@@ -1,13 +1,13 @@
 class_name Dog
-extends CharacterBody2D
-## One playable dog. Reads a DeviceInput, moves, dashes (with i-frames), throws, catches.
-## Hits are decided by Toy.gd calling [method hit_by]; this class only decides if the hit lands.
+extends CharacterBody3D
+## One playable dog. Reads a DeviceInput, moves on the XZ plane, dashes (with i-frames),
+## throws, catches. Hits are decided by Toy.gd calling [method hit_by].
 
 signal eliminated(dog: Dog)
 
 enum State { ALIVE, ELIMINATED }
 
-const ACCEL := 3400.0
+const ACCEL := 60.0
 const DASH_TIME := 0.16
 const SPAWN_GRACE := 0.6
 
@@ -15,7 +15,7 @@ var slot: PlayerSlot
 var data: DogData
 var input: DeviceInput
 var state := State.ALIVE
-var facing := Vector2.RIGHT
+var facing := Vector3(0, 0, -1)
 var held_toy: Toy = null
 var invincible := false
 ## Set by zones (e.g. the pool) to slow the dog down.
@@ -28,12 +28,12 @@ var _spawn_grace := SPAWN_GRACE
 var _catch_buffer := 0.0
 var _catch_cooldown := 0.0
 
-@onready var body_shape: CollisionShape2D = $Body
-@onready var visual: DogVisual = $Visual
-@onready var catch_area: Area2D = $CatchArea
-@onready var catch_shape: CollisionShape2D = $CatchArea/Shape
-@onready var name_tag: Label = $NameTag
-@onready var ring: Node2D = $Ring
+@onready var body_shape: CollisionShape3D = $Body
+@onready var model: DogModel = $Model
+@onready var catch_area: Area3D = $CatchArea
+@onready var catch_shape: CollisionShape3D = $CatchArea/Shape
+@onready var name_tag: Label3D = $NameTag
+@onready var ring: MeshInstance3D = $Ring
 
 
 var alive: bool:
@@ -50,21 +50,23 @@ func setup(p_slot: PlayerSlot) -> void:
 
 func _ready() -> void:
 	add_to_group("dogs")
-	var body := body_shape.shape.duplicate() as CircleShape2D
+	var body := CapsuleShape3D.new()
 	body.radius = data.body_radius
+	body.height = data.body_radius * 2.0 + 0.6
 	body_shape.shape = body
-	var catch := catch_shape.shape.duplicate() as CircleShape2D
+	body_shape.position.y = body.height / 2.0
+	var catch := SphereShape3D.new()
 	catch.radius = data.catch_radius
 	catch_shape.shape = catch
-	visual.setup(data, slot.color)
-	visual.scale = Vector2.ONE * (data.body_radius / 19.0)
-	name_tag.text = data.display_name
-	name_tag.add_theme_color_override("font_color", slot.color)
-	name_tag.position.x = -name_tag.size.x / 2.0
-	ring.modulate = slot.color
-	ring.radius = data.body_radius + 10.0
-	name_tag.position.y = -data.body_radius * 1.5 - 44.0
-	Juice.pop(visual, 1.6, 0.35)
+	catch_shape.position.y = 0.5
+	model.setup(data, slot.color)
+	name_tag.text = data.display_name.to_upper()
+	name_tag.font = UiKit.FONT_DISPLAY
+	name_tag.modulate = slot.color
+	name_tag.position.y = 1.55 * data.model_scale + 0.35
+	ring.mesh = Mats.torus(data.body_radius + 0.12, data.body_radius + 0.28)
+	ring.material_override = Mats.unlit(slot.color)
+	Juice.pop(model, 1.5, 0.35)
 
 
 func _physics_process(delta: float) -> void:
@@ -77,17 +79,18 @@ func _physics_process(delta: float) -> void:
 		_catch_buffer -= delta
 		if _catch_buffer <= 0.0:
 			_catch_cooldown = data.catch_cooldown
-			visual.set_catching(false)
+			model.set_catching(false)
 
-	var move := input.move_vector()
-	if move != Vector2.ZERO:
+	var move2 := input.move_vector()
+	var move := Vector3(move2.x, 0.0, move2.y)
+	if move != Vector3.ZERO:
 		facing = move.normalized()
 
 	if _dash_timer > 0.0:
 		_dash_timer -= delta
 		if _dash_timer <= 0.0:
 			invincible = false
-			visual.set_dashing(false)
+			model.set_dashing(false)
 	else:
 		velocity = velocity.move_toward(move * data.move_speed * speed_scale, ACCEL * delta)
 		if input.just_pressed(&"dash") and _dash_cooldown <= 0.0:
@@ -96,14 +99,16 @@ func _physics_process(delta: float) -> void:
 	if input.just_pressed(&"throw"):
 		_throw_or_catch()
 
+	velocity.y = 0.0
 	move_and_slide()
-	visual.update_motion(facing, velocity.length() / data.move_speed)
+	global_position.y = 0.0
+	model.update_motion(facing, velocity.length() / data.move_speed, delta)
 	if held_toy:
 		held_toy.global_position = get_hold_position()
 
 
-func get_hold_position() -> Vector2:
-	return global_position + facing * (data.body_radius + 12.0)
+func get_hold_position() -> Vector3:
+	return global_position + facing * (data.body_radius + 0.45) + Vector3(0, 0.7, 0)
 
 
 # ---------------------------------------------------------------- actions
@@ -113,9 +118,9 @@ func _start_dash() -> void:
 	_dash_cooldown = data.dash_cooldown
 	velocity = facing * (data.dash_distance / DASH_TIME)
 	invincible = true
-	visual.set_dashing(true)
+	model.set_dashing(true)
 	Sfx.play("dash", randf_range(0.9, 1.1))
-	Juice.burst(get_parent(), global_position - facing * 10.0, Color(1, 1, 1, 0.6), 8, 160.0)
+	Juice.burst(get_parent(), global_position - facing * 0.3 + Vector3(0, 0.3, 0), Color(1, 1, 1, 0.7), 8, 3.0)
 
 
 func _throw_or_catch() -> void:
@@ -130,14 +135,14 @@ func _throw_or_catch() -> void:
 		return
 	# Arm the catch window: a toy that reaches us in the next catch_window seconds is caught.
 	_catch_buffer = data.catch_window
-	visual.set_catching(true)
+	model.set_catching(true)
 
 
 func _throw() -> void:
 	var toy := held_toy
 	held_toy = null
 	toy.throw(self, facing, data.throw_power)
-	Juice.squash(visual)
+	model.squash()
 	Sfx.play("throw", randf_range(0.95, 1.1))
 	Events.toy_thrown.emit(toy, self)
 
@@ -156,11 +161,11 @@ func _find_catchable_toy() -> Toy:
 
 func _catch(toy: Toy) -> void:
 	_catch_buffer = 0.0
-	visual.set_catching(false)
+	model.set_catching(false)
 	toy.pick_up(self)
 	Sfx.play("catch")
-	Juice.pop(visual, 1.35)
-	Juice.float_text(get_parent(), global_position + Vector2(-50, -80), "CATCH!", slot.color, 44)
+	Juice.pop(model, 1.3)
+	Juice.float_text(get_parent(), global_position + Vector3(0, 1.6, 0), "CATCH!", slot.color, 0.7)
 	Events.toy_caught.emit(toy, self)
 
 
@@ -170,7 +175,7 @@ func try_pickup(toy: Toy) -> bool:
 		return false
 	toy.pick_up(self)
 	Sfx.play("pickup", randf_range(0.9, 1.2), -6.0)
-	Juice.pop(visual, 1.15, 0.12)
+	Juice.pop(model, 1.12, 0.12)
 	return true
 
 
@@ -195,14 +200,14 @@ func eliminate(by: Toy = null) -> void:
 		dropped.drop(global_position)
 	body_shape.set_deferred("disabled", true)
 	catch_shape.set_deferred("disabled", true)
-	velocity = Vector2.ZERO
+	velocity = Vector3.ZERO
 	Sfx.play("bonk")
 	Juice.hitstop()
-	Juice.shake(16.0)
-	Juice.burst(get_parent(), global_position, slot.color, 26)
-	Juice.float_text(get_parent(), global_position + Vector2(-60, -90), "BONK!", Color(1.0, 0.85, 0.2), 60)
-	var dir := by.velocity.normalized() if by and by.velocity.length() > 1.0 else Vector2.UP
-	visual.play_knocked_out(dir)
+	Juice.shake(0.35)
+	Juice.burst(get_parent(), global_position + Vector3(0, 0.6, 0), slot.color, 26, 6.0)
+	Juice.float_text(get_parent(), global_position + Vector3(0, 1.8, 0), "BONK!", Color(1.0, 0.85, 0.2), 1.0)
+	var dir := by.velocity.normalized() if by and by.velocity.length() > 0.1 else Vector3(0, 0, 1)
+	model.play_knocked_out(dir)
 	ring.visible = false
 	eliminated.emit(self)
 	Events.dog_eliminated.emit(self, by)

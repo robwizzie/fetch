@@ -42,19 +42,19 @@ pointing/emulate_touch_from_mouse=false
 
 [layer_names]
 
-2d_physics/layer_1="walls"
-2d_physics/layer_2="dogs"
-2d_physics/layer_3="toys"
-2d_physics/layer_4="zones"
+3d_physics/layer_1="walls"
+3d_physics/layer_2="dogs"
+3d_physics/layer_3="toys"
+3d_physics/layer_4="zones"
 
 [physics]
 
-2d/default_gravity=0.0
 common/physics_ticks_per_second=60
 
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-textures/canvas_textures/default_texture_filter=1
-anti_aliasing/quality/msaa_2d=2
+anti_aliasing/quality/msaa_3d=2
+lights_and_shadows/directional_shadow/size=4096
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=2

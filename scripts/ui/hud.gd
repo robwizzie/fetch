@@ -10,6 +10,21 @@ var _slots: Array[PlayerSlot] = []
 var _chips: Dictionary = {}
 
 
+func _ready() -> void:
+	# Soft vignette so the arena edges fall off like Boomerang Fu
+	var vignette := ColorRect.new()
+	vignette.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = "shader_type canvas_item; void fragment() { vec2 uv = UV - 0.5; uv.x *= 1.25; float d = length(uv) * 1.6; COLOR = vec4(0.03, 0.04, 0.09, smoothstep(0.62, 1.25, d) * 0.6); }"
+	var mat := ShaderMaterial.new()
+	mat.shader = sh
+	vignette.material = mat
+	add_child(vignette)
+	move_child(vignette, 0)
+	center.add_theme_font_override("font", UiKit.FONT_DISPLAY)
+
+
 func setup(slots: Array[PlayerSlot], mode_hint: String) -> void:
 	_slots = slots
 	hint.text = mode_hint
@@ -30,7 +45,7 @@ func refresh_scores() -> void:
 		var dots: HBoxContainer = chip.get_node("VBox/Dots")
 		for i in dots.get_child_count():
 			var dot: ColorRect = dots.get_child(i)
-			dot.color = slot.color if i < slot.score else Color(1, 1, 1, 0.15)
+			dot.color = UiKit.YELLOW if i < slot.score else Color(1, 1, 1, 0.18)
 		if slot.score > 0:
 			Juice.pop(chip, 1.15)
 
@@ -62,7 +77,7 @@ func banner(text: String, color: Color, seconds: float) -> void:
 func _make_chip(slot: PlayerSlot) -> PanelContainer:
 	var chip := PanelContainer.new()
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.08, 0.14, 0.85)
+	style.bg_color = Color(slot.dog.card_color_dark, 0.92)
 	style.border_color = slot.color
 	style.set_border_width_all(3)
 	style.set_corner_radius_all(12)
@@ -74,17 +89,24 @@ func _make_chip(slot: PlayerSlot) -> PanelContainer:
 	var vbox := VBoxContainer.new()
 	vbox.name = "VBox"
 	chip.add_child(vbox)
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 8)
+	name_row.add_child(UiKit.chip(slot.label, slot.color, 18))
 	var name_label := Label.new()
-	name_label.text = "%s  %s" % [slot.label, slot.dog.display_name]
-	name_label.add_theme_color_override("font_color", slot.color)
-	name_label.add_theme_font_size_override("font_size", 24)
-	vbox.add_child(name_label)
+	name_label.text = slot.dog.display_name.to_upper()
+	name_label.add_theme_font_override("font", UiKit.FONT_DISPLAY)
+	name_label.add_theme_color_override("font_color", UiKit.CREAM)
+	name_label.add_theme_color_override("font_outline_color", UiKit.INK)
+	name_label.add_theme_constant_override("outline_size", 6)
+	name_label.add_theme_font_size_override("font_size", 26)
+	name_row.add_child(name_label)
+	vbox.add_child(name_row)
 	var dots := HBoxContainer.new()
 	dots.name = "Dots"
 	dots.add_theme_constant_override("separation", 6)
 	for i in Game.points_to_win:
 		var dot := ColorRect.new()
-		dot.custom_minimum_size = Vector2(22, 10)
+		dot.custom_minimum_size = Vector2(24, 10)
 		dots.add_child(dot)
 	vbox.add_child(dots)
 	return chip

@@ -23,10 +23,17 @@ var _caught := 0
 var _phase := "ui"
 var _target_throw_timer := 0.0
 var _failed := false
+## Stuck detection for the scripted shooter (it has no pathfinding; props can pin it).
+var _last_shooter_pos := Vector3.ZERO
+var _stuck_time := 0.0
+var _detour_timer := 0.0
+var _detour_dir := Vector2.ZERO
 
 
-static func dir_to(from: Node2D, to: Node2D) -> Vector2:
-	return (to.global_position - from.global_position).normalized()
+## Flat (XZ) direction from one node to another as a 2D input vector (x = right, y = down/toward camera).
+static func dir_to(from: Node3D, to: Node3D) -> Vector2:
+	var d := to.global_position - from.global_position
+	return Vector2(d.x, d.z).normalized()
 
 
 func _ready() -> void:
@@ -71,8 +78,18 @@ func _ready() -> void:
 	add_child(_match)
 
 
-func _process(delta: float) -> void:
+var _debug_timer := 0.0
+
+
+func _physics_process(delta: float) -> void:
 	_elapsed += delta
+	_debug_timer += delta
+	if _debug_timer > 4.0 and _phase == "match" and OS.get_cmdline_user_args().has("--verbose"):
+		_debug_timer = 0.0
+		for d in _match.dogs:
+			print("[smoke]   %s alive=%s pos=%s held=%s" % [d.data.display_name, d.alive, d.global_position.snapped(Vector3(0.1, 0.1, 0.1)), d.held_toy != null])
+		for t in _match.toys:
+			print("[smoke]   toy state=%d pos=%s speed=%.1f" % [t.state, t.global_position.snapped(Vector3(0.1, 0.1, 0.1)), t.velocity.length()])
 	if _elapsed > TIMEOUT_SEC:
 		_fail("timed out (rounds won: %d, eliminations: %d, catches: %d)" % [_rounds_won, _eliminations, _caught])
 	if _phase != "match" or not _round_started:
@@ -96,16 +113,31 @@ func _process(delta: float) -> void:
 			if t.state == Toy.State.IDLE and (nearest == null or t.global_position.distance_to(shooter.global_position) < nearest.global_position.distance_to(shooter.global_position)):
 				nearest = t
 		if nearest:
-			shooter.input.virtual_move = (nearest.global_position - shooter.global_position).normalized()
+			shooter.input.virtual_move = dir_to(shooter, nearest)
 		_throw_timer = 0.0
 	else:
-		shooter.input.virtual_move = (target.global_position - shooter.global_position).normalized()
+		shooter.input.virtual_move = dir_to(shooter, target)
 		_throw_timer += delta
 		if _throw_timer > 1.2:
 			_throw_timer = 0.0
 			shooter.input.virtual_buttons[&"throw"] = true
-	# The target first throws its own toy away (you can't catch while holding), then tries one
-	# catch: press throw when a dangerous toy is inside its catch radius.
+	# If the shooter is pushing against a prop, sidestep for a moment (props block the straight line).
+	var moved := shooter.global_position.distance_to(_last_shooter_pos)
+	_last_shooter_pos = shooter.global_position
+	if _detour_timer > 0.0:
+		_detour_timer -= delta
+		shooter.input.virtual_move = _detour_dir
+	elif shooter.input.virtual_move != Vector2.ZERO and moved < 0.01:
+		_stuck_time += delta
+		if _stuck_time > 0.5:
+			_stuck_time = 0.0
+			var m := shooter.input.virtual_move
+			_detour_dir = Vector2(-m.y, m.x) * (1.0 if randf() < 0.5 else -1.0)
+			_detour_timer = 0.9
+	else:
+		_stuck_time = 0.0
+	# The target first throws its own toy away (you can't catch while holding), then tries to
+	# catch: press when an incoming toy will reach it within the buffered catch window.
 	target.input.virtual_buttons[&"throw"] = false
 	var side := Vector2(-dir_to(shooter, target).y, dir_to(shooter, target).x)
 	target.input.virtual_move = side
@@ -116,10 +148,27 @@ func _process(delta: float) -> void:
 			target.input.virtual_buttons[&"throw"] = true
 	elif _caught == 0:
 		for t in _match.toys:
-			if t.is_dangerous() and t.can_be_caught_by(target) \
-					and t.global_position.distance_to(target.global_position) < target.data.catch_radius:
+			if _incoming(t, target):
 				target.input.virtual_buttons[&"throw"] = true
 				break
+
+
+## True when a dangerous toy is flying at the dog and will arrive inside its catch window.
+static func _incoming(t: Toy, dog: Dog) -> bool:
+	if not t.is_dangerous() or not t.can_be_caught_by(dog):
+		return false
+	var to_dog := dog.global_position - t.global_position
+	to_dog.y = 0.0
+	var speed := t.velocity.length()
+	var dir := t.velocity / speed
+	var along := to_dog.dot(dir)
+	if along <= 0.0:
+		return false
+	var lateral := (to_dog - dir * along).length()
+	if lateral > dog.data.body_radius + t.data.radius:
+		return false
+	var time_to_impact := along / speed
+	return time_to_impact < dog.data.catch_window * 0.75 or along < dog.data.catch_radius
 
 
 func _finish() -> void:

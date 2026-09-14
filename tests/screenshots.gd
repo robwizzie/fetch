@@ -19,15 +19,15 @@ func _ready() -> void:
 	Game.slots[0].score = 3
 	Game.slots[2].score = 1
 
-	await _shoot("res://scenes/ui/main_menu.tscn", "01_main_menu")
+	await _shoot("res://scenes/ui/main_menu.tscn", "01_main_menu", 2.5)
 	Game.debug_fill_players(3)
 	Game.slots[1].dog = Game.dogs[4]
 	Game.slots[1].ready = true
 	Game.slots[2].dog = Game.dogs[2]
 	await _shoot("res://scenes/ui/dog_select.tscn", "02_dog_select")
 	await _shoot("res://scenes/ui/match_setup.tscn", "03_match_setup")
-	Game.gallery_kind = "toys"
-	await _shoot("res://scenes/ui/gallery.tscn", "04_gallery_toys")
+	Game.gallery_kind = "dogs"
+	await _shoot("res://scenes/ui/gallery.tscn", "04_gallery_dogs")
 	await _shoot("res://scenes/ui/results.tscn", "05_results")
 
 	Game.reset_scores()
@@ -51,12 +51,12 @@ func _ready() -> void:
 	get_tree().quit(0)
 
 
-func _shoot(path: String, name_: String) -> void:
+func _shoot(path: String, name_: String, settle: float = 0.4) -> void:
 	var inst: Node = load(path).instantiate()
 	add_child(inst)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	await get_tree().create_timer(0.4).timeout
+	await get_tree().create_timer(settle).timeout
 	await _capture(name_)
 	inst.queue_free()
 	await get_tree().process_frame
