@@ -23,6 +23,11 @@ var _caught := 0
 var _phase := "ui"
 var _target_throw_timer := 0.0
 var _failed := false
+## Stuck detection for the scripted shooter (it has no pathfinding; props can pin it).
+var _last_shooter_pos := Vector3.ZERO
+var _stuck_time := 0.0
+var _detour_timer := 0.0
+var _detour_dir := Vector2.ZERO
 
 
 ## Flat (XZ) direction from one node to another as a 2D input vector (x = right, y = down/toward camera).
@@ -116,6 +121,21 @@ func _process(delta: float) -> void:
 		if _throw_timer > 1.2:
 			_throw_timer = 0.0
 			shooter.input.virtual_buttons[&"throw"] = true
+	# If the shooter is pushing against a prop, sidestep for a moment (props block the straight line).
+	var moved := shooter.global_position.distance_to(_last_shooter_pos)
+	_last_shooter_pos = shooter.global_position
+	if _detour_timer > 0.0:
+		_detour_timer -= delta
+		shooter.input.virtual_move = _detour_dir
+	elif shooter.input.virtual_move != Vector2.ZERO and moved < 0.01:
+		_stuck_time += delta
+		if _stuck_time > 0.5:
+			_stuck_time = 0.0
+			var m := shooter.input.virtual_move
+			_detour_dir = Vector2(-m.y, m.x) * (1.0 if randf() < 0.5 else -1.0)
+			_detour_timer = 0.9
+	else:
+		_stuck_time = 0.0
 	# The target first throws its own toy away (you can't catch while holding), then tries one
 	# catch: press throw when a dangerous toy is inside its catch radius.
 	target.input.virtual_buttons[&"throw"] = false
