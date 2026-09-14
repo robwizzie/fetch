@@ -15,8 +15,8 @@ var mode: GameMode
 var phase := Phase.COUNTDOWN
 var round_number := 0
 
-@onready var arena_holder: Node2D = $ArenaHolder
-@onready var actors: Node2D = $Actors
+@onready var arena_holder: Node3D = $ArenaHolder
+@onready var actors: Node3D = $Actors
 @onready var hud: Hud = $HUD
 
 
@@ -30,6 +30,13 @@ func _ready() -> void:
 	hud.setup(Game.slots, mode.hud_hint())
 	Events.dog_eliminated.connect(_on_dog_eliminated)
 	start_round()
+
+
+func _physics_process(_delta: float) -> void:
+	# Safety net: a toy that somehow leaves the arena comes back to a toy spawn.
+	for toy in toys:
+		if toy.state != Toy.State.HELD and arena.is_outside(toy.global_position):
+			toy.drop(arena.get_toy_spawn_position(0))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -48,7 +55,7 @@ func start_round() -> void:
 		var dog: Dog = DOG_SCENE.instantiate()
 		dog.setup(slot)
 		dog.position = arena.get_spawn_position(i)
-		dog.facing = (arena.size / 2.0 - dog.position).normalized()
+		dog.facing = (Vector3.ZERO - dog.position).normalized()
 		actors.add_child(dog)
 		dogs.append(dog)
 		# Everyone starts holding a toy so the action begins immediately.
@@ -68,7 +75,7 @@ func start_round() -> void:
 	Events.round_started.emit(round_number)
 
 
-func _spawn_toy(at: Vector2) -> Toy:
+func _spawn_toy(at: Vector3) -> Toy:
 	var toy: Toy = TOY_SCENE.instantiate()
 	toy.setup(Game.selected_toy)
 	toy.position = at

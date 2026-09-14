@@ -1,47 +1,47 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/actors/dog.gd" id="1_dog"]
-[ext_resource type="Script" path="res://scripts/actors/dog_visual.gd" id="2_visual"]
-[ext_resource type="Script" path="res://scripts/actors/ring.gd" id="3_ring"]
+[ext_resource type="Script" path="res://scripts/visuals/dog_model.gd" id="2_model"]
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
-radius = 22.0
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
+radius = 0.55
+height = 1.7
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_catch"]
-radius = 70.0
+[sub_resource type="SphereShape3D" id="SphereShape3D_catch"]
+radius = 1.7
 
-[node name="Dog" type="CharacterBody2D"]
-z_index = 10
+[node name="Dog" type="CharacterBody3D"]
 collision_layer = 2
 collision_mask = 3
 motion_mode = 1
 script = ExtResource("1_dog")
 
-[node name="Body" type="CollisionShape2D" parent="."]
-shape = SubResource("CircleShape2D_body")
+[node name="Body" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+shape = SubResource("CapsuleShape3D_body")
 
-[node name="Ring" type="Node2D" parent="."]
-z_index = -1
-script = ExtResource("3_ring")
+[node name="Ring" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0)
+cast_shadow = 0
 
-[node name="Visual" type="Node2D" parent="."]
-script = ExtResource("2_visual")
+[node name="Model" type="Node3D" parent="."]
+script = ExtResource("2_model")
 
-[node name="CatchArea" type="Area2D" parent="."]
+[node name="CatchArea" type="Area3D" parent="."]
 collision_layer = 0
 collision_mask = 4
 monitorable = false
 
-[node name="Shape" type="CollisionShape2D" parent="CatchArea"]
-shape = SubResource("CircleShape2D_catch")
+[node name="Shape" type="CollisionShape3D" parent="CatchArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+shape = SubResource("SphereShape3D_catch")
 
-[node name="NameTag" type="Label" parent="."]
-offset_left = -60.0
-offset_top = -72.0
-offset_right = 60.0
-offset_bottom = -44.0
-theme_override_colors/font_outline_color = Color(0.05, 0.05, 0.1, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 20
+[node name="NameTag" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)
+pixel_size = 0.008
+billboard = 1
+no_depth_test = true
+outline_modulate = Color(0.05, 0.05, 0.1, 1)
 text = "Dog"
-horizontal_alignment = 1
+font_size = 48
+outline_size = 14

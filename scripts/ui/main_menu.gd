@@ -2,7 +2,6 @@ extends Control
 ## Title screen. Play -> dog select. The galleries show content so new dogs/toys/arenas
 ## are visible the moment their .tres file exists.
 
-var _parade: Array[DogVisual] = []
 
 
 func _ready() -> void:
@@ -15,7 +14,7 @@ func _ready() -> void:
 	vbox.grow_vertical = Control.GROW_DIRECTION_BOTH
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_theme_constant_override("separation", 8)
-	vbox.position.y -= 90.0
+	vbox.position.y -= 150.0
 	add_child(vbox)
 
 	vbox.add_child(UiKit.title("FETCH", 170, UiKit.ACCENT))
@@ -43,13 +42,6 @@ func _ready() -> void:
 	add_child(version)
 
 
-func _process(_delta: float) -> void:
-	var i := 0
-	for v in _parade:
-		v.update_motion(Vector2(1.0, sin(Time.get_ticks_msec() * 0.003 + i) * 0.25).normalized(), 0.6)
-		i += 1
-
-
 func _add_button(parent: Control, text: String, on_pressed: Callable) -> Button:
 	var b := UiKit.button(text)
 	b.pressed.connect(on_pressed)
@@ -62,21 +54,25 @@ func _gallery(kind: String) -> void:
 	Game.goto(Game.SCENE_GALLERY)
 
 
-## The five dogs running along the bottom of the screen, like the key art.
+## The dogs lined up along the bottom of the screen, like the key art.
 func _build_parade() -> void:
 	var count := Game.dogs.size()
 	if count == 0:
 		return
-	var y := 985.0
-	var spacing := 1920.0 / (count + 1)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 30)
+	row.anchor_left = 0.0
+	row.anchor_right = 1.0
+	row.anchor_top = 1.0
+	row.anchor_bottom = 1.0
+	row.offset_top = -290.0
+	row.offset_bottom = -10.0
+	add_child(row)
 	for i in count:
-		var v := DogVisual.new()
-		v.position = Vector2(spacing * (i + 1), y)
-		v.scale = Vector2.ONE * 2.3
-		v.setup(Game.dogs[i], PlayerSlot.COLORS[i % PlayerSlot.COLORS.size()])
-		add_child(v)
-		_parade.append(v)
-		var tag := UiKit.label(Game.dogs[i].display_name, 24, Color(1, 1, 1, 0.85))
-		tag.position = v.position + Vector2(-100, 52)
-		tag.size = Vector2(200, 30)
-		add_child(tag)
+		var box := VBoxContainer.new()
+		box.alignment = BoxContainer.ALIGNMENT_END
+		var color: Color = PlayerSlot.COLORS[i % PlayerSlot.COLORS.size()]
+		box.add_child(UiKit.dog_portrait(Game.dogs[i], color, Vector2(280, 235), 1.15, 0.35 + i * 0.07))
+		box.add_child(UiKit.label(Game.dogs[i].display_name, 24, Color(1, 1, 1, 0.85)))
+		row.add_child(box)

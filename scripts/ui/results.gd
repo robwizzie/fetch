@@ -16,7 +16,7 @@ func _ready() -> void:
 	root.add_child(UiKit.label("MATCH RESULTS", 28, Color(1, 1, 1, 0.6)))
 	if winner:
 		root.add_child(UiKit.title("%s WINS!" % winner.dog.display_name.to_upper(), 110, winner.color))
-		root.add_child(UiKit.dog_portrait(winner.dog, winner.color, Vector2(400, 240), 3.2))
+		root.add_child(UiKit.dog_portrait(winner.dog, winner.color, Vector2(420, 300), 1.1, 0.7))
 	else:
 		root.add_child(UiKit.title("GAME OVER", 110, UiKit.ACCENT))
 

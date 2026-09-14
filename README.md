@@ -3,9 +3,10 @@
 **Throw. Dodge. Fetch. Repeat.** A top-down local-multiplayer party game where 2–4 dogs throw toys
 at each other in small, chaotic arenas. Inspired by *Boomerang Fu*.
 
-Built with **Godot 4.7.2 (GDScript)**. Everything in this repo is a working prototype you can play today:
-join with any mix of gamepads and keyboard, pick a dog, pick an arena and toy, and play *Last Dog Standing*
-to 5 points.
+Built with **Godot 4.7.2 (GDScript)** in **3D** with a fixed tilted camera, like Boomerang Fu. Everything in
+this repo is a working prototype you can play today: join with any mix of gamepads and keyboard, pick a dog,
+pick an arena and toy, and play *Last Dog Standing* to 5 points. Art is placeholder low-poly built from
+primitives, ready to be swapped for real models.
 
 - Why Godot, why 2D, what's next: [`docs/GAMEPLAN.md`](docs/GAMEPLAN.md)
 - How the code is organised and how to add dogs / toys / arenas / modes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
@@ -49,5 +50,6 @@ CI runs the same two commands on every push (`.github/workflows/ci.yml`).
 - ✅ Movement, dash with i-frames, throw, bounce, catch, one-hit elimination
 - ✅ Main menu → dog select → match setup → match → results
 - ✅ 5 dogs, 6 toys (4 fully playable, 2 stat-only prototypes), 2 arenas, Last Dog Standing to N points
+- ✅ 3D: perspective arena camera, toon-shaded low-poly placeholder dogs/props, real-time shadows, 3D dog portraits in menus
 - ✅ Placeholder "juice": screen shake, hit-stop, particles, floating text, synthesised sound
 - ⏳ Other modes, real art and audio, pause menu, bots, online play: see the roadmap in `docs/GAMEPLAN.md`

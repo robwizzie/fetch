@@ -7,7 +7,6 @@ const MIN_PLAYERS := 2
 
 var _panels: Array[PanelContainer] = []
 var _inputs: Dictionary = {}
-var _portraits: Dictionary = {}
 var _footer: Label
 
 
@@ -80,9 +79,6 @@ func _process(_delta: float) -> void:
 				_inputs.erase(slot)
 				Sfx.play("bounce")
 			_refresh_all()
-	for slot in _portraits:
-		var v: DogVisual = _portraits[slot]
-		v.update_motion(Vector2(0.9, -0.45).normalized(), 0.35)
 
 
 func _cycle(slot: PlayerSlot, dir: int) -> void:
@@ -102,7 +98,6 @@ func _all_ready() -> bool:
 
 
 func _refresh_all() -> void:
-	_portraits.clear()
 	for i in _panels.size():
 		var panel := _panels[i]
 		for c in panel.get_children():
@@ -147,9 +142,7 @@ func _fill_player_panel(panel: PanelContainer, slot: PlayerSlot) -> void:
 	v.add_child(header)
 	v.add_child(UiKit.title(dog.display_name.to_upper(), 44, Color.WHITE))
 
-	var portrait := UiKit.dog_portrait(dog, slot.color, Vector2(340, 190), 2.4)
-	v.add_child(portrait)
-	_portraits[slot] = portrait.get_node("DogVisual")
+	v.add_child(UiKit.dog_portrait(dog, slot.color, Vector2(340, 230), 1.3, 0.6))
 
 	var stats := VBoxContainer.new()
 	stats.add_theme_constant_override("separation", 4)

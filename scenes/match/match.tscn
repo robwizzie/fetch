@@ -6,8 +6,8 @@
 [node name="Match" type="Node"]
 script = ExtResource("1_match")
 
-[node name="ArenaHolder" type="Node2D" parent="."]
+[node name="ArenaHolder" type="Node3D" parent="."]
 
-[node name="Actors" type="Node2D" parent="."]
+[node name="Actors" type="Node3D" parent="."]
 
 [node name="HUD" parent="." instance=ExtResource("2_hud")]
