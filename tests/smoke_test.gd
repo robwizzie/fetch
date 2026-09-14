@@ -81,7 +81,7 @@ func _ready() -> void:
 var _debug_timer := 0.0
 
 
-func _process(delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	_elapsed += delta
 	_debug_timer += delta
 	if _debug_timer > 4.0 and _phase == "match" and OS.get_cmdline_user_args().has("--verbose"):
@@ -136,8 +136,8 @@ func _process(delta: float) -> void:
 			_detour_timer = 0.9
 	else:
 		_stuck_time = 0.0
-	# The target first throws its own toy away (you can't catch while holding), then tries one
-	# catch: press throw when a dangerous toy is inside its catch radius.
+	# The target first throws its own toy away (you can't catch while holding), then tries to
+	# catch: press when an incoming toy will reach it within the buffered catch window.
 	target.input.virtual_buttons[&"throw"] = false
 	var side := Vector2(-dir_to(shooter, target).y, dir_to(shooter, target).x)
 	target.input.virtual_move = side
@@ -148,10 +148,27 @@ func _process(delta: float) -> void:
 			target.input.virtual_buttons[&"throw"] = true
 	elif _caught == 0:
 		for t in _match.toys:
-			if t.is_dangerous() and t.can_be_caught_by(target) \
-					and t.global_position.distance_to(target.global_position) < target.data.catch_radius:
+			if _incoming(t, target):
 				target.input.virtual_buttons[&"throw"] = true
 				break
+
+
+## True when a dangerous toy is flying at the dog and will arrive inside its catch window.
+static func _incoming(t: Toy, dog: Dog) -> bool:
+	if not t.is_dangerous() or not t.can_be_caught_by(dog):
+		return false
+	var to_dog := dog.global_position - t.global_position
+	to_dog.y = 0.0
+	var speed := t.velocity.length()
+	var dir := t.velocity / speed
+	var along := to_dog.dot(dir)
+	if along <= 0.0:
+		return false
+	var lateral := (to_dog - dir * along).length()
+	if lateral > dog.data.body_radius + t.data.radius:
+		return false
+	var time_to_impact := along / speed
+	return time_to_impact < dog.data.catch_window * 0.75 or along < dog.data.catch_radius
 
 
 func _finish() -> void:
