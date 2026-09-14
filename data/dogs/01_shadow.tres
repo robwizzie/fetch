@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="DogData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dog_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"shadow"
+display_name = "Shadow"
+description = "Balanced and reliable."
+fur_color = Color(0.12, 0.12, 0.14, 1)
+accent_color = Color(0.3, 0.26, 0.28, 1)
+bandana_color = Color(0.25, 0.55, 1.0, 1)
+speed_rating = 3
+throw_rating = 3
+catch_rating = 3
+dash_rating = 3
+move_speed = 420.0
+throw_power = 1.0
+catch_radius = 100.0
+catch_window = 0.18
+dash_distance = 300.0
+body_radius = 32.0

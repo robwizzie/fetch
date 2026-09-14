@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="DogData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dog_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"posey"
+display_name = "Posey"
+description = "Larger catch window. Beginner friendly."
+fur_color = Color(0.9, 0.7, 0.35, 1)
+accent_color = Color(0.98, 0.9, 0.7, 1)
+bandana_color = Color(0.6, 0.35, 0.9, 1)
+speed_rating = 3
+throw_rating = 3
+catch_rating = 5
+dash_rating = 2
+move_speed = 410.0
+throw_power = 1.0
+catch_radius = 150.0
+catch_window = 0.32
+dash_distance = 260.0
+body_radius = 37.0

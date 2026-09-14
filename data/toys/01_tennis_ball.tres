@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ToyData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/toy_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"tennis_ball"
+display_name = "Tennis Ball"
+description = "Balanced and bouncy."
+color = Color(0.85, 0.95, 0.3, 1)
+radius = 22.0
+throw_speed = 1100.0
+bounciness = 0.85
+max_bounces = 3
+friction = 450.0
+danger_speed = 350.0
+special = 0
+fully_implemented = true

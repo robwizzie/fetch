@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="DogData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dog_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"luna"
+display_name = "Luna"
+description = "Fast and agile. Small target."
+fur_color = Color(0.85, 0.5, 0.2, 1)
+accent_color = Color(0.98, 0.95, 0.9, 1)
+bandana_color = Color(0.85, 0.35, 0.8, 1)
+speed_rating = 5
+throw_rating = 2
+catch_rating = 3
+dash_rating = 4
+move_speed = 500.0
+throw_power = 0.8
+catch_radius = 95.0
+catch_window = 0.18
+dash_distance = 340.0
+body_radius = 26.0

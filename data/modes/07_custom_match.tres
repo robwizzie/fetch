@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="GameModeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/game_mode_data.gd" id="1"]
+
+
+[resource]
+script = ExtResource("1")
+id = &"custom_match"
+display_name = "Custom Match"
+description = "Your rules, your chaos: adjust toys, arenas, and modifiers."
+
+default_points_to_win = 5
+team_based = false
+fully_implemented = false
+swatch = Color(0.6, 0.6, 0.65, 1)

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="GameModeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/game_mode_data.gd" id="1"]
+
+
+[resource]
+script = ExtResource("1")
+id = &"fetch_frenzy"
+display_name = "Fetch Frenzy"
+description = "Collect toys and bring them to your doghouse for points."
+
+default_points_to_win = 10
+team_based = false
+fully_implemented = false
+swatch = Color(0.4, 0.8, 0.5, 1)

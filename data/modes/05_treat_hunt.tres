@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="GameModeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/game_mode_data.gd" id="1"]
+
+
+[resource]
+script = ExtResource("1")
+id = &"treat_hunt"
+display_name = "Treat Hunt"
+description = "Collect treats while avoiding elimination."
+
+default_points_to_win = 15
+team_based = false
+fully_implemented = false
+swatch = Color(0.7, 0.5, 0.9, 1)

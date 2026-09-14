@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="GameModeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/game_mode_data.gd" id="1"]
+
+
+[resource]
+script = ExtResource("1")
+id = &"pack_battle"
+display_name = "Pack Battle"
+description = "2v2 chaos. Last team alive wins the round."
+
+default_points_to_win = 5
+team_based = true
+fully_implemented = false
+swatch = Color(0.45, 0.6, 0.95, 1)

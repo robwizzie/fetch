@@ -1,0 +1,11 @@
+# Godot 4 editor cache / imported data (regenerated on open)
+.godot/
+# Exports
+export/
+*.pck
+*.zip
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

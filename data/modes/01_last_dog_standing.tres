@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="GameModeData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/game_mode_data.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/modes/last_dog_standing.gd" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = &"last_dog_standing"
+display_name = "Last Dog Standing"
+description = "Classic free-for-all. Last dog standing wins the round."
+mode_script = ExtResource("2")
+default_points_to_win = 5
+team_based = false
+fully_implemented = true
+swatch = Color(0.95, 0.4, 0.4, 1)

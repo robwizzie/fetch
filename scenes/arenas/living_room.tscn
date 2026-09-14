@@ -1,0 +1,93 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/arena/arena.gd" id="1_arena"]
+[ext_resource type="Script" path="res://scripts/arena/obstacle.gd" id="2_obstacle"]
+[ext_resource type="Script" path="res://scripts/arena/slow_zone.gd" id="3_slow"]
+
+[node name="LivingRoom" type="Node2D"]
+script = ExtResource("1_arena")
+ground_color = Color(0.8, 0.62, 0.42, 1)
+ground_accent = Color(0.76, 0.58, 0.38, 1)
+wall_color = Color(0.35, 0.3, 0.45, 1)
+wall_accent = Color(0.28, 0.24, 0.38, 1)
+pattern_seed = 3
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(960, 540)
+
+[node name="SpawnPoints" type="Node2D" parent="."]
+
+[node name="P1" type="Marker2D" parent="SpawnPoints"]
+position = Vector2(240, 240)
+
+[node name="P2" type="Marker2D" parent="SpawnPoints"]
+position = Vector2(1680, 840)
+
+[node name="P3" type="Marker2D" parent="SpawnPoints"]
+position = Vector2(1680, 240)
+
+[node name="P4" type="Marker2D" parent="SpawnPoints"]
+position = Vector2(240, 840)
+
+[node name="ToySpawns" type="Node2D" parent="."]
+
+[node name="T1" type="Marker2D" parent="ToySpawns"]
+position = Vector2(960, 300)
+
+[node name="T2" type="Marker2D" parent="ToySpawns"]
+position = Vector2(960, 780)
+
+[node name="T3" type="Marker2D" parent="ToySpawns"]
+position = Vector2(400, 540)
+
+[node name="Obstacles" type="Node2D" parent="."]
+
+[node name="Rug" type="Area2D" parent="Obstacles"]
+position = Vector2(960, 540)
+script = ExtResource("3_slow")
+radius = 150.0
+color = Color(0.75, 0.3, 0.35, 1)
+slow_factor = 0.8
+
+[node name="CoffeeTable" type="StaticBody2D" parent="Obstacles"]
+position = Vector2(960, 540)
+script = ExtResource("2_obstacle")
+size = Vector2(200, 90)
+color = Color(0.45, 0.3, 0.2, 1)
+label = "TABLE"
+
+[node name="Couch" type="StaticBody2D" parent="Obstacles"]
+position = Vector2(960, 860)
+script = ExtResource("2_obstacle")
+size = Vector2(420, 110)
+color = Color(0.3, 0.45, 0.65, 1)
+label = "COUCH"
+rounded = 30.0
+
+[node name="TV" type="StaticBody2D" parent="Obstacles"]
+position = Vector2(960, 190)
+script = ExtResource("2_obstacle")
+size = Vector2(300, 70)
+color = Color(0.2, 0.2, 0.25, 1)
+label = "TV"
+
+[node name="Armchair1" type="StaticBody2D" parent="Obstacles"]
+position = Vector2(500, 540)
+script = ExtResource("2_obstacle")
+size = Vector2(120, 140)
+color = Color(0.6, 0.35, 0.5, 1)
+rounded = 24.0
+
+[node name="Armchair2" type="StaticBody2D" parent="Obstacles"]
+position = Vector2(1420, 540)
+script = ExtResource("2_obstacle")
+size = Vector2(120, 140)
+color = Color(0.6, 0.35, 0.5, 1)
+rounded = 24.0
+
+[node name="Plant" type="StaticBody2D" parent="Obstacles"]
+position = Vector2(1650, 520)
+script = ExtResource("2_obstacle")
+size = Vector2(80, 80)
+color = Color(0.3, 0.6, 0.3, 1)
+rounded = 40.0
