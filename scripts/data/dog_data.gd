@@ -20,19 +20,19 @@ extends Resource
 @export_range(1, 5) var dash_rating: int = 3
 
 @export_group("Gameplay numbers")
-## Top speed in pixels per second.
-@export var move_speed: float = 420.0
+## Top speed in metres per second.
+@export var move_speed: float = 7.0
 ## Multiplier applied to the toy's base throw speed.
 @export var throw_power: float = 1.0
 ## Pressing catch while a dangerous toy is inside this radius catches it immediately.
-@export var catch_radius: float = 100.0
+@export var catch_radius: float = 2.0
 ## A catch press also stays "armed" for this many seconds: a toy that would hit the dog in that
 ## window is caught instead. This is the real skill window; bigger = more forgiving.
 @export var catch_window: float = 0.18
 ## After a missed catch press the dog can't try again for this long (stops button mashing).
 @export var catch_cooldown: float = 0.35
-## Distance covered by one dash, in pixels.
-@export var dash_distance: float = 300.0
+## Distance covered by one dash, in metres.
+@export var dash_distance: float = 5.0
 @export var dash_cooldown: float = 0.9
 ## Hitbox radius. Smaller dogs are harder to hit.
-@export var body_radius: float = 32.0
+@export var body_radius: float = 0.72

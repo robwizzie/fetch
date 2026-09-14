@@ -1,39 +1,43 @@
 [gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/actors/toy.gd" id="1_toy"]
-[ext_resource type="Script" path="res://scripts/actors/toy_visual.gd" id="2_visual"]
+[ext_resource type="Script" path="res://scripts/visuals/toy_model.gd" id="2_model"]
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
-radius = 16.0
+[sub_resource type="SphereShape3D" id="SphereShape3D_body"]
+radius = 0.35
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_hit"]
-radius = 22.0
+[sub_resource type="SphereShape3D" id="SphereShape3D_hit"]
+radius = 0.5
 
-[node name="Toy" type="CharacterBody2D"]
-z_index = 20
+[node name="Toy" type="CharacterBody3D"]
 collision_layer = 4
 collision_mask = 1
 motion_mode = 1
 script = ExtResource("1_toy")
 
-[node name="Shape" type="CollisionShape2D" parent="."]
-shape = SubResource("CircleShape2D_body")
+[node name="Shape" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape3D_body")
 
-[node name="HitArea" type="Area2D" parent="."]
+[node name="HitArea" type="Area3D" parent="."]
 collision_layer = 0
 collision_mask = 2
 monitorable = false
 
-[node name="Shape" type="CollisionShape2D" parent="HitArea"]
-shape = SubResource("CircleShape2D_hit")
+[node name="Shape" type="CollisionShape3D" parent="HitArea"]
+shape = SubResource("SphereShape3D_hit")
 
-[node name="Trail" type="Line2D" parent="."]
-z_index = -1
-width = 18.0
-default_color = Color(1, 1, 0.5, 0.6)
-joint_mode = 2
-begin_cap_mode = 2
-end_cap_mode = 2
+[node name="Trail" type="CPUParticles3D" parent="."]
+amount = 24
+lifetime = 0.35
+local_coords = false
+direction = Vector3(0, 0, 0)
+spread = 180.0
+gravity = Vector3(0, 0, 0)
+initial_velocity_min = 0.2
+initial_velocity_max = 0.6
+scale_amount_min = 0.3
+scale_amount_max = 1.0
+scale_amount_curve = null
 
-[node name="Visual" type="Node2D" parent="."]
-script = ExtResource("2_visual")
+[node name="Model" type="Node3D" parent="."]
+script = ExtResource("2_model")

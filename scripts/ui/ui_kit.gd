@@ -64,18 +64,11 @@ static func stat_row(name: String, rating: int, color: Color) -> HBoxContainer:
 	return row
 
 
-## Draws a dog inside a Control (Node2D children of Controls are fine in Godot).
-static func dog_portrait(data: DogData, color: Color, box: Vector2 = Vector2(220, 200), zoom: float = 2.2) -> Control:
-	var holder := Control.new()
-	holder.custom_minimum_size = box
-	var v := DogVisual.new()
-	v.name = "DogVisual"
-	v.position = box / 2.0
-	v.scale = Vector2.ONE * zoom
-	v.setup(data, color)
-	v.update_motion(Vector2(0.9, -0.45).normalized(), 0.0)
-	holder.add_child(v)
-	return holder
+## A live 3D dog inside the 2D UI (SubViewport turntable).
+static func dog_portrait(data: DogData, color: Color, box: Vector2 = Vector2(320, 240), zoom: float = 1.0, spin: float = 0.5) -> DogPortrait:
+	var p := DogPortrait.new()
+	p.setup(data, color, box, zoom, spin)
+	return p
 
 
 static func panel_style(border: Color, bg: Color = Color(0.09, 0.11, 0.19, 0.95)) -> StyleBoxFlat:

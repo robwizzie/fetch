@@ -25,8 +25,10 @@ var _target_throw_timer := 0.0
 var _failed := false
 
 
-static func dir_to(from: Node2D, to: Node2D) -> Vector2:
-	return (to.global_position - from.global_position).normalized()
+## Flat (XZ) direction from one node to another as a 2D input vector (x = right, y = down/toward camera).
+static func dir_to(from: Node3D, to: Node3D) -> Vector2:
+	var d := to.global_position - from.global_position
+	return Vector2(d.x, d.z).normalized()
 
 
 func _ready() -> void:
@@ -71,8 +73,18 @@ func _ready() -> void:
 	add_child(_match)
 
 
+var _debug_timer := 0.0
+
+
 func _process(delta: float) -> void:
 	_elapsed += delta
+	_debug_timer += delta
+	if _debug_timer > 4.0 and _phase == "match" and OS.get_cmdline_user_args().has("--verbose"):
+		_debug_timer = 0.0
+		for d in _match.dogs:
+			print("[smoke]   %s alive=%s pos=%s held=%s" % [d.data.display_name, d.alive, d.global_position.snapped(Vector3(0.1, 0.1, 0.1)), d.held_toy != null])
+		for t in _match.toys:
+			print("[smoke]   toy state=%d pos=%s speed=%.1f" % [t.state, t.global_position.snapped(Vector3(0.1, 0.1, 0.1)), t.velocity.length()])
 	if _elapsed > TIMEOUT_SEC:
 		_fail("timed out (rounds won: %d, eliminations: %d, catches: %d)" % [_rounds_won, _eliminations, _caught])
 	if _phase != "match" or not _round_started:
@@ -96,10 +108,10 @@ func _process(delta: float) -> void:
 			if t.state == Toy.State.IDLE and (nearest == null or t.global_position.distance_to(shooter.global_position) < nearest.global_position.distance_to(shooter.global_position)):
 				nearest = t
 		if nearest:
-			shooter.input.virtual_move = (nearest.global_position - shooter.global_position).normalized()
+			shooter.input.virtual_move = dir_to(shooter, nearest)
 		_throw_timer = 0.0
 	else:
-		shooter.input.virtual_move = (target.global_position - shooter.global_position).normalized()
+		shooter.input.virtual_move = dir_to(shooter, target)
 		_throw_timer += delta
 		if _throw_timer > 1.2:
 			_throw_timer = 0.0
