@@ -60,10 +60,10 @@ func _ready() -> void:
 	catch_shape.shape = catch
 	catch_shape.position.y = 0.5
 	model.setup(data, slot.color)
-	model.scale = Vector3.ONE * (data.body_radius / 0.55)
-	name_tag.text = data.display_name
+	name_tag.text = data.display_name.to_upper()
+	name_tag.font = UiKit.FONT_DISPLAY
 	name_tag.modulate = slot.color
-	name_tag.position.y = 1.7 * (data.body_radius / 0.55) + 0.4
+	name_tag.position.y = 1.55 * data.model_scale + 0.35
 	ring.mesh = Mats.torus(data.body_radius + 0.12, data.body_radius + 0.28)
 	ring.material_override = Mats.unlit(slot.color)
 	Juice.pop(model, 1.5, 0.35)

@@ -27,8 +27,12 @@ is the faster road, and the codebase is small enough that a later port is a rewr
 tilted camera: props have volume, dogs cast shadows, balls arc over things. That look is hard to fake in 2D
 and cheap to get in 3D with low-poly assets. Gameplay is still 2D underneath: dogs and toys move on the
 ground plane (XZ), toys fly at a fixed height, so the physics stays as simple and fair as a 2D game.
-The prototype's placeholder art is built from primitives (capsules, spheres, boxes) with toon shading;
-real models drop in by replacing two nodes (`DogModel`, `ToyModel`) and the prop builder (`Obstacle`).
+The prototype's placeholder art is built from primitives (capsules, spheres, boxes) with toon shading and an
+inverted-hull outline; each breed has its own body plan (`DogModel.breed_spec`) so Shadow is a black Lab,
+Goose a grey pit bull, Luna a tri-colour corgi, Hattie a black-and-tan dachshund and Posey a golden retriever.
+Real models drop in by replacing two nodes (`DogModel`, `ToyModel`) and the prop builder (`Obstacle`).
+Menus follow the boards: the FETCH wordmark (built in code from Luckiest Guy with a paw in the C and a tennis
+ball streak), wood-plank buttons with paw icons over the live 3D backyard, per-dog card colours on select.
 
 ## 2. Starting point
 

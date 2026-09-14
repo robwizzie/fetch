@@ -24,6 +24,9 @@ Always run `--import` then the smoke test before committing. Commit generated `*
 - One responsibility per script. Gameplay talks to the rest of the game through `Events` (signal bus), never by reaching into UI nodes.
 - Content is data: dogs/toys/arenas/modes are `.tres` files in `data/`, discovered by folder scan. Add content by adding a file, not by editing code.
 - Menus are built in code with `UiKit` helpers for now. Keep them that way until the art direction is locked.
+- Fonts: Luckiest Guy (logo/titles, Apache 2.0) and Fredoka (UI, OFL) in `assets/fonts`; use `UiKit.title()` / `UiKit.FONT_DISPLAY` rather than new font resources.
+- Dogs are breed-specific: `DogData.breed` picks a body plan in `DogModel.breed_spec()`; colours/markings come from the `.tres`. Keep the five breeds recognisable (black Lab, grey pit bull, tri-colour corgi, black-and-tan dachshund, golden retriever).
+- Menu palette lives in `UiKit` (NAVY, CREAM, YELLOW, WOOD). Dog cards use the dog's `card_color`; the player colour is only the border and P-tag.
 - Placeholder art is primitive meshes built in code (`DogModel`, `ToyModel`, `Obstacle`) with toon materials from `Mats`. Real models replace those nodes, not the gameplay scripts.
 - Units are metres. Arena is 26 x 14.6 centred on the origin. Speeds ~7 m/s, throws ~18 m/s.
 - Nodes built before entering the tree can't call `look_at()`; use `look_at_from_position()`.

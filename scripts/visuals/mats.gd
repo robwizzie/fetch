@@ -85,3 +85,23 @@ static func prism(size: Vector3) -> PrismMesh:
 	var p := PrismMesh.new()
 	p.size = size
 	return p
+
+
+## Cartoon outline: an inverted-hull copy of the mesh, grown along its normals and drawn back-face only.
+static func outline(mi: MeshInstance3D, amount: float = 0.03, color: Color = Color(0.09, 0.07, 0.12)) -> MeshInstance3D:
+	var h := MeshInstance3D.new()
+	h.mesh = mi.mesh
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = color
+	m.cull_mode = BaseMaterial3D.CULL_FRONT
+	m.grow = true
+	m.grow_amount = amount
+	h.material_override = m
+	h.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.add_child(h)
+	return h
+
+
+static func cone(radius: float, height: float) -> CylinderMesh:
+	return cylinder(radius, height, 0.0)

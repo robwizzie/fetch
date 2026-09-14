@@ -22,8 +22,8 @@ func _ready() -> void:
 			var i := 0
 			for d in Game.dogs:
 				var color: Color = PlayerSlot.COLORS[i % PlayerSlot.COLORS.size()]
-				var card := _card(color, d.display_name, d.description)
-				card.get_node("VBox").add_child(UiKit.dog_portrait(d, color, Vector2(260, 200), 1.0, 0.5))
+				var card := _card(d.card_color, d.display_name, d.description)
+				card.get_node("VBox").add_child(UiKit.dog_portrait(d, color, Vector2(260, 210), 1.0, 0.0, true))
 				card.get_node("VBox").move_child(card.get_node("VBox").get_child(-1), 1)
 				flow.add_child(card)
 				i += 1
