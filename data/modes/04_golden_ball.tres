@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="GameModeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/game_mode_data.gd" id="1"]
+
+
+[resource]
+script = ExtResource("1")
+id = &"golden_ball"
+display_name = "Golden Ball"
+description = "One special ball. Hold it to score."
+
+default_points_to_win = 5
+team_based = false
+fully_implemented = false
+swatch = Color(1.0, 0.85, 0.3, 1)

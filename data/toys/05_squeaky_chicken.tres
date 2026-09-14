@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ToyData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/toy_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"squeaky_chicken"
+display_name = "Squeaky Chicken"
+description = "Reveals nearby dogs (sound). (squeak special: prototype)"
+color = Color(1.0, 0.85, 0.2, 1)
+radius = 26.0
+throw_speed = 1000.0
+bounciness = 0.8
+max_bounces = 3
+friction = 500.0
+danger_speed = 340.0
+special = 2
+fully_implemented = false

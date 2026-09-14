@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ToyData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/toy_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"rope_toy"
+display_name = "Rope Toy"
+description = "Knocks toys away. (knockback special: prototype)"
+color = Color(0.4, 0.5, 0.9, 1)
+radius = 26.0
+throw_speed = 950.0
+bounciness = 0.7
+max_bounces = 2
+friction = 600.0
+danger_speed = 320.0
+special = 1
+fully_implemented = false

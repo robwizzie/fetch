@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="DogData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dog_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"goose"
+display_name = "Goose"
+description = "Stronger throws. A little slower."
+fur_color = Color(0.5, 0.48, 0.5, 1)
+accent_color = Color(0.75, 0.72, 0.72, 1)
+bandana_color = Color(0.95, 0.3, 0.3, 1)
+speed_rating = 2
+throw_rating = 5
+catch_rating = 3
+dash_rating = 2
+move_speed = 370.0
+throw_power = 1.35
+catch_radius = 100.0
+catch_window = 0.18
+dash_distance = 260.0
+body_radius = 35.0

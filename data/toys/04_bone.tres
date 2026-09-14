@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ToyData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/toy_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"bone"
+display_name = "Bone"
+description = "Heavy but powerful."
+color = Color(0.95, 0.93, 0.85, 1)
+radius = 26.0
+throw_speed = 850.0
+bounciness = 0.95
+max_bounces = 4
+friction = 300.0
+danger_speed = 300.0
+special = 0
+fully_implemented = true
