@@ -4,14 +4,27 @@ extends Resource
 ## To add a dog: duplicate any .tres in res://data/dogs/, change the values, done.
 ## Files are loaded in filename order, so prefix with a number to control menu order.
 
+## Body plan used by DogModel. Each breed has its own proportions, ears, tail and markings.
+enum Breed { LABRADOR, PITBULL, CORGI, DACHSHUND, GOLDEN }
+
 @export var id: StringName = &"shadow"
 @export var display_name: String = "Shadow"
 @export_multiline var description: String = "Balanced and reliable."
+@export var breed: Breed = Breed.LABRADOR
 
 @export_group("Look")
-@export var fur_color: Color = Color(0.12, 0.12, 0.14)
-@export var accent_color: Color = Color(0.35, 0.3, 0.3)
-@export var bandana_color: Color = Color(0.2, 0.5, 1.0)
+## Main coat colour.
+@export var fur_color: Color = Color(0.1, 0.1, 0.13)
+## White/cream/tan patches: chest, muzzle, blaze, socks (used per breed).
+@export var markings_color: Color = Color(0.95, 0.95, 0.95)
+## Second coat colour: corgi saddle, dachshund tan points, ear shading.
+@export var secondary_color: Color = Color(0.16, 0.16, 0.2)
+@export var bandana_color: Color = Color(0.2, 0.45, 1.0)
+## Card colours on the select screen (bright top, dark bottom).
+@export var card_color: Color = Color(0.24, 0.5, 1.0)
+@export var card_color_dark: Color = Color(0.1, 0.2, 0.5)
+## Overall model scale (breed proportions are baked into DogModel).
+@export var model_scale: float = 1.0
 
 @export_group("Ratings (1-5, shown on the select screen)")
 @export_range(1, 5) var speed_rating: int = 3

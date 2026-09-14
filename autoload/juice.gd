@@ -53,6 +53,7 @@ func float_text(parent: Node, pos: Vector3, text: String, color: Color = Color.W
 		return
 	var l := Label3D.new()
 	l.text = text
+	l.font = UiKit.FONT_DISPLAY
 	l.font_size = int(72 * size)
 	l.outline_size = int(20 * size)
 	l.pixel_size = 0.012

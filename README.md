@@ -26,10 +26,10 @@ You can also run a scene directly with **F6** while it's open (e.g. `scenes/matc
 |---|---|---|---|
 | Join (dog select) | A / Start | Space | Enter |
 | Move | Left stick / D-pad | WASD | Arrow keys |
-| Throw / Catch / Pick up | A or X | Space | Enter |
-| Dash (invincible) | B, RB or RT | Left Shift or E | Right Ctrl, `/` or Numpad 0 |
+| Throw / Catch / Pick up | X (or Y, RT) · LT also catches | Space | Enter |
+| Dash (invincible) | A or RB | Left Shift or E | Right Ctrl, `/` or Numpad 0 |
+| Confirm (menus) | A / X | Space | Enter |
 | Back / leave | B / Back | Esc | Backspace |
-| Menus | D-pad + A | Arrows + Enter | Arrows + Enter |
 
 Walk over a toy on the ground to pick it up. Press throw with no toy in hand to **catch**: a toy that
 reaches you within the next fraction of a second (per dog: `catch_window`) is caught instead of hitting you.
