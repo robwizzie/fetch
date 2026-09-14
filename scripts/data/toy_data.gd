@@ -9,19 +9,19 @@ enum Special { NONE, KNOCKBACK, SQUEAK, RICOCHET }
 @export var display_name: String = "Tennis Ball"
 @export_multiline var description: String = "Balanced and bouncy."
 @export var color: Color = Color(0.85, 0.95, 0.3)
-@export var radius: float = 22.0
+@export var radius: float = 0.42
 
 @export_group("Flight")
 ## Base speed when thrown, before the dog's throw_power multiplier.
-@export var throw_speed: float = 1100.0
+@export var throw_speed: float = 18.0
 ## Fraction of speed kept after bouncing off a wall.
 @export var bounciness: float = 0.85
 ## After this many bounces the toy loses half its speed each bounce (prevents endless ricochets).
 @export var max_bounces: int = 3
-## Slow-down while flying, in pixels per second squared.
-@export var friction: float = 450.0
+## Slow-down while flying, in metres per second squared.
+@export var friction: float = 7.5
 ## Below this speed the toy is harmless and can be picked up.
-@export var danger_speed: float = 350.0
+@export var danger_speed: float = 5.8
 
 @export_group("Special")
 @export var special: Special = Special.NONE

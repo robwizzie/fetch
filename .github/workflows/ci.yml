@@ -22,7 +22,11 @@ jobs:
           ./godot --version
 
       - name: Import project
-        run: ./godot --headless --path . --import
+        # Two passes: the first imports the font files, the second lets the theme that references
+        # them load cleanly (otherwise the log fills with harmless "non-existent resource" errors).
+        run: |
+          ./godot --headless --path . --import
+          ./godot --headless --path . --import
 
       - name: Run smoke test
         run: ./godot --headless --path . res://tests/smoke_test.tscn

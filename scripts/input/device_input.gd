@@ -5,7 +5,9 @@ extends RefCounted
 ## bots and tests drive by setting [member virtual_move] / [member virtual_buttons].
 ## Keeping this in one place is what makes "2-4 players on any mix of pads + keyboard" trivial.
 
-const KEYBOARD_WASD := -1    ## WASD, Space = throw/catch, Left Shift = dash, Esc = back
+## Gamepad (from the design board): stick/d-pad move, X = throw / catch (LT also catches), A = dash,
+## A / X / Start = confirm in menus, B = back.
+const KEYBOARD_WASD := -1    ## WASD, Space = throw/catch, Left Shift or E = dash, Esc = back
 const KEYBOARD_ARROWS := -2  ## Arrows, Enter = throw/catch, Right Ctrl or "/" = dash, Backspace = back
 const VIRTUAL := -100        ## Scripted input for bots and automated tests
 const NONE := -999
@@ -56,7 +58,7 @@ func is_pressed(action: StringName) -> bool:
 	match device:
 		KEYBOARD_WASD:
 			match action:
-				&"throw":
+				&"throw", &"confirm":
 					return Input.is_physical_key_pressed(KEY_SPACE)
 				&"dash":
 					return Input.is_physical_key_pressed(KEY_SHIFT) or Input.is_physical_key_pressed(KEY_E)
@@ -64,7 +66,7 @@ func is_pressed(action: StringName) -> bool:
 					return Input.is_physical_key_pressed(KEY_ESCAPE)
 		KEYBOARD_ARROWS:
 			match action:
-				&"throw":
+				&"throw", &"confirm":
 					return Input.is_physical_key_pressed(KEY_ENTER) or Input.is_physical_key_pressed(KEY_KP_ENTER)
 				&"dash":
 					return Input.is_physical_key_pressed(KEY_CTRL) or Input.is_physical_key_pressed(KEY_SLASH) or Input.is_physical_key_pressed(KEY_KP_0)
@@ -75,11 +77,14 @@ func is_pressed(action: StringName) -> bool:
 		_:
 			match action:
 				&"throw":
-					return Input.is_joy_button_pressed(device, JOY_BUTTON_A) or Input.is_joy_button_pressed(device, JOY_BUTTON_X)
-				&"dash":
-					return Input.is_joy_button_pressed(device, JOY_BUTTON_B) \
-						or Input.is_joy_button_pressed(device, JOY_BUTTON_RIGHT_SHOULDER) \
+					return Input.is_joy_button_pressed(device, JOY_BUTTON_X) or Input.is_joy_button_pressed(device, JOY_BUTTON_Y) \
+						or Input.get_joy_axis(device, JOY_AXIS_TRIGGER_LEFT) > 0.5 \
 						or Input.get_joy_axis(device, JOY_AXIS_TRIGGER_RIGHT) > 0.5
+				&"dash":
+					return Input.is_joy_button_pressed(device, JOY_BUTTON_A) or Input.is_joy_button_pressed(device, JOY_BUTTON_RIGHT_SHOULDER)
+				&"confirm":
+					return Input.is_joy_button_pressed(device, JOY_BUTTON_A) or Input.is_joy_button_pressed(device, JOY_BUTTON_X) \
+						or Input.is_joy_button_pressed(device, JOY_BUTTON_START)
 				&"back":
 					return Input.is_joy_button_pressed(device, JOY_BUTTON_B) or Input.is_joy_button_pressed(device, JOY_BUTTON_BACK)
 	return false
@@ -110,9 +115,9 @@ static func join_device_from_event(event: InputEvent) -> int:
 static func describe(p_device: int) -> String:
 	match p_device:
 		KEYBOARD_WASD:
-			return "Keyboard: WASD + Space"
+			return "Keyboard · WASD"
 		KEYBOARD_ARROWS:
-			return "Keyboard: Arrows + Enter"
+			return "Keyboard · Arrows"
 		VIRTUAL:
 			return "Bot"
 		NONE:

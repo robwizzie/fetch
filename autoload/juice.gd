@@ -8,18 +8,21 @@ var _hitstop_active := false
 
 
 func _process(delta: float) -> void:
-	var cam := get_viewport().get_camera_2d()
+	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return
-	if _shake_amount > 0.05:
-		cam.offset = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * _shake_amount
+	if _shake_amount > 0.002:
+		cam.h_offset = randf_range(-1.0, 1.0) * _shake_amount
+		cam.v_offset = randf_range(-1.0, 1.0) * _shake_amount
 		_shake_amount = lerpf(_shake_amount, 0.0, minf(1.0, _shake_decay * delta))
-	elif cam.offset != Vector2.ZERO:
-		cam.offset = Vector2.ZERO
+	elif cam.h_offset != 0.0 or cam.v_offset != 0.0:
+		cam.h_offset = 0.0
+		cam.v_offset = 0.0
 		_shake_amount = 0.0
 
 
-func shake(amount: float = 8.0) -> void:
+## Amount is in metres of camera offset; 0.3 is a solid hit.
+func shake(amount: float = 0.2) -> void:
 	_shake_amount = maxf(_shake_amount, amount)
 
 
@@ -34,65 +37,62 @@ func hitstop(duration: float = 0.08, time_scale: float = 0.05) -> void:
 	_hitstop_active = false
 
 
-## Scales a node up then eases it back to 1. Works for Node2D and Control.
+## Scales a node up then eases it back to its base scale. Works for Node3D and Control.
 func pop(node: Node, amount: float = 1.3, time: float = 0.18) -> void:
 	if not is_instance_valid(node):
 		return
-	node.scale = Vector2.ONE * amount
+	var base: Variant = node.scale
+	node.scale = base * amount
 	var t := create_tween()
-	t.tween_property(node, "scale", Vector2.ONE, time).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	t.tween_property(node, "scale", base, time).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
-## Cartoon squash & stretch, e.g. on throw or landing.
-func squash(node: Node, squash_scale: Vector2 = Vector2(1.25, 0.75), time: float = 0.2) -> void:
-	if not is_instance_valid(node):
-		return
-	node.scale = squash_scale
-	var t := create_tween()
-	t.tween_property(node, "scale", Vector2.ONE, time).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
-
-
-## Spawns a rising, fading label in world space ("BONK!", "CATCH!").
-func float_text(parent: Node, pos: Vector2, text: String, color: Color = Color.WHITE, size: int = 48) -> void:
+## Spawns a rising, fading billboard label in world space ("BONK!", "CATCH!").
+func float_text(parent: Node, pos: Vector3, text: String, color: Color = Color.WHITE, size: float = 1.0) -> void:
 	if not is_instance_valid(parent):
 		return
-	var l := Label.new()
+	var l := Label3D.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", color)
-	l.add_theme_color_override("font_outline_color", Color(0.05, 0.05, 0.1))
-	l.add_theme_constant_override("outline_size", 10)
+	l.font = UiKit.FONT_DISPLAY
+	l.font_size = int(72 * size)
+	l.outline_size = int(20 * size)
+	l.pixel_size = 0.012
+	l.modulate = color
+	l.outline_modulate = Color(0.05, 0.05, 0.1)
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.no_depth_test = true
 	l.position = pos
-	l.rotation = randf_range(-0.18, 0.18)
-	l.z_index = 100
 	parent.add_child(l)
 	var t := create_tween()
-	t.tween_property(l, "position:y", pos.y - 90.0, 0.9).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	t.tween_property(l, "position:y", pos.y + 1.6, 0.9).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	t.parallel().tween_property(l, "modulate:a", 0.0, 0.5).set_delay(0.45)
 	t.tween_callback(l.queue_free)
 
 
-## One-shot particle burst in world space.
-func burst(parent: Node, pos: Vector2, color: Color, count: int = 16, speed: float = 320.0) -> void:
+## One-shot particle burst in world space. Speed in metres per second.
+func burst(parent: Node, pos: Vector3, color: Color, count: int = 16, speed: float = 5.0) -> void:
 	if not is_instance_valid(parent):
 		return
-	var p := CPUParticles2D.new()
+	var p := CPUParticles3D.new()
 	p.position = pos
 	p.amount = count
 	p.one_shot = true
 	p.explosiveness = 1.0
 	p.lifetime = 0.55
-	p.direction = Vector2.RIGHT
+	p.direction = Vector3.UP
 	p.spread = 180.0
 	p.initial_velocity_min = speed * 0.4
 	p.initial_velocity_max = speed
-	p.gravity = Vector2.ZERO
-	p.damping_min = speed * 1.5
-	p.damping_max = speed * 2.0
-	p.scale_amount_min = 4.0
-	p.scale_amount_max = 9.0
+	p.gravity = Vector3(0, -6.0, 0)
+	p.damping_min = speed * 0.8
+	p.damping_max = speed * 1.2
+	p.scale_amount_min = 0.6
+	p.scale_amount_max = 1.4
 	p.color = color
-	p.z_index = 50
+	p.mesh = Mats.sphere(0.12)
+	var pm := Mats.unlit(Color.WHITE)
+	pm.vertex_color_use_as_albedo = true
+	p.mesh.material = pm
 	p.emitting = true
 	parent.add_child(p)
 	get_tree().create_timer(1.2).timeout.connect(p.queue_free)

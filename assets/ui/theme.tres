@@ -1,4 +1,6 @@
-[gd_resource type="Theme" load_steps=6 format=3]
+[gd_resource type="Theme" load_steps=7 format=3]
+
+[ext_resource type="FontVariation" path="res://assets/ui/fredoka_semibold.tres" id="font"]
 
 [sub_resource type="StyleBoxFlat" id="btn_normal"]
 content_margin_left = 28.0
@@ -67,6 +69,7 @@ corner_radius_bottom_left = 18
 [sub_resource type="StyleBoxEmpty" id="empty"]
 
 [resource]
+default_font = ExtResource("font")
 default_font_size = 28
 Button/colors/font_color = Color(1, 1, 1, 1)
 Button/colors/font_disabled_color = Color(1, 1, 1, 0.35)
