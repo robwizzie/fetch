@@ -6,13 +6,19 @@
 script = ExtResource("1")
 id = &"squeaky_chicken"
 display_name = "Squeaky Chicken"
-description = "Reveals nearby dogs (sound). (squeak special: prototype)"
+description = "Bonks on impact. A squeak disarms and slows nearby rivals."
 color = Color(1.0, 0.85, 0.2, 1)
-radius = 0.52
-throw_speed = 17.0
-bounciness = 0.8
-max_bounces = 3
-friction = 8.3
-danger_speed = 5.7
+radius = 0.36
+throw_speed = 13.26
+bounciness = 0.74
+max_bounces = 2
+friction = 5.05
+danger_speed = 4.45
 special = 2
-fully_implemented = false
+fully_implemented = true
+
+held_scale = 1.0
+
+held_rotation = Vector3(90, 0, 0)
+
+ground_height = 0.25

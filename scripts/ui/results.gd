@@ -3,6 +3,7 @@ extends Control
 
 
 func _ready() -> void:
+	Music.play("victory")
 	UiKit.backdrop(self)
 	var winner := Game.last_match_winner
 	var root := VBoxContainer.new()

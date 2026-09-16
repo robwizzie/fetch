@@ -6,13 +6,17 @@
 script = ExtResource("1")
 id = &"bone"
 display_name = "Bone"
-description = "Heavy but powerful."
+description = "Heavy straight shot. Ploughs through dogs; stops at walls."
 color = Color(0.95, 0.93, 0.85, 1)
-radius = 0.52
-throw_speed = 14.0
-bounciness = 0.95
-max_bounces = 4
-friction = 5.0
-danger_speed = 5.0
-special = 0
+radius = 0.36
+throw_speed = 12.48
+bounciness = 0.08
+max_bounces = 0
+friction = 4.14
+danger_speed = 3.9
+special = 4
 fully_implemented = true
+
+held_scale = 1.0
+
+ground_height = 0.16

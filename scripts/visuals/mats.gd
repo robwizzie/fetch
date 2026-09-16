@@ -1,14 +1,15 @@
 class_name Mats
 extends RefCounted
-## Material helpers for the low-poly toon look. One place to change the whole game's shading.
+## Soft, matte materials for the toy-like world. Keep coat and prop colours readable in sunlight.
 
 
 static func flat(color: Color, roughness: float = 0.9) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = color
 	m.roughness = roughness
-	m.diffuse_mode = BaseMaterial3D.DIFFUSE_TOON
-	m.specular_mode = BaseMaterial3D.SPECULAR_TOON
+	m.diffuse_mode = BaseMaterial3D.DIFFUSE_BURLEY
+	m.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+	m.metallic_specular = 0.18
 	return m
 
 

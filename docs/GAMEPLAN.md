@@ -3,6 +3,10 @@
 This document records the decisions behind the prototype and the plan to turn it into a full party game.
 Reference: the two design boards (title/menu, dog select, toys, modes, arenas, game flow) and Boomerang Fu.
 
+**Historical roadmap:** the cover/reference art pass, CPU practice, pause, round timer, and
+orthographic camera are now implemented. See [`ART_DIRECTION.md`](ART_DIRECTION.md) for the current
+visual direction and remaining production work, and the README for current controls and test commands.
+
 ## 1. Engine and language: Godot 4.7 + GDScript
 
 **Decision: Godot 4.7.2, GDScript, 3D with a fixed tilted camera (Boomerang Fu style).** Unity was the stated preference; here is why Godot wins for this

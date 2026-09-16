@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ArenaData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/arena_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/arenas/agility_park.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = &"agility_park"
+display_name = "Agility Park"
+description = "Tunnels, an A-frame and weave poles. Long sightlines and fast lanes."
+scene = ExtResource("2")
+swatch = Color(0.36, 0.62, 0.86, 1)

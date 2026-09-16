@@ -11,6 +11,9 @@ func _ready() -> void:
 		if arg.begins_with("--out="):
 			out_dir = arg.trim_prefix("--out=")
 	DirAccess.make_dir_recursive_absolute(out_dir)
+	Game.show_start_prompt = true
+	await _shoot("res://scenes/ui/loading.tscn", "00_loading", 0.8)
+	Game.show_start_prompt = false
 	Game.debug_fill_players(3)
 	Game.slots[1].dog = Game.dogs[4]
 	Game.slots[2].dog = Game.dogs[2]
@@ -28,10 +31,16 @@ func _ready() -> void:
 	await _shoot("res://scenes/ui/match_setup.tscn", "03_match_setup")
 	Game.gallery_kind = "dogs"
 	await _shoot("res://scenes/ui/gallery.tscn", "04_gallery_dogs")
+	await _shoot("res://scenes/ui/model_review.tscn", "06_model_studio")
+	Game.last_match_winner = Game.slots[1]
+	Game.slots[1].score = 5
+	Game.slots[0].score = 3
+	Game.slots[2].score = 1
 	await _shoot("res://scenes/ui/results.tscn", "05_results")
 
 	Game.reset_scores()
 	Game.slots[0].score = 2
+	Game.random_arena_each_round = false
 	for i in Game.arenas.size():
 		Game.selected_arena = Game.arenas[i]
 		var m: Node = load("res://scenes/match/match.tscn").instantiate()
@@ -40,11 +49,16 @@ func _ready() -> void:
 		# Throw once so a ball is mid-flight, then wait a beat and capture.
 		var d: Dog = m.dogs[0]
 		d.input = DeviceInput.new(DeviceInput.VIRTUAL)
+		m.toys[0].pick_up(d)
 		d.input.virtual_move = Vector2(1, 0.4).normalized()
 		await get_tree().create_timer(0.3).timeout
 		d.input.virtual_buttons[&"throw"] = true
 		await get_tree().create_timer(0.25).timeout
 		await _capture("1%d_match_%s" % [i, Game.arenas[i].id])
+		if i == 0:
+			m.set_paused(true)
+			await _capture("12_pause")
+			m.set_paused(false)
 		m.queue_free()
 		await get_tree().process_frame
 	print("[shots] done -> " + ProjectSettings.globalize_path(out_dir))

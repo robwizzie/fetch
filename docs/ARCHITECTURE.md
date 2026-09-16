@@ -1,5 +1,32 @@
 # Architecture
 
+The current presentation and gameplay pass is described in [`ART_DIRECTION.md`](ART_DIRECTION.md).
+Startup now begins with `scenes/ui/loading.tscn`. `Game.goto()` routes scene changes through this
+cover screen and uses `ResourceLoader` threaded loading with actual progress. After the initial
+ready prompt, subsequent transitions proceed automatically. The main menu uses `CoverStage` to
+preserve the original cover image's aspect ratio beside the controls.
+
+`Game.start_practice(device)` creates one human and three CPU slots. `PlayerSlot.is_bot` explicitly
+opts a dog into `BotBrain`, which drives `DeviceInput.VIRTUAL`; scripted-test virtual devices are
+left alone. The lobby can add/remove CPUs, change their dogs, and retains their ready state.
+Match setup offers only fully implemented modes/toys; galleries can still show prototypes.
+
+The match has a 45-second round clock, no-score timeout draws, and real tree pause on Esc/Start.
+Audio is synthesised, not loaded: `Sfx` builds its one-shots at startup and `Music` sequences
+three looping tracks on a worker thread, mixed on separate `SFX` and `Music` buses. Screens ask
+for a track by name and repeating the current one is a no-op, so the front end keeps one piece
+playing across scene changes. A knockout ducks the music briefly.
+
+A throw is one-way: once released, a toy belongs to whoever picks it up next. Opening toy placement is
+mirror-symmetric about both arena axes and kept clear of every spawn, so each dog has the same run to the
+nearest toy, and it is redrawn each round. With `Game.random_arena_each_round` (the setup screen's default)
+the match swaps the whole arena between rounds. The HUD shows score, toy/dash status, round time, input hints, and pause controls.
+The arena camera is orthographic and adjusts framing to keep the full arena visible.
+
+Dog selection uses front-view crops from `images/models`; rotating 3D portraits and matches use
+the procedural `DogModel`. Barkley retains the old `hattie` data ID for compatibility and uses the
+new spaniel body plan. The section below describes the underlying structure inherited from the prototype.
+
 ```
 project.godot                 Godot project (autoloads, 1920x1080 canvas, physics layers, theme)
 autoload/

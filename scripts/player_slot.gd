@@ -14,6 +14,28 @@ var device: int = DeviceInput.NONE
 var dog: DogData
 var score: int = 0
 var ready: bool = false
+## AI is opt-in: virtual devices are also used by scripted tests and menu dogs.
+var is_bot: bool = false
+## Power-ups held for the rest of the match, oldest first. Capped at PowerupKinds.MAX_SLOTS.
+var powerups: Array[StringName] = []
+
+
+## Adds a power-up, pushing out the oldest once the belt is full. Returns what was displaced,
+## or an empty name — the HUD uses it to show the swap.
+func take_powerup(kind: StringName) -> StringName:
+	var dropped := &""
+	if powerups.size() >= PowerupKinds.MAX_SLOTS:
+		dropped = powerups.pop_front()
+	powerups.append(kind)
+	return dropped
+
+
+func has_powerup(kind: StringName) -> bool:
+	return powerups.has(kind)
+
+
+func powerup_count(kind: StringName) -> int:
+	return PowerupKinds.count(powerups, kind)
 
 var color: Color:
 	get:
@@ -21,4 +43,4 @@ var color: Color:
 
 var label: String:
 	get:
-		return "P%d" % (index + 1)
+		return "CPU %d" % (index + 1) if is_bot else "P%d" % (index + 1)

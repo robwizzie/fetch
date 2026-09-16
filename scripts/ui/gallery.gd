@@ -37,6 +37,13 @@ func _ready() -> void:
 			for m in Game.modes:
 				flow.add_child(_card(m.swatch, m.display_name + ("" if m.fully_implemented else " (coming soon)"), m.description))
 
+	if Game.gallery_kind == "dogs":
+		var studio := UiKit.button("3D DOG STUDIO")
+		studio.pressed.connect(func() -> void: Game.goto("res://scenes/ui/model_review.tscn"))
+		var studio_center := CenterContainer.new()
+		studio_center.add_child(studio)
+		root.add_child(studio_center)
+
 	var back := UiKit.button("Back")
 	back.pressed.connect(func() -> void: Game.goto(Game.SCENE_MAIN_MENU))
 	var center := CenterContainer.new()

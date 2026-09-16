@@ -6,13 +6,17 @@
 script = ExtResource("1")
 id = &"rope_toy"
 display_name = "Rope Toy"
-description = "Knocks toys away. (knockback special: prototype)"
+description = "Tug, disarm and shove rivals into the open."
 color = Color(0.4, 0.5, 0.9, 1)
-radius = 0.52
-throw_speed = 16.0
-bounciness = 0.7
-max_bounces = 2
-friction = 10.0
-danger_speed = 5.3
+radius = 0.37
+throw_speed = 13.26
+bounciness = 0.55
+max_bounces = 1
+friction = 6.08
+danger_speed = 4.13
 special = 1
-fully_implemented = false
+fully_implemented = true
+
+held_scale = 1.0
+
+ground_height = 0.14

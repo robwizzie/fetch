@@ -1,19 +1,29 @@
 extends Control
 ## Choose mode, arena, toy and points-to-win, then start the match.
-## Modes/toys that aren't fully implemented are selectable so they're visible, but Start explains why not.
+## Only playable content appears here; prototypes remain visible in the galleries.
 
 var _mode_row: CarouselRow
 var _arena_row: CarouselRow
 var _toy_row: CarouselRow
 var _points_row: CarouselRow
+var _powerups_row: CarouselRow
 var _start: Button
 var _desc: Label
+var _playable_modes: Array[GameModeData] = []
+var _playable_toys: Array[ToyData] = []
 
 const POINT_OPTIONS := [3, 5, 7, 10]
 
 
 func _ready() -> void:
+	Music.play("menu")
 	UiKit.backdrop(self)
+	for mode in Game.modes:
+		if mode.fully_implemented and mode.mode_script != null:
+			_playable_modes.append(mode)
+	for toy in Game.toys:
+		if toy.fully_implemented:
+			_playable_toys.append(toy)
 	var root := VBoxContainer.new()
 	root.set_anchors_preset(Control.PRESET_CENTER)
 	root.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -25,21 +35,25 @@ func _ready() -> void:
 	root.add_child(UiKit.title("SET UP THE MATCH", 72, UiKit.ACCENT))
 	root.add_child(UiKit.label("%d dogs ready to play" % Game.slots.size(), 24, Color(1, 1, 1, 0.7)))
 
-	_mode_row = _row(root, "Mode", Game.modes.map(func(m: GameModeData) -> String:
-		return m.display_name + ("" if m.fully_implemented else "  (coming soon)")), Game.modes.find(Game.selected_mode))
-	_arena_row = _row(root, "Arena", Game.arenas.map(func(a: ArenaData) -> String: return a.display_name), Game.arenas.find(Game.selected_arena))
-	_toy_row = _row(root, "Toy", Game.toys.map(func(t: ToyData) -> String:
-		return t.display_name + ("" if t.fully_implemented else "  (prototype)")), Game.toys.find(Game.selected_toy))
+	_mode_row = _row(root, "Mode", _playable_modes.map(func(m: GameModeData) -> String:
+		return m.display_name), _playable_modes.find(Game.selected_mode))
+	var arena_names: Array[String] = ["Shuffle every round"]
+	for a in Game.arenas:
+		arena_names.append(a.display_name)
+	_arena_row = _row(root, "Arena", arena_names, 0 if Game.random_arena_each_round else Game.arenas.find(Game.selected_arena) + 1)
+	_toy_row = _row(root, "Toy box", ["Mixed dog toys"] + _playable_toys.map(func(t: ToyData) -> String:
+		return t.display_name), 0 if Game.mixed_toys else _playable_toys.find(Game.selected_toy) + 1)
+	_powerups_row = _row(root, "Treats", ["From round 2", "Off"], 0 if Game.powerups_enabled else 1)
 	_points_row = _row(root, "First to", POINT_OPTIONS.map(func(p: int) -> String: return "%d points" % p), maxi(POINT_OPTIONS.find(Game.points_to_win), 0))
 
 	_desc = UiKit.label("", 22, Color(1, 1, 1, 0.75))
 	_desc.custom_minimum_size = Vector2(900, 90)
 	root.add_child(_desc)
 
-	_start = UiKit.button("FETCH!", 900)
+	_start = UiKit.wood_button("FETCH!", 900)
 	_start.pressed.connect(_on_start)
 	root.add_child(_start)
-	var back := UiKit.button("Back", 900)
+	var back := UiKit.wood_button("Choose dogs", 900)
 	back.pressed.connect(func() -> void: Game.goto(Game.SCENE_DOG_SELECT))
 	root.add_child(back)
 
@@ -61,11 +75,17 @@ func _row(parent: Control, title: String, items: Array, start: int) -> CarouselR
 
 
 func _apply() -> void:
-	Game.selected_mode = Game.modes[_mode_row.index]
-	Game.selected_arena = Game.arenas[_arena_row.index]
-	Game.selected_toy = Game.toys[_toy_row.index]
+	Game.selected_mode = _playable_modes[_mode_row.index]
+	Game.random_arena_each_round = _arena_row.index == 0
+	if not Game.random_arena_each_round:
+		Game.selected_arena = Game.arenas[_arena_row.index - 1]
+	Game.mixed_toys = _toy_row.index == 0
+	if not Game.mixed_toys:
+		Game.selected_toy = _playable_toys[_toy_row.index - 1]
+	Game.powerups_enabled = _powerups_row.index == 0
 	Game.points_to_win = POINT_OPTIONS[_points_row.index]
-	_desc.text = "%s\n%s  ·  %s" % [Game.selected_mode.description, Game.selected_arena.description, Game.selected_toy.description]
+	var where := "A different arena every round, drawn from all %d." % Game.arenas.size() if Game.random_arena_each_round else Game.selected_arena.description
+	_desc.text = "%s\n%s  ·  %s" % [Game.selected_mode.description, where, ("Start empty-handed. Fetch a toy from the arena!" if Game.mixed_toys else Game.selected_toy.description)]
 	var ok := Game.selected_mode.fully_implemented and Game.selected_mode.mode_script != null
 	_start.text = "FETCH!" if ok else "That mode isn't built yet"
 	_start.disabled = not ok

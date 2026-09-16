@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ArenaData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/arena_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/arenas/beach.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = &"beach"
+display_name = "Pup Beach"
+description = "Open sand, a big umbrella and a tide pool that slows you down."
+scene = ExtResource("2")
+swatch = Color(0.95, 0.76, 0.42, 1)
