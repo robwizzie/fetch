@@ -36,7 +36,7 @@ func step(dir: int) -> void:
 		return
 	index = wrapi(index + dir, 0, items.size())
 	_refresh()
-	Sfx.play("ui")
+	Sfx.play("ui_move")
 	pivot_offset = size / 2.0
 	Juice.pop(self, 1.04, 0.1)
 	changed.emit(index)

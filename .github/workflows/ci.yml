@@ -30,3 +30,19 @@ jobs:
 
       - name: Run smoke test
         run: ./godot --headless --path . res://tests/smoke_test.tscn
+
+      - name: Check gameplay mechanics
+        run: ./godot --headless --path . res://tests/gameplay_test.tscn
+
+      - name: Check menu and loading flow
+        run: ./godot --headless --path . res://tests/ui_flow_test.tscn
+
+      - name: Check weapons, placement and camera
+        run: |
+          ./godot --headless --path . res://tests/weapon_test.tscn
+          ./godot --headless --path . res://tests/match_rules_test.tscn
+          ./godot --headless --path . res://tests/camera_test.tscn
+          ./godot --headless --path . res://tests/mixed_match_test.tscn
+
+      - name: Check authored 3D asset pipeline
+        run: ./godot --headless --path . res://tests/asset_pipeline_test.tscn

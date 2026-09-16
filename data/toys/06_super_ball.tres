@@ -6,13 +6,15 @@
 script = ExtResource("1")
 id = &"super_ball"
 display_name = "Super Ball"
-description = "Fast. Ricochets more."
+description = "Quick rubber ball. Six wild ricochets."
 color = Color(0.6, 0.25, 0.85, 1)
-radius = 0.36
-throw_speed = 22.0
-bounciness = 1.0
+radius = 0.29
+throw_speed = 17.16
+bounciness = 0.98
 max_bounces = 6
-friction = 4.2
-danger_speed = 6.3
+friction = 2.31
+danger_speed = 4.91
 special = 3
 fully_implemented = true
+
+held_scale = 1.0

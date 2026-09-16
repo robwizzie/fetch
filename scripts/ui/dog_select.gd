@@ -9,13 +9,15 @@ const MIN_PLAYERS := 2
 var _panels: Array[Control] = []
 var _inputs: Dictionary = {}
 var _footer: Label
+var _continue: Button
 
 
 func _ready() -> void:
+	Music.play("menu")
 	UiKit.backdrop(self)
 	Game.reset_scores()
 	for slot in Game.slots:
-		slot.ready = false
+		slot.ready = slot.is_bot
 		_inputs[slot] = DeviceInput.new(slot.device)
 
 	var root := VBoxContainer.new()
@@ -25,6 +27,7 @@ func _ready() -> void:
 	add_child(root)
 
 	root.add_child(UiKit.title("SELECT YOUR DOG", 78, UiKit.YELLOW))
+	root.add_child(UiKit.label("Same friends. New tricks.  •  Pick your pup and ready up.", 23, UiKit.CREAM))
 
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -38,6 +41,21 @@ func _ready() -> void:
 
 	_footer = UiKit.label("", 24, Color(1, 1, 1, 0.8))
 	root.add_child(_footer)
+	var actions := HBoxContainer.new()
+	actions.alignment = BoxContainer.ALIGNMENT_CENTER
+	actions.add_theme_constant_override("separation", 18)
+	root.add_child(actions)
+	var back := _mouse_button("Back", 170)
+	back.pressed.connect(func() -> void: Game.goto(Game.SCENE_MAIN_MENU))
+	actions.add_child(back)
+	var cpu := _mouse_button("Add CPU", 220)
+	cpu.pressed.connect(_add_bot)
+	actions.add_child(cpu)
+	_continue = _mouse_button("Let's play!", 300)
+	_continue.pressed.connect(func() -> void:
+		if _all_ready():
+			Game.goto(Game.SCENE_MATCH_SETUP))
+	actions.add_child(_continue)
 	_refresh_all()
 
 
@@ -58,6 +76,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _process(_delta: float) -> void:
 	for slot in Game.slots.duplicate():
+		if slot.is_bot:
+			continue
 		var inp: DeviceInput = _inputs[slot]
 		if not slot.ready:
 			if inp.just_pressed(&"left"):
@@ -74,7 +94,7 @@ func _process(_delta: float) -> void:
 		if inp.just_pressed(&"back"):
 			if slot.ready:
 				slot.ready = false
-				Sfx.play("ui", 0.8)
+				Sfx.play("ui_back")
 			else:
 				Game.remove_player(slot)
 				_inputs.erase(slot)
@@ -85,7 +105,7 @@ func _process(_delta: float) -> void:
 func _cycle(slot: PlayerSlot, dir: int) -> void:
 	var i := Game.dogs.find(slot.dog)
 	slot.dog = Game.dogs[wrapi(i + dir, 0, Game.dogs.size())]
-	Sfx.play("ui")
+	Sfx.play("ui_move")
 	_refresh_all()
 
 
@@ -95,10 +115,11 @@ func _all_ready() -> bool:
 	for s in Game.slots:
 		if not s.ready:
 			return false
-	return true
+	return Game.slots.any(func(s: PlayerSlot) -> bool: return not s.is_bot)
 
 
 func _refresh_all() -> void:
+	_continue.disabled = not _all_ready()
 	for i in _panels.size():
 		var holder := _panels[i]
 		for c in holder.get_children():
@@ -109,9 +130,9 @@ func _refresh_all() -> void:
 		else:
 			_fill_empty_card(holder, i)
 	if _all_ready():
-		_footer.text = "Everyone's ready!  Press A / Enter to continue"
+		_footer.text = "Everyone's ready!  Press A / Space / Enter to continue"
 	elif Game.slots.size() < MIN_PLAYERS:
-		_footer.text = "Need %d+ players.   Join:  gamepad A / Start  ·  Space (WASD)  ·  Enter (Arrows)" % MIN_PLAYERS
+		_footer.text = "Join: A / Start  ·  Space (WASD)  ·  Enter (Arrows)  —  Add a CPU to practise solo"
 	else:
 		_footer.text = "Left / Right: pick a dog   ·   A / Enter: ready   ·   B / Esc: un-ready or leave"
 
@@ -140,6 +161,9 @@ func _fill_empty_card(holder: Control, i: int) -> void:
 	v.add_child(c)
 	v.add_child(UiKit.title("P%d" % (i + 1), 44, Color(1, 1, 1, 0.3)))
 	v.add_child(UiKit.label("Press A / Space / Enter\nto join", 24, Color(1, 1, 1, 0.45)))
+	var join := _mouse_button("Join the pack", 220)
+	join.pressed.connect(_join_keyboard)
+	v.add_child(join)
 
 
 func _fill_player_card(holder: Control, slot: PlayerSlot) -> void:
@@ -168,14 +192,19 @@ func _fill_player_card(holder: Control, slot: PlayerSlot) -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 8)
 	head.add_child(UiKit.chip(slot.label, slot.color, 22))
-	var dev := UiKit.label(DeviceInput.describe(slot.device), 17, Color(1, 1, 1, 0.85))
+	var dev := UiKit.label("CPU • Practice pal" if slot.is_bot else DeviceInput.describe(slot.device), 17, Color(1, 1, 1, 0.85))
 	dev.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	dev.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(dev)
 	v.add_child(head)
 
 	v.add_child(UiKit.title(dog.display_name.to_upper(), 46, UiKit.CREAM))
-	v.add_child(UiKit.dog_portrait(dog, slot.color, Vector2(340, 250), 1.0, 0.0, true))
+	# The portrait takes whatever height the rest of the card does not, so the card fills
+	# instead of leaving dead colour under the buttons — and every dog is scaled to the same
+	# height, so they read as one set.
+	var portrait := UiKit.dog_portrait(dog, slot.color, Vector2(340, 228), 1.0, 0.0, true)
+	portrait.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(portrait)
 
 	var stats := VBoxContainer.new()
 	stats.add_theme_constant_override("separation", 5)
@@ -190,13 +219,80 @@ func _fill_player_card(holder: Control, slot: PlayerSlot) -> void:
 	desc.custom_minimum_size = Vector2(0, 62)
 	v.add_child(desc)
 
-	if slot.ready:
+	if slot.ready and not slot.is_bot:
+		# The stamp sits over the portrait rather than taking a row of its own, so a ready
+		# card keeps exactly the same layout — and the same portrait size — as the others.
 		var ready := UiKit.chip("READY!", UiKit.YELLOW, 30)
-		var c := CenterContainer.new()
-		c.add_child(ready)
-		v.add_child(c)
+		var stamp := CenterContainer.new()
+		stamp.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+		stamp.offset_top = -84
+		stamp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		portrait.add_child(stamp)
+		stamp.add_child(ready)
 		ready.pivot_offset = Vector2(60, 22)
 		ready.rotation_degrees = -4.0
 		Juice.pop(ready, 1.5, 0.35)
+		var change := _mouse_button("Change dog", 230)
+		change.pressed.connect(func() -> void:
+			slot.ready = false
+			_refresh_all())
+		v.add_child(change)
 	else:
-		v.add_child(UiKit.label("◀  ▶  choose   ·   A / Enter = ready", 19, Color(1, 1, 1, 0.75)))
+		# Picking a dog and committing to it are different actions, so they get their own rows.
+		var controls := HBoxContainer.new()
+		controls.alignment = BoxContainer.ALIGNMENT_CENTER
+		controls.add_theme_constant_override("separation", 10)
+		v.add_child(controls)
+		for dir in [-1, 1]:
+			var arrow := _mouse_button("◀" if dir == -1 else "▶", 120)
+			arrow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			arrow.pressed.connect(func() -> void: _cycle(slot, dir))
+			controls.add_child(arrow)
+		var ready_button := _mouse_button("Remove" if slot.is_bot else "Ready!", 200)
+		ready_button.pressed.connect(func() -> void:
+			if slot.is_bot:
+				Game.remove_player(slot)
+				_inputs.erase(slot)
+			else:
+				slot.ready = true
+			_refresh_all())
+		ready_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		v.add_child(ready_button)
+
+
+func _mouse_button(text: String, width: float) -> Button:
+	var b := UiKit.wood_button(text, width)
+	b.icon = null
+	b.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.add_theme_font_size_override("font_size", 24)
+	# Joining and readiness are per-device; global UI accept must not consume their presses.
+	b.focus_mode = Control.FOCUS_NONE
+	return b
+
+
+func _join_keyboard() -> void:
+	for device in [DeviceInput.KEYBOARD_WASD, DeviceInput.KEYBOARD_ARROWS]:
+		if Game.get_slot_by_device(device) == null:
+			var slot := Game.add_player(device)
+			if slot:
+				_inputs[slot] = DeviceInput.new(device)
+				Sfx.play("catch")
+				_refresh_all()
+			return
+
+
+func _add_bot() -> void:
+	if Game.slots.size() >= Game.MAX_PLAYERS:
+		return
+	# Leave room for a human and make the one-click practice route work from an empty lobby.
+	if Game.slots.is_empty():
+		_join_keyboard()
+	var device := DeviceInput.VIRTUAL
+	while Game.get_slot_by_device(device) != null:
+		device -= 1
+	var slot := Game.add_player(device)
+	if slot:
+		slot.is_bot = true
+		slot.ready = true
+		_inputs[slot] = DeviceInput.new(DeviceInput.VIRTUAL)
+		_refresh_all()

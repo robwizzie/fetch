@@ -6,13 +6,21 @@
 script = ExtResource("1")
 id = &"frisbee"
 display_name = "Frisbee"
-description = "Longer range. Straight flight."
+description = "Fast, flat flight. Barely bounces; skids to a stop."
 color = Color(0.95, 0.3, 0.3, 1)
-radius = 0.58
-throw_speed = 21.0
-bounciness = 0.6
-max_bounces = 2
-friction = 3.7
-danger_speed = 6.7
+radius = 0.38
+throw_speed = 15.6
+bounciness = 0.65
+max_bounces = 1
+friction = 2.92
+danger_speed = 5.23
 special = 0
 fully_implemented = true
+
+held_scale = 1.0
+
+held_rotation = Vector3(0, 0, 0)
+
+flat_spin = true
+
+ground_height = 0.075

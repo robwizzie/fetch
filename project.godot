@@ -13,7 +13,7 @@ config_version=5
 config/name="FETCH"
 config/description="Top-down local multiplayer party game. Throw. Dodge. Fetch. Repeat."
 config/version="0.1.0"
-run/main_scene="res://scenes/ui/main_menu.tscn"
+run/main_scene="res://scenes/ui/splash.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [autoload]
@@ -22,6 +22,7 @@ Events="*res://autoload/events.gd"
 Game="*res://autoload/game.gd"
 Juice="*res://autoload/juice.gd"
 Sfx="*res://autoload/sfx.gd"
+Music="*res://autoload/music.gd"
 
 [display]
 
@@ -30,15 +31,10 @@ window/size/viewport_height=1080
 window/size/window_width_override=1600
 window/size/window_height_override=900
 window/stretch/mode="canvas_items"
-window/stretch/aspect="keep"
 
 [gui]
 
 theme/custom="res://assets/ui/theme.tres"
-
-[input_devices]
-
-pointing/emulate_touch_from_mouse=false
 
 [layer_names]
 
@@ -47,14 +43,8 @@ pointing/emulate_touch_from_mouse=false
 3d_physics/layer_3="toys"
 3d_physics/layer_4="zones"
 
-[physics]
-
-common/physics_ticks_per_second=60
-
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 anti_aliasing/quality/msaa_3d=2
-lights_and_shadows/directional_shadow/size=4096
-lights_and_shadows/directional_shadow/soft_shadow_filter_quality=2

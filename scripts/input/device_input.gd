@@ -1,6 +1,6 @@
 class_name DeviceInput
 extends RefCounted
-## Polls ONE input device and exposes a tiny set of game actions (move, throw, dash, back).
+## Polls ONE input device and exposes move, throw/catch, dash, back and pause.
 ## A device is a gamepad index (0+), one of two keyboard layouts, or a virtual device that
 ## bots and tests drive by setting [member virtual_move] / [member virtual_buttons].
 ## Keeping this in one place is what makes "2-4 players on any mix of pads + keyboard" trivial.
@@ -62,7 +62,7 @@ func is_pressed(action: StringName) -> bool:
 					return Input.is_physical_key_pressed(KEY_SPACE)
 				&"dash":
 					return Input.is_physical_key_pressed(KEY_SHIFT) or Input.is_physical_key_pressed(KEY_E)
-				&"back":
+				&"back", &"pause":
 					return Input.is_physical_key_pressed(KEY_ESCAPE)
 		KEYBOARD_ARROWS:
 			match action:
@@ -72,6 +72,8 @@ func is_pressed(action: StringName) -> bool:
 					return Input.is_physical_key_pressed(KEY_CTRL) or Input.is_physical_key_pressed(KEY_SLASH) or Input.is_physical_key_pressed(KEY_KP_0)
 				&"back":
 					return Input.is_physical_key_pressed(KEY_BACKSPACE)
+				&"pause":
+					return Input.is_physical_key_pressed(KEY_ESCAPE)
 		VIRTUAL:
 			return virtual_buttons.get(action, false)
 		_:
@@ -85,6 +87,8 @@ func is_pressed(action: StringName) -> bool:
 				&"confirm":
 					return Input.is_joy_button_pressed(device, JOY_BUTTON_A) or Input.is_joy_button_pressed(device, JOY_BUTTON_X) \
 						or Input.is_joy_button_pressed(device, JOY_BUTTON_START)
+				&"pause":
+					return Input.is_joy_button_pressed(device, JOY_BUTTON_START)
 				&"back":
 					return Input.is_joy_button_pressed(device, JOY_BUTTON_B) or Input.is_joy_button_pressed(device, JOY_BUTTON_BACK)
 	return false
@@ -132,3 +136,12 @@ func _key_axis(positive: Key, negative: Key) -> float:
 
 func _joy_axis(positive: JoyButton, negative: JoyButton) -> float:
 	return float(Input.is_joy_button_pressed(device, positive)) - float(Input.is_joy_button_pressed(device, negative))
+
+
+## Pause is distinct from B/back and A/join: neither exits an active match.
+static func is_pause_event(event: InputEvent) -> bool:
+	if event is InputEventKey:
+		return event.pressed and not event.echo and (event.physical_keycode == KEY_ESCAPE or event.keycode == KEY_ESCAPE)
+	if event is InputEventJoypadButton:
+		return event.pressed and event.button_index == JOY_BUTTON_START
+	return false
