@@ -22,6 +22,7 @@ var _countdown_steps: Array = []
 var _countdown_index := 0
 var _sequence_time := 0.0
 var _banner_time := 0.0
+var _board: RoundBoard
 
 
 func _ready() -> void:
@@ -112,6 +113,16 @@ func _process(delta: float) -> void:
 		if _banner_time <= 0.0:
 			center.text = ""
 			banner_finished.emit()
+
+
+## The between-rounds standings. Replaces the plain banner whenever there is a board worth
+## showing, and reports back through banner_finished so the match flow is unchanged.
+func round_board(headline: String, sides: Array, target: int, prompt: String) -> void:
+	if _board == null:
+		_board = RoundBoard.new()
+		add_child(_board)
+		_board.dismissed.connect(func() -> void: banner_finished.emit())
+	_board.show_board(headline, sides, target, prompt)
 
 
 func banner(text: String, color: Color, seconds: float) -> void:

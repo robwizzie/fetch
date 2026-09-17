@@ -13,6 +13,8 @@ const SCENE_MATCH := "res://scenes/match/match.tscn"
 const SCENE_RESULTS := "res://scenes/ui/results.tscn"
 const SCENE_GALLERY := "res://scenes/ui/gallery.tscn"
 const SETTINGS_PATH := "user://settings.cfg"
+const TEAM_NAMES: Array[String] = ["RED PACK", "BLUE PACK"]
+const TEAM_COLORS: Array[Color] = [Color(0.95, 0.36, 0.32), Color(0.36, 0.56, 0.95)]
 
 var dogs: Array[DogData] = []
 var toys: Array[ToyData] = []
@@ -36,6 +38,15 @@ var arcade_hints: ArcadeHints = ArcadeHints.AUTO
 var fullscreen := false
 var selected_toy: ToyData
 var selected_mode: GameModeData
+## Two packs instead of a free-for-all. Teams are assigned by seat: odd seats against even.
+var team_mode := false
+var team_scores: Array[int] = [0, 0]
+## Whether a toy from your own side can put you out. Off by default: hitting a team-mate by
+## accident is funny once and infuriating after that.
+var friendly_fire := false
+## Whether your own throw can come back and bonk you. On by default - a ricochet off a wall
+## into your own face is one of the best things that can happen in a round.
+var self_fire := true
 var mixed_toys := true
 var powerups_enabled := true
 ## First round that drops treats. The default holds them back so the opening round is a clean
@@ -275,6 +286,34 @@ func reset_scores() -> void:
 	for s in slots:
 		s.score = 0
 		s.powerups.clear()
+	team_scores = [0, 0]
+	assign_teams()
+
+
+## Seats alternate sides, so two players sitting next to each other are opponents and a
+## four-player cabinet splits two against two without anybody choosing.
+func assign_teams() -> void:
+	for s in slots:
+		s.team = (s.index % TEAM_NAMES.size()) if team_mode else -1
+
+
+## What a side is called, and what colour it flies. Falls back to the player's own colour in a
+## free-for-all, where the "team" is one dog.
+func team_name(team: int) -> String:
+	return TEAM_NAMES[team] if team >= 0 and team < TEAM_NAMES.size() else ""
+
+
+func team_color(team: int) -> Color:
+	return TEAM_COLORS[team] if team >= 0 and team < TEAM_COLORS.size() else UiKit.CREAM
+
+
+## Points on the board for whichever side this slot is on.
+func score_for(slot: PlayerSlot) -> int:
+	if slot == null:
+		return 0
+	if team_mode and slot.team >= 0:
+		return team_scores[slot.team]
+	return slot.score
 
 
 ## Fills empty slots with keyboard/virtual players so scenes can be run directly from the editor (F6).

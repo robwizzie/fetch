@@ -84,6 +84,7 @@ func _physics_process(delta: float) -> void:
 	_pad_ring.scale = Vector3(pulse, 1.0, pulse)
 	if not is_instance_valid(dog) or not dog.alive:
 		return
+	_keep_dog_inside()
 	var pad_world := _pad.global_position
 	var gap := Vector2(dog.global_position.x - pad_world.x, dog.global_position.z - pad_world.z).length()
 	if gap <= PAD_RADIUS:
@@ -92,6 +93,20 @@ func _physics_process(delta: float) -> void:
 			_set_ready()
 	else:
 		_dwell = maxf(0.0, _dwell - delta * 2.0)
+
+
+## A dog can only check in from inside its own pen, so one that ends up outside - warped out,
+## shoved through a corner, anything - is put back rather than left stranded.
+func _keep_dog_inside() -> void:
+	var local := to_local(dog.global_position)
+	# _size is (width, depth), so the pen's Z extent is half.y.
+	var half := _size * 0.5
+	if absf(local.x) <= half.x and absf(local.z) <= half.y:
+		return
+	dog.velocity = Vector3.ZERO
+	dog.global_position = global_position + Vector3(
+		clampf(local.x, -half.x + 0.6, half.x - 0.6), 0.0, clampf(local.z, -half.y + 0.6, half.y - 0.6))
+	Juice.burst(get_parent(), dog.global_position + Vector3.UP * 0.6, slot.color, 10, 2.4)
 
 
 ## Bots do not need teaching; they take a moment so the pens do not all pop at once.

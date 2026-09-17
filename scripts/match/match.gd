@@ -30,6 +30,9 @@ var phase := Phase.COUNTDOWN
 var round_number := 0
 var round_time_left := ROUND_SECONDS
 var _round_winner: PlayerSlot
+## The warm-up round after the pens open. It plays exactly like a real round - dogs can be
+## bonked out and someone wins it - but nothing it produces goes on the board.
+var practice_round := false
 var _treat_clock := TREAT_FIRST_DELAY
 var _treat_count := 0
 var _result_delay := 0.0
@@ -91,7 +94,10 @@ func _process(delta: float) -> void:
 		return
 	_result_delay -= delta / maxf(Engine.time_scale, 0.001)
 	if _result_delay <= 0.0:
-		hud.banner(_result_text, _result_color, 1.65)
+		if practice_round:
+			hud.banner(_result_text, _result_color, 1.65)
+		else:
+			hud.round_board(_result_text, _standings(), Game.points_to_win, "Press to continue")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -125,11 +131,12 @@ func start_round() -> void:
 	_result_delay = 0.0
 	_treat_clock = _treat_delay(true)
 	_treat_count = 0
-	round_number += 1
+	if not practice_round:
+		round_number += 1
 	round_time_left = ROUND_SECONDS
 	phase = Phase.COUNTDOWN
 	# Round 1's arena is already up; later rounds draw a fresh one when shuffling.
-	if Game.random_arena_each_round and round_number > 1:
+	if Game.random_arena_each_round and round_number > 1 and not practice_round:
 		_install_arena(Game.random_arena(arena_data))
 	_clear_actors()
 	actors.process_mode = Node.PROCESS_MODE_DISABLED
@@ -273,6 +280,10 @@ func _layout_imbalance(points: Array[Vector3], spawns: Array[Vector3]) -> float:
 ## Nothing here is scored.
 func _start_tutorial() -> void:
 	phase = Phase.TUTORIAL
+	# Arena furniture is off while the pens are up. A portal that happens to sit inside someone's
+	# pen would warp them out of it, and a dog that cannot get back to its pad can never check
+	# in - which leaves the match stuck on the practice round forever.
+	_set_furniture_active(false)
 	_clear_actors()
 	_pens.clear()
 	actors.process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -341,17 +352,32 @@ func _finish_tutorial() -> void:
 		return
 	phase = Phase.COUNTDOWN
 	_dismiss_coach()
+	_set_furniture_active(true)
 	for pen in _pens:
 		if is_instance_valid(pen):
 			pen.open()
 	_pens.clear()
-	# Safety comes off with the walls; start_round() then respawns everyone in the open.
+	# Safety comes off with the walls: the warm-up is a real fight, bonks and all. It simply
+	# does not score, which is what makes it safe to lose.
 	for dog in dogs:
 		if is_instance_valid(dog):
 			dog.practice_safe = false
+	practice_round = true
 	Sfx.play("whistle", 1.0, -3.0)
 	await get_tree().create_timer(0.75).timeout
 	start_round()
+
+
+## Portals and switches are the only arena pieces that move a dog without being asked, so they
+## are the ones that have to be inert while everyone is penned in learning the buttons.
+func _set_furniture_active(active: bool) -> void:
+	if arena == null:
+		return
+	for node in arena.find_children("*", "Area3D", true, false):
+		if node is Portal or node is SwitchPad:
+			var area := node as Area3D
+			area.monitoring = active
+			area.visible = active
 
 
 func _maybe_coach() -> void:
@@ -409,25 +435,63 @@ func _end_round(winner: PlayerSlot, message: String = "") -> void:
 	for pickup in get_tree().get_nodes_in_group("powerups"):
 		pickup.set_deferred("process_mode", Node.PROCESS_MODE_DISABLED)
 	if winner:
-		winner.score += 1
+		if practice_round:
+			pass
+		elif Game.team_mode and winner.team >= 0:
+			Game.team_scores[winner.team] += 1
+		else:
+			winner.score += 1
 		hud.refresh_scores()
 	Events.round_over.emit(winner)
 	Sfx.play("fanfare" if winner else "tick")
 	var text := "%s wins the round!" % winner.dog.display_name if winner else "Draw! Fetch again."
+	if winner and Game.team_mode and winner.team >= 0:
+		text = "%s wins the round!" % Game.team_name(winner.team)
+	if practice_round:
+		text = "Warm-up over - no points. Here we go!"
 	if not message.is_empty():
 		text = message
 	var color := winner.color if winner else UiKit.CREAM
+	if winner and Game.team_mode and winner.team >= 0:
+		color = Game.team_color(winner.team)
 	_round_winner = winner
 	_result_text = text
 	_result_color = color
 	_result_delay = 0.8 if winner else 0.1
 
 
+## One bar per side for the round board: packs when teams are on, dogs otherwise.
+func _standings() -> Array:
+	var sides: Array = []
+	if Game.team_mode:
+		for team in Game.TEAM_NAMES.size():
+			sides.append({
+				"label": Game.team_name(team),
+				"color": Game.team_color(team),
+				"score": Game.team_scores[team],
+				"winner": _round_winner != null and _round_winner.team == team,
+			})
+		return sides
+	for slot in Game.slots:
+		sides.append({
+			"label": "%s  %s" % [slot.label, slot.dog.display_name.to_upper()],
+			"color": slot.color,
+			"score": slot.score,
+			"winner": slot == _round_winner,
+		})
+	return sides
+
+
 func _finish_round() -> void:
 	if phase != Phase.ROUND_OVER:
 		return
 	var winner := _round_winner
-	if winner and winner.score >= Game.points_to_win:
+	if practice_round:
+		# The warm-up is done. Round 1 starts now, with the board still at nil-nil.
+		practice_round = false
+		start_round()
+		return
+	if winner and Game.score_for(winner) >= Game.points_to_win:
 		phase = Phase.MATCH_OVER
 		Game.matches_played += 1
 		Game.last_match_winner = winner

@@ -7,6 +7,8 @@ var _arena_row: CarouselRow
 var _toy_row: CarouselRow
 var _points_row: CarouselRow
 var _powerups_row: CarouselRow
+var _teams_row: CarouselRow
+var _fire_row: CarouselRow
 var _start: Button
 var _desc: Label
 var _preview: TextureRect
@@ -17,6 +19,9 @@ const POINT_OPTIONS := [3, 5, 7, 10]
 ## Holding treats back a round keeps the opening fight clean; starting them in round 1 makes
 ## power-ups part of the scramble from the first whistle.
 const TREAT_OPTIONS := ["From round 2", "From the start", "Off"]
+const SIDE_OPTIONS := ["Free-for-all", "Two packs"]
+## Who your own toys can hurt. Most groups want neither; the third is for people who enjoy pain.
+const FIRE_OPTIONS := ["Own goals only", "Nobody", "Team-mates too"]
 
 
 func _ready() -> void:
@@ -48,6 +53,8 @@ func _ready() -> void:
 	_toy_row = _row(root, "Toy box", ["Mixed dog toys"] + _playable_toys.map(func(t: ToyData) -> String:
 		return t.display_name), 0 if Game.mixed_toys else _playable_toys.find(Game.selected_toy) + 1)
 	_powerups_row = _row(root, "Treats", TREAT_OPTIONS, _treat_option_index())
+	_teams_row = _row(root, "Sides", SIDE_OPTIONS, 1 if Game.team_mode else 0)
+	_fire_row = _row(root, "Own toys hurt", FIRE_OPTIONS, _fire_option_index())
 	_points_row = _row(root, "First to", POINT_OPTIONS.map(func(p: int) -> String: return "%d points" % p), maxi(POINT_OPTIONS.find(Game.points_to_win), 0))
 
 	_preview = TextureRect.new()
@@ -86,6 +93,13 @@ func _row(parent: Control, title: String, items: Array, start: int) -> CarouselR
 	return row
 
 
+## "Own goals only" is the default: your own ricochet can get you, a team-mate's cannot.
+func _fire_option_index() -> int:
+	if Game.friendly_fire:
+		return 2
+	return 0 if Game.self_fire else 1
+
+
 func _treat_option_index() -> int:
 	if not Game.powerups_enabled:
 		return 2
@@ -102,6 +116,10 @@ func _apply() -> void:
 		Game.selected_toy = _playable_toys[_toy_row.index - 1]
 	Game.powerups_enabled = _powerups_row.index < 2
 	Game.treats_from_round = 1 if _powerups_row.index == 1 else 2
+	Game.team_mode = _teams_row.index == 1
+	Game.assign_teams()
+	Game.self_fire = _fire_row.index != 1
+	Game.friendly_fire = _fire_row.index == 2
 	Game.points_to_win = POINT_OPTIONS[_points_row.index]
 	# Shuffle has no single map to show, so the preview steps aside for it.
 	if Game.random_arena_each_round:
