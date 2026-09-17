@@ -43,13 +43,18 @@ func _ready() -> void:
 		var shortest: float = nearest.min()
 		var longest: float = nearest.max()
 		_check(longest - shortest <= 3.0, "opening run is comparable for every dog in " + arena_data.display_name)
-		# Nobody should be able to learn the spots: two draws must not land in the same places.
-		var first: Array[Vector3] = game_match._toy_spawn_points(6)
-		var second: Array[Vector3] = game_match._toy_spawn_points(6)
+		# Nobody should be able to learn the spots. Two consecutive draws landing close together is
+		# ordinary luck, so this averages over several rounds' worth: what must not happen is a
+		# layout that is fixed.
+		var draws := 8
+		var previous: Array[Vector3] = game_match._toy_spawn_points(6)
 		var shifted := 0.0
-		for i in first.size():
-			shifted += first[i].distance_to(second[i])
-		_check(shifted / float(first.size()) > 1.0, "toy placement is redrawn every round in " + arena_data.display_name)
+		for _d in draws:
+			var next: Array[Vector3] = game_match._toy_spawn_points(6)
+			for i in previous.size():
+				shifted += previous[i].distance_to(next[i])
+			previous = next
+		_check(shifted / float(previous.size() * draws) > 1.0, "toy placement is redrawn every round in " + arena_data.display_name)
 		while game_match.phase == game_match.Phase.COUNTDOWN:
 			await get_tree().process_frame
 		game_match._treat_clock = 0.0
