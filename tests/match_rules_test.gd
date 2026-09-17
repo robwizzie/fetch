@@ -145,11 +145,21 @@ func _practice_round_is_free() -> void:
 	# Nobody is ready yet, so the match must still be waiting.
 	await get_tree().create_timer(0.4).timeout
 	_check(game_match.phase == game_match.Phase.TUTORIAL, "the match waits until everyone checks in")
+	# The walls dropping IS the start of the warm-up: the same dogs play on from where they
+	# stand. A respawn or a second countdown here would make it a separate round again.
+	var before_ids: Array[int] = []
+	for dog in game_match.dogs:
+		before_ids.append(dog.get_instance_id())
 	for pen in pens:
 		if is_instance_valid(pen):
 			pen._set_ready()
 	await get_tree().create_timer(1.4).timeout
 	_check(game_match.phase != game_match.Phase.TUTORIAL, "checking in drops the pens")
+	_check(game_match.phase == game_match.Phase.PLAYING, "the walls dropping starts play, with no second countdown")
+	var after_ids: Array[int] = []
+	for dog in game_match.dogs:
+		after_ids.append(dog.get_instance_id())
+	_check(before_ids == after_ids, "the warm-up carries on with the same dogs, not respawned ones")
 	# The warm-up is a real fight now: dogs can bonk each other out. It just is not a round.
 	_check(game_match.practice_round, "a warm-up round runs once the pens open")
 	_check(game_match.round_number == 0, "the warm-up does not consume a round")
