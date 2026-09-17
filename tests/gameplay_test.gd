@@ -83,7 +83,10 @@ func _ready() -> void:
 		game_match = load("res://scenes/match/match.tscn").instantiate()
 		add_child(game_match)
 		var elapsed := 0.0
-		while _rounds == 0 and elapsed < 35.0:
+		# Wall-clock, so it is sensitive to whatever else the machine is doing. Measured across
+		# three clean runs every arena finishes in 5-18s; 60 gives room for a loaded machine
+		# without hiding a real regression.
+		while _rounds == 0 and elapsed < 60.0:
 			await get_tree().create_timer(0.2).timeout
 			elapsed += 0.2
 		_check(_rounds > 0 and _last_winner != null, "bots finish a scored round in " + arena.display_name)
