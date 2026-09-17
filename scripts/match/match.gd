@@ -74,7 +74,7 @@ func _physics_process(delta: float) -> void:
 	for toy in toys:
 		if toy.state != Toy.State.HELD and arena.is_outside(toy.global_position):
 			toy.drop(arena.get_toy_spawn_position(0))
-	if Game.powerups_enabled and round_number >= 2:
+	if Game.powerups_enabled and round_number >= Game.treats_from_round:
 		_treat_clock -= delta
 		if _treat_clock <= 0.0 and _treat_count < MAX_TREATS_PER_ROUND:
 			_spawn_treat()

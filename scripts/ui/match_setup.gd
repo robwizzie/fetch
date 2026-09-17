@@ -14,6 +14,9 @@ var _playable_modes: Array[GameModeData] = []
 var _playable_toys: Array[ToyData] = []
 
 const POINT_OPTIONS := [3, 5, 7, 10]
+## Holding treats back a round keeps the opening fight clean; starting them in round 1 makes
+## power-ups part of the scramble from the first whistle.
+const TREAT_OPTIONS := ["From round 2", "From the start", "Off"]
 
 
 func _ready() -> void:
@@ -44,7 +47,7 @@ func _ready() -> void:
 	_arena_row = _row(root, "Arena", arena_names, 0 if Game.random_arena_each_round else Game.arenas.find(Game.selected_arena) + 1)
 	_toy_row = _row(root, "Toy box", ["Mixed dog toys"] + _playable_toys.map(func(t: ToyData) -> String:
 		return t.display_name), 0 if Game.mixed_toys else _playable_toys.find(Game.selected_toy) + 1)
-	_powerups_row = _row(root, "Treats", ["From round 2", "Off"], 0 if Game.powerups_enabled else 1)
+	_powerups_row = _row(root, "Treats", TREAT_OPTIONS, _treat_option_index())
 	_points_row = _row(root, "First to", POINT_OPTIONS.map(func(p: int) -> String: return "%d points" % p), maxi(POINT_OPTIONS.find(Game.points_to_win), 0))
 
 	_preview = TextureRect.new()
@@ -83,6 +86,12 @@ func _row(parent: Control, title: String, items: Array, start: int) -> CarouselR
 	return row
 
 
+func _treat_option_index() -> int:
+	if not Game.powerups_enabled:
+		return 2
+	return 1 if Game.treats_from_round <= 1 else 0
+
+
 func _apply() -> void:
 	Game.selected_mode = _playable_modes[_mode_row.index]
 	Game.random_arena_each_round = _arena_row.index == 0
@@ -91,7 +100,8 @@ func _apply() -> void:
 	Game.mixed_toys = _toy_row.index == 0
 	if not Game.mixed_toys:
 		Game.selected_toy = _playable_toys[_toy_row.index - 1]
-	Game.powerups_enabled = _powerups_row.index == 0
+	Game.powerups_enabled = _powerups_row.index < 2
+	Game.treats_from_round = 1 if _powerups_row.index == 1 else 2
 	Game.points_to_win = POINT_OPTIONS[_points_row.index]
 	# Shuffle has no single map to show, so the preview steps aside for it.
 	if Game.random_arena_each_round:

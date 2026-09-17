@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ArenaData" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/arena_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/arenas/warp_yard.tscn" id="2"]
+[ext_resource type="Texture2D" path="res://images/arenas/warp_yard.png" id="3"]
+
+[resource]
+script = ExtResource("1")
+id = &"warp_yard"
+display_name = "Warp Yard"
+description = "Two portal pairs and a wall that opens and shuts. Step on a paw switch to move the gates — or slam them on whoever is mid-chase."
+scene = ExtResource("2")
+swatch = Color(0.55, 0.42, 0.82, 1)
+thumbnail = ExtResource("3")
