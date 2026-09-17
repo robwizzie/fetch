@@ -18,6 +18,9 @@ var _playable_modes: Array[GameModeData] = []
 var _playable_toys: Array[ToyData] = []
 
 const POINT_OPTIONS := [3, 5, 7, 10]
+## Where the carousel lands when the mode's default is not one of the options. Falling back to
+## index 0 quietly turned every such match into a first-to-3.
+const DEFAULT_POINTS := 5
 ## Auto is the party default: a brand new session gets a few clean rounds first, and every
 ## match after that opens with crates already dropping.
 const TREAT_OPTIONS := ["Auto", "From the start", "From round 2", "Off"]
@@ -52,7 +55,10 @@ func _ready() -> void:
 	_mode_row = _row(root, "Mode", _playable_modes.map(func(m: GameModeData) -> String:
 		return m.display_name), _playable_modes.find(Game.selected_mode))
 	_teams_row = _row(root, "Sides", SIDE_OPTIONS, 1 if Game.team_mode else 0)
-	_points_row = _row(root, "First to", POINT_OPTIONS.map(func(p: int) -> String: return "%d points" % p), maxi(POINT_OPTIONS.find(Game.points_to_win), 0))
+	var points_at := POINT_OPTIONS.find(Game.points_to_win)
+	if points_at < 0:
+		points_at = POINT_OPTIONS.find(DEFAULT_POINTS)
+	_points_row = _row(root, "First to", POINT_OPTIONS.map(func(p: int) -> String: return "%d points" % p), points_at)
 
 	_more_button = UiKit.button("More options", 420)
 	_more_button.pressed.connect(_toggle_more)

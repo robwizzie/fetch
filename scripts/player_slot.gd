@@ -25,6 +25,10 @@ var powerups: Array[StringName] = []
 ## Adds a power-up, pushing out the oldest once the belt is full. Returns what was displaced,
 ## or an empty name — the HUD uses it to show the swap.
 func take_powerup(kind: StringName) -> StringName:
+	# Doubling up on one treat is a dud pickup dressed as a reward, so a belt holds each kind
+	# at most once. Powerup rerolls before offering one you already have; this is the backstop.
+	if powerups.has(kind):
+		return &""
 	var dropped := &""
 	if powerups.size() >= PowerupKinds.MAX_SLOTS:
 		dropped = powerups.pop_front()

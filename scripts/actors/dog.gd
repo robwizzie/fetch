@@ -15,6 +15,9 @@ const SPAWN_GRACE := 1.1
 ## Close-quarters swipe for a dog with nothing in its mouth.
 const WHACK_RANGE := 1.55
 const WHACK_COOLDOWN := 0.6
+## A short lockout after any throw, catch or swipe. Mashing the button used to fire an attempt
+## every frame, which felt unresponsive rather than fast; this makes each press mean one action.
+const ACTION_LOCKOUT := 0.2
 const DIZZY_TIME := 1.5
 
 var slot: PlayerSlot
@@ -52,6 +55,8 @@ var _catch_cooldown := 0.0
 var _pickup_lock := 0.0
 var _stagger_time := 0.0
 var _whack_cooldown := 0.0
+var _action_lockout := 0.0
+var _shield_bubble: MeshInstance3D
 ## While > 0 the dog is seeing stars: no input, no actions.
 var dizzy_time := 0.0
 ## Set during the practice round: the dog can throw, catch and whack, but nothing can put it
@@ -99,6 +104,16 @@ func _ready() -> void:
 	ring.mesh = Mats.torus(data.body_radius + 0.12, data.body_radius + 0.28)
 	ring.material_override = Mats.unlit(slot.color)
 	_build_aim_marker()
+	# A real bubble, not just a ring on the floor: a shield you are wearing should look like
+	# something between you and the toy.
+	var shell := Mats.sphere(data.body_radius + 0.46)
+	_shield_bubble = Mats.mesh(self, shell, Color(0.55, 0.88, 1.0, 0.3), Vector3(0, data.body_radius + 0.24, 0))
+	var bubble_mat := Mats.glass(Color(0.55, 0.88, 1.0, 0.24))
+	bubble_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	bubble_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_shield_bubble.material_override = bubble_mat
+	_shield_bubble.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_shield_bubble.visible = false
 	_powerup_halo = Mats.mesh(self, Mats.torus(data.body_radius + 0.37, data.body_radius + 0.43), Color.WHITE, Vector3(0, 0.055, 0))
 	_powerup_halo.material_override = Mats.unlit(Color(1.0, 0.88, 0.4))
 	_powerup_halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -115,6 +130,8 @@ func _physics_process(delta: float) -> void:
 	_pickup_lock = maxf(0.0, _pickup_lock - delta)
 	_stagger_time = maxf(0.0, _stagger_time - delta)
 	_whack_cooldown = maxf(0.0, _whack_cooldown - delta)
+	_action_lockout = maxf(0.0, _action_lockout - delta)
+	_update_shield_bubble(delta)
 	if dizzy_time > 0.0:
 		dizzy_time = maxf(0.0, dizzy_time - delta)
 		if dizzy_time <= 0.0 and model.has_method("set_dizzy"):
@@ -190,7 +207,32 @@ func _start_dash() -> void:
 	Juice.burst(get_parent(), global_position - facing * 0.3 + Vector3(0, 0.3, 0), Color(1, 1, 1, 0.7), 8, 3.0)
 
 
+## Feedback for the lockout: the ring flicks so a press that arrived too early reads as "not
+## yet" rather than as nothing happening at all.
+func _reject_press() -> void:
+	ring.scale = Vector3(1.22, 1.0, 1.22)
+	Sfx.play("ui_move", 1.5, -20.0)
+
+
+## The shield bubble breathes while it is up, and pops when the last charge goes.
+func _update_shield_bubble(delta: float) -> void:
+	if not is_instance_valid(_shield_bubble):
+		return
+	var want := shield_charges > 0
+	if _shield_bubble.visible != want:
+		_shield_bubble.visible = want
+		if want:
+			_shield_bubble.scale = Vector3.ZERO
+	if want:
+		var breathe := 1.0 + sin(Time.get_ticks_msec() * 0.004) * 0.045
+		_shield_bubble.scale = _shield_bubble.scale.move_toward(Vector3.ONE * breathe, delta * 4.5)
+
+
 func _throw_or_catch() -> void:
+	if _action_lockout > 0.0:
+		_reject_press()
+		return
+	_action_lockout = ACTION_LOCKOUT
 	if held_toy:
 		_throw()
 		return
@@ -199,6 +241,7 @@ func _throw_or_catch() -> void:
 		_whack(target)
 		return
 	if _catch_cooldown > 0.0 or _catch_buffer > 0.0:
+		_reject_press()
 		return
 	var toy := _find_catchable_toy()
 	if toy:
@@ -362,6 +405,12 @@ func hit_by(toy: Toy) -> bool:
 			slot.powerups.erase(PowerupKinds.SHIELD)
 		_powerup_halo.visible = shield_charges > 0
 		toy.deflect_from(self)
+		# The bubble pops where the toy hit it, so the shield is visibly what stopped it.
+		if is_instance_valid(_shield_bubble) and shield_charges <= 0:
+			var burst := _shield_bubble.create_tween()
+			burst.tween_property(_shield_bubble, "scale", Vector3.ONE * 1.45, 0.14).set_trans(Tween.TRANS_BACK)
+			burst.tween_property(_shield_bubble, "scale", Vector3.ZERO, 0.12)
+		Juice.burst(get_parent(), global_position + Vector3.UP * 0.8, Color(0.6, 0.9, 1.0), 20, 4.2)
 		Juice.float_text(get_parent(), global_position + Vector3.UP * 1.6, "SHIELD!", Color(1.0, 0.88, 0.4), 0.6)
 		Juice.burst(get_parent(), global_position + Vector3.UP * 0.7, Color(1.0, 0.88, 0.4), 14, 3.5)
 		Sfx.play("catch", 1.25, -3.0)

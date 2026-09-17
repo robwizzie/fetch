@@ -101,7 +101,8 @@ func _process(delta: float) -> void:
 		if practice_round:
 			hud.banner(_result_text, _result_color, 1.65)
 		else:
-			hud.round_board(_result_text, _standings(), Game.points_to_win, "Press to continue")
+			hud.round_board(_result_text, _standings(), Game.points_to_win,
+				"NEXT ROUND  -  press %s" % DeviceInput.button_label(&"confirm", Game.slots))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -312,6 +313,7 @@ func _start_tutorial() -> void:
 	# pen would warp them out of it, and a dog that cannot get back to its pad can never check
 	# in - which leaves the match stuck on the practice round forever.
 	_set_furniture_active(false)
+	_lock_camera_wide(true)
 	_clear_actors()
 	_pens.clear()
 	actors.process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -398,6 +400,8 @@ func _finish_tutorial() -> void:
 ## IS the start. It scores nothing, so losing it costs nothing.
 func _begin_warmup() -> void:
 	practice_round = true
+	# Play is starting, so the camera goes back to following the pack.
+	_lock_camera_wide(false)
 	_treat_clock = _treat_delay(true)
 	_treat_count = 0
 	round_time_left = ROUND_SECONDS
@@ -423,6 +427,15 @@ func _begin_warmup() -> void:
 	hud.practice_clock()
 	phase = Phase.PLAYING
 	Events.round_started.emit(round_number)
+
+
+## Holds the camera on the whole arena, or hands it back to its normal follow behaviour.
+func _lock_camera_wide(locked: bool) -> void:
+	if arena == null:
+		return
+	var camera := arena.get_node_or_null("Camera") as ArenaCamera
+	if camera != null:
+		camera.locked_wide = locked
 
 
 ## Portals and switches are the only arena pieces that move a dog without being asked, so they

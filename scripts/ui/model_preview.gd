@@ -10,8 +10,11 @@ extends TextureRect
 ## The model lives in a SubViewport with own_world_3d, so menu lighting is ours alone and no
 ## arena can reach in and change it.
 
-## Degrees per second. Slow enough to read, fast enough to show it is real.
+## Degrees per second, for the subjects that do turn. Dogs stand still: a dog revolving on the
+## spot reads as a display model, not as the animal you are about to play.
 const SPIN := 34.0
+## How far the subject is turned when it is not spinning - just off square, so it has depth.
+const RESTING_YAW := -24.0
 ## Framing: the subject is scaled so its height fills this much of the viewport.
 const FILL := 0.74
 
@@ -75,7 +78,9 @@ func show_dog(data: DogData) -> void:
 	_pivot.add_child(model)
 	# Face the camera rather than away from it: the models are authored facing +Z.
 	model.rotation_degrees = Vector3(0, 180, 0)
-	_frame(maxf(0.4, data.model_height * data.model_scale), 0.24)
+	_ground()
+	set_spinning(false)
+	_frame(maxf(0.4, data.model_height * data.model_scale), 0.0)
 
 
 ## A toy, sized from its own radius so a tennis ball and a frisbee both fill the frame.
@@ -108,7 +113,13 @@ func show_powerup(kind: StringName) -> void:
 func set_spinning(on: bool) -> void:
 	_spin = on
 	if not on:
-		_pivot.rotation_degrees.y = -22.0
+		_pivot.rotation_degrees.y = RESTING_YAW
+
+
+## A shadow under the subject. Without one it reads as hovering in the middle of the card
+## rather than standing on anything.
+func _ground() -> void:
+	Mats.contact_shadow(_pivot, 0.42)
 
 
 func _clear() -> void:
@@ -117,11 +128,13 @@ func _clear() -> void:
 	_pivot.rotation_degrees = Vector3.ZERO
 
 
-## Points the camera at a subject of the given height, keeping it centred in frame.
+## Points the camera at a subject standing on y = 0, so its feet sit on the bottom of the
+## frame rather than floating in the middle of it.
 func _frame(height: float, lift: float) -> void:
 	_camera.size = height / FILL
-	_camera.position = Vector3(0, height * 0.5 + lift, height * 2.4 + 1.0)
-	_camera.rotation_degrees = Vector3(-7, 0, 0)
+	# Centre on the subject's middle, then drop it slightly so the ground line reads.
+	_camera.position = Vector3(0, height * 0.46 + lift, height * 2.4 + 1.0)
+	_camera.rotation_degrees = Vector3(-6, 0, 0)
 
 
 func _process(delta: float) -> void:

@@ -178,7 +178,6 @@ func _load_settings() -> void:
 		fullscreen = config.get_value("display", "fullscreen", fullscreen)
 		arcade_hints = config.get_value("input", "arcade_hints", int(arcade_hints)) as ArcadeHints
 		treats_from_round = config.get_value("match", "treats_from_round", treats_from_round)
-		points_to_win = config.get_value("match", "points_to_win", points_to_win)
 	elif _has_unmapped_pad():
 		# First run on a cabinet. Nobody plays an arcade machine in a window.
 		fullscreen = true
@@ -212,7 +211,6 @@ func save_settings() -> void:
 		config.set_value("audio", "music", music.enabled)
 	config.set_value("input", "arcade_hints", int(arcade_hints))
 	config.set_value("match", "treats_from_round", treats_from_round)
-	config.set_value("match", "points_to_win", points_to_win)
 	config.save(SETTINGS_PATH)
 
 
