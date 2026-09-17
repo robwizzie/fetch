@@ -58,25 +58,55 @@ func _bind_menu_gamepad() -> void:
 		&"ui_cancel": [JOY_BUTTON_B, JOY_BUTTON_BACK],
 	}
 	for action in bindings:
-		if not InputMap.has_action(action):
+		_add_joy_buttons(action, bindings[action])
+	# An arcade encoder usually has no SDL mapping, so Godot reports raw hardware indices and
+	# "button A" means nothing: the cabinet's main button could be any number. On a cabinet
+	# every action button should select anyway, so bind the lot. Index 1 is left for cancel,
+	# and every menu also has an on-screen Back.
+	if _has_unmapped_pad():
+		var accept: Array[int] = []
+		for index in range(0, 16):
+			if index != JOY_BUTTON_B:
+				accept.append(index)
+		_add_joy_buttons(&"ui_accept", accept)
+
+
+func _add_joy_buttons(action: StringName, buttons: Array) -> void:
+	if not InputMap.has_action(action):
+		return
+	var already: Array[int] = []
+	for existing in InputMap.action_get_events(action):
+		if existing is InputEventJoypadButton:
+			already.append((existing as InputEventJoypadButton).button_index)
+	for button in buttons:
+		if already.has(button):
 			continue
-		var already: Array[int] = []
-		for existing in InputMap.action_get_events(action):
-			if existing is InputEventJoypadButton:
-				already.append((existing as InputEventJoypadButton).button_index)
-		for button in bindings[action]:
-			if already.has(button):
-				continue
-			var event := InputEventJoypadButton.new()
-			# device -1 so every connected pad drives the menus, not just the first.
-			event.device = -1
-			event.button_index = button
-			event.pressed = true
-			InputMap.action_add_event(action, event)
+		var event := InputEventJoypadButton.new()
+		# device -1 so every connected pad drives the menus, not just the first.
+		event.device = -1
+		event.button_index = button
+		event.pressed = true
+		InputMap.action_add_event(action, event)
+
+
+## True when a connected pad has no SDL mapping, which is the normal state for arcade encoder
+## boards. Their button numbering is whatever the board's firmware chose.
+func _has_unmapped_pad() -> bool:
+	if arcade_hints == ArcadeHints.ALWAYS:
+		return true
+	if arcade_hints == ArcadeHints.NEVER:
+		return false
+	for device in Input.get_connected_joypads():
+		if not Input.is_joy_known(device):
+			return true
+		if DeviceInput.is_arcade(device):
+			return true
+	return false
 
 
 func _ready() -> void:
 	_bind_menu_gamepad()
+	Input.joy_connection_changed.connect(func(_device: int, _connected: bool) -> void: _bind_menu_gamepad())
 	_load_content()
 	_apply_defaults()
 

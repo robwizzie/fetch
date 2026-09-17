@@ -35,8 +35,8 @@ func _input(event: InputEvent) -> void:
 func _build_menu() -> void:
 	var menu := VBoxContainer.new()
 	menu.position = Vector2(CoverStage.COLUMN_X, CoverStage.COLUMN_TOP)
-	menu.size = Vector2(560, 480)
-	menu.add_theme_constant_override("separation", 10)
+	menu.size = Vector2(560, 482)
+	menu.add_theme_constant_override("separation", 8)
 	_canvas.add_child(menu)
 	var play := _add(menu, "PARTY PLAY", func() -> void: Game.goto(Game.SCENE_DOG_SELECT))
 	play.tooltip_text = "2–4 friends. Join with gamepads or share a keyboard."
@@ -49,7 +49,7 @@ func _build_menu() -> void:
 	_add(menu, "SETTINGS", _show_settings)
 
 	var footer := HBoxContainer.new()
-	footer.position = Vector2(CoverStage.COLUMN_X, 866)
+	footer.position = Vector2(CoverStage.COLUMN_X, 902)
 	footer.size = Vector2(560, 60)
 	footer.add_theme_constant_override("separation", 12)
 	_canvas.add_child(footer)
@@ -57,7 +57,7 @@ func _build_menu() -> void:
 	_small_button(footer, "QUIT", func() -> void: get_tree().quit(), 208)
 
 	var blurb := CoverStage.copy("1–4 players   •   local multiplayer   •   gamepads + keyboard", 21, Color(0.92, 0.95, 0.86))
-	blurb.position = Vector2(CoverStage.COLUMN_X + 2, 946)
+	blurb.position = Vector2(CoverStage.COLUMN_X + 2, 980)
 	blurb.size = Vector2(700, 32)
 	_canvas.add_child(blurb)
 
@@ -141,7 +141,7 @@ func _hint(glyph: String, tint: Color, action: String, caption_width: float) -> 
 	return pill
 
 
-func _add(parent: Control, text: String, on_pressed: Callable, width: float = 560, height: float = 66) -> Button:
+func _add(parent: Control, text: String, on_pressed: Callable, width: float = 560, height: float = 62) -> Button:
 	var button := UiKit.wood_button(text, width)
 	button.custom_minimum_size.y = height
 	button.add_theme_font_override("font", UiKit.FONT_DISPLAY)
@@ -198,6 +198,9 @@ func _show_settings() -> void:
 		music.text = "MUSIC: ON" if Music.enabled else "MUSIC: OFF")
 	body.add_child(music)
 	# Cabinets report their encoder name, but the override is here because they vary.
+	var tester := UiKit.wood_button("CONTROLLER TEST", 770)
+	tester.pressed.connect(func() -> void: Game.goto("res://scenes/ui/controller_test.tscn"))
+	body.add_child(tester)
 	var arcade_names := ["ARCADE CONTROLS: AUTO", "ARCADE CONTROLS: ALWAYS", "ARCADE CONTROLS: NEVER"]
 	var arcade := UiKit.wood_button(arcade_names[int(Game.arcade_hints)], 770)
 	arcade.pressed.connect(func() -> void:
