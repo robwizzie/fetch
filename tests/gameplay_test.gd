@@ -12,6 +12,8 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	Sfx.enabled = DisplayServer.get_name() != "headless"
 	seed(617)
+	# These suites assert on a normal scored round, so skip the one-off practice round.
+	Game.tutorial_shown = true
 	Game.mixed_toys = false
 	Game.powerups_enabled = false
 	Events.round_over.connect(func(winner: PlayerSlot) -> void:

@@ -228,6 +228,12 @@ func _build_clock() -> void:
 	_announcement.hide()
 
 
+## The practice round has no clock and no score, so the timer says so instead of counting.
+func practice_clock() -> void:
+	_clock.text = "PRACTICE ROUND"
+	_clock.add_theme_color_override("font_color", UiKit.YELLOW)
+
+
 func announce(text: String) -> void:
 	_announcement.text = text
 	_announcement_time = 3.0
@@ -268,13 +274,9 @@ func _control_hint(slots: Array[PlayerSlot]) -> String:
 	for slot in slots:
 		if slot.is_bot:
 			continue
-		if slot.device == DeviceInput.KEYBOARD_WASD:
-			layouts.append("WASD move · Space throw / catch · E or Shift dash")
-		elif slot.device == DeviceInput.KEYBOARD_ARROWS:
-			layouts.append("Arrows move · Enter throw / catch · Ctrl dash")
-		elif slot.device >= 0:
-			if not layouts.has("Stick move · X throw / catch · A dash"):
-				layouts.append("Stick move · X throw / catch · A dash")
+		var line := DeviceInput.controls_line(slot.device)
+		if not layouts.has(line):
+			layouts.append(line)
 	layouts.append("Esc / Start pause")
 	return "   |   ".join(layouts)
 

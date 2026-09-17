@@ -11,7 +11,7 @@ const ACCEL := 47.0
 const DASH_TIME := 0.22
 ## Invincibility covers the burst but not the recovery, so a dash is an escape, not a shield.
 const DASH_IFRAMES := 0.14
-const SPAWN_GRACE := 0.6
+const SPAWN_GRACE := 1.1
 ## Close-quarters swipe for a dog with nothing in its mouth.
 const WHACK_RANGE := 1.55
 const WHACK_COOLDOWN := 0.6
@@ -50,6 +50,9 @@ var _stagger_time := 0.0
 var _whack_cooldown := 0.0
 ## While > 0 the dog is seeing stars: no input, no actions.
 var dizzy_time := 0.0
+## Set during the practice round: the dog can throw, catch and whack, but nothing can put it
+## out. Learning which button throws should never cost you a knockout.
+var practice_safe := false
 var _weapon_impulse := Vector3.ZERO
 
 @onready var body_shape: CollisionShape3D = $Body
@@ -254,7 +257,7 @@ func _whack(target: Dog) -> void:
 
 ## Taking a swipe: a dog holding something loses it, an empty-pawed one sees stars.
 func receive_whack(direction: Vector3, from: Dog) -> void:
-	if not alive or round_locked or invincible or _spawn_grace > 0.0:
+	if not alive or round_locked or invincible or _spawn_grace > 0.0 or practice_safe:
 		return
 	if is_instance_valid(held_toy):
 		var dropped := held_toy
@@ -316,6 +319,15 @@ func try_pickup(toy: Toy) -> bool:
 ## Called by a flying toy. Returns true if the hit landed.
 func hit_by(toy: Toy) -> bool:
 	if not alive or round_locked or invincible or _spawn_grace > 0.0 or not toy.is_dangerous():
+		return false
+	if practice_safe:
+		# Still reads as a hit so a catch can be practised, but never eliminates.
+		if _catch_buffer > 0.0 and held_toy == null and toy.can_be_caught_by(self):
+			_catch(toy)
+		else:
+			toy.deflect_from(self)
+			Juice.float_text(get_parent(), global_position + Vector3.UP * 1.6, "BONK!", Color(1.0, 0.85, 0.3), 0.6)
+			Sfx.play("bounce", 0.9, -5.0)
 		return false
 	if _catch_buffer > 0.0 and held_toy == null and toy.can_be_caught_by(self):
 		_catch(toy)

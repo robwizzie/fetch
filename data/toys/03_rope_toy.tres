@@ -9,11 +9,11 @@ display_name = "Rope Toy"
 description = "Tug, disarm and shove rivals into the open."
 color = Color(0.4, 0.5, 0.9, 1)
 radius = 0.37
-throw_speed = 13.26
+throw_speed = 11.54
 bounciness = 0.55
 max_bounces = 1
-friction = 6.08
-danger_speed = 4.13
+friction = 4.6
+danger_speed = 3.59
 special = 1
 fully_implemented = true
 

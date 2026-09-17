@@ -71,9 +71,25 @@ func _rebuild() -> void:
 			Mats.mesh(v, Mats.box(Vector3(0.12, s.y + 0.04, s.z + 0.04)), accent, Vector3(0, s.y / 2.0, 0))
 		Kind.DOGHOUSE:
 			var body_h := s.y * 0.62
+			var roof_h := s.y - body_h
 			Mats.mesh(v, Mats.box(Vector3(s.x, body_h, s.z)), color, Vector3(0, body_h / 2.0, 0))
-			Mats.mesh(v, Mats.prism(Vector3(s.x * 1.2, s.y - body_h, s.z * 1.15)), accent, Vector3(0, body_h + (s.y - body_h) / 2.0, 0))
-			Mats.mesh(v, Mats.box(Vector3(s.x * 0.4, body_h * 0.7, 0.1)), Color(0.12, 0.08, 0.06), Vector3(0, body_h * 0.35, s.z / 2.0))
+			# Plank seams break up the walls, which are otherwise one flat face from above.
+			for seam in 3:
+				var sy: float = body_h * (0.28 + seam * 0.22)
+				Mats.mesh(v, Mats.box(Vector3(s.x + 0.02, 0.035, s.z + 0.02)), color.darkened(0.16), Vector3(0, sy, 0))
+			Mats.mesh(v, Mats.prism(Vector3(s.x * 1.22, roof_h, s.z * 1.16)), accent, Vector3(0, body_h + roof_h / 2.0, 0))
+			# Shingle courses down each slope, and a ridge beam along the top: the roof is most
+			# of what the overhead camera sees, so it carries the read.
+			for course in 3:
+				var t: float = 0.22 + course * 0.24
+				var width: float = s.x * 1.22 * (1.0 - t * 0.92)
+				Mats.mesh(v, Mats.box(Vector3(width, 0.03, s.z * 1.18)), accent.darkened(0.18),
+					Vector3(0, body_h + roof_h * t, 0))
+			Mats.mesh(v, Mats.box(Vector3(0.09, 0.09, s.z * 1.2)), accent.darkened(0.3), Vector3(0, s.y, 0))
+			# Doorway with a frame, so the entrance is not a flat black rectangle.
+			var door := Vector3(s.x * 0.44, body_h * 0.74, 0.12)
+			Mats.mesh(v, Mats.box(door + Vector3(0.1, 0.08, 0.0)), accent.lightened(0.12), Vector3(0, body_h * 0.37, s.z / 2.0 - 0.01))
+			Mats.mesh(v, Mats.box(door), Color(0.1, 0.07, 0.06), Vector3(0, body_h * 0.36, s.z / 2.0))
 		Kind.TABLE:
 			Mats.mesh(v, Mats.box(Vector3(s.x, 0.16, s.z)), color, Vector3(0, s.y - 0.08, 0))
 			for p in [Vector3(-1, 0, -1), Vector3(1, 0, -1), Vector3(-1, 0, 1), Vector3(1, 0, 1)]:

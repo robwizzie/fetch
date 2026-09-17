@@ -16,13 +16,25 @@ reference_sheet = "res://images/models/shadow-model.png"
 portrait_region = Rect2(42, 142, 300, 366)
 card_color = Color(0.24, 0.5, 1.0, 1)
 card_color_dark = Color(0.09, 0.18, 0.46, 1)
-model_scene_path = "res://assets/models/dogs/shadow/shadow.glb"
+model_scene_path = "res://assets/models/dogs/shadow/shadow.tscn"
 model_scale = 1.0
+model_height = 1.2
+model_rotation_degrees = Vector3(0, 180, 0)
+mouth_socket_bone = &"headend"
+model_animations = {
+"catch": &"catch",
+"dash": &"dash",
+"idle": &"idle",
+"ko": &"ko",
+"run": &"run",
+"throw": &"throw",
+"win": &"win"
+}
 speed_rating = 3
 throw_rating = 3
 catch_rating = 3
 dash_rating = 3
-move_speed = 5.46
+move_speed = 4.75
 throw_power = 1.0
 catch_radius = 2.0
 catch_window = 0.18

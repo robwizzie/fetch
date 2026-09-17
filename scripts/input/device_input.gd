@@ -116,6 +116,63 @@ static func join_device_from_event(event: InputEvent) -> int:
 	return NONE
 
 
+## Encoder chips and sticks that show up in arcade cabinets. Godot reports the USB device
+## name, and these boards are distinctive enough to match on.
+const ARCADE_NAMES: Array[String] = [
+	"i-pac", "ipac", "ultimarc", "xin-mo", "xinmo", "zero delay", "arcade",
+	"usb encoder", "dragonrise", "generic   usb  joystick", "2 axis 8 button",
+]
+
+
+## True when this pad looks like an arcade cabinet rather than a console controller.
+static func is_arcade(p_device: int) -> bool:
+	if p_device < 0:
+		return false
+	if Game.arcade_hints == Game.ArcadeHints.ALWAYS:
+		return true
+	if Game.arcade_hints == Game.ArcadeHints.NEVER:
+		return false
+	var reported := Input.get_joy_name(p_device).to_lower()
+	for token in ARCADE_NAMES:
+		if reported.contains(token):
+			return true
+	return false
+
+
+## True when any joined player is on a cabinet, so shared prompts can use cabinet wording.
+static func any_arcade(slots: Array) -> bool:
+	for slot in slots:
+		if slot != null and not slot.is_bot and is_arcade(slot.device):
+			return true
+	return false
+
+
+## One line describing how to play on this device, for the HUD and menus.
+static func controls_line(p_device: int) -> String:
+	match p_device:
+		KEYBOARD_WASD:
+			return "WASD move · Space throw / catch · E or Shift dash"
+		KEYBOARD_ARROWS:
+			return "Arrows move · Enter throw / catch · Ctrl dash"
+		_:
+			if is_arcade(p_device):
+				return "Joystick move · Button 1 throw / catch · Button 2 dash"
+			return "Stick move · X throw / catch · A dash"
+
+
+## The button wording for one action, given who is playing.
+static func button_label(action: StringName, slots: Array) -> String:
+	var arcade := any_arcade(slots)
+	match action:
+		&"throw":
+			return "Button 1  /  Space  /  Enter" if arcade else "X  /  Space  /  Enter"
+		&"dash":
+			return "Button 2  /  Shift  /  Ctrl" if arcade else "A  /  Shift  /  Ctrl"
+		&"move":
+			return "Joystick  /  WASD  /  Arrows" if arcade else "Stick  /  WASD  /  Arrows"
+	return ""
+
+
 static func describe(p_device: int) -> String:
 	match p_device:
 		KEYBOARD_WASD:
