@@ -11,7 +11,9 @@ const UI_SCENES := [
 	"res://scenes/ui/results.tscn",
 	"res://scenes/ui/gallery.tscn",
 ]
-const TIMEOUT_SEC := 75.0
+## A bot round regularly runs the full ROUND_SECONDS - measured at 55s in every arena - so two
+## round wins plus countdowns needs room for roughly 130s before this is a real failure.
+const TIMEOUT_SEC := 165.0
 
 var _match: Node
 var _elapsed := 0.0

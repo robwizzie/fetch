@@ -9,6 +9,8 @@ const COLORS: Array[Color] = [
 	Color(1.0, 0.8, 0.2),     # P4 yellow
 ]
 
+## Which side this player is on: -1 in a free-for-all, otherwise an index into Game.TEAM_NAMES.
+var team: int = -1
 var index: int = 0
 var device: int = DeviceInput.NONE
 var dog: DogData
@@ -44,3 +46,12 @@ var color: Color:
 var label: String:
 	get:
 		return "CPU %d" % (index + 1) if is_bot else "P%d" % (index + 1)
+
+## True when both players are on the same side. A free-for-all slot is on nobody's side but
+## its own, so this is false for everyone except the player themselves.
+func allied_with(other: PlayerSlot) -> bool:
+	if other == null:
+		return false
+	if other == self:
+		return true
+	return team >= 0 and team == other.team

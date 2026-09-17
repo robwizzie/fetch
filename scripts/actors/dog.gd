@@ -317,8 +317,26 @@ func try_pickup(toy: Toy) -> bool:
 
 
 ## Called by a flying toy. Returns true if the hit landed.
+## True when this toy is allowed to put this dog out, given who threw it. A toy that cannot
+## hurt you still bounces off - it just does not eliminate.
+func can_be_hurt_by(toy: Toy) -> bool:
+	var attacker: Dog = toy.thrower
+	if attacker == null or not is_instance_valid(attacker) or attacker.slot == null or slot == null:
+		return true
+	if attacker == self:
+		return Game.self_fire
+	if slot.allied_with(attacker.slot):
+		return Game.friendly_fire
+	return true
+
+
 func hit_by(toy: Toy) -> bool:
 	if not alive or round_locked or invincible or _spawn_grace > 0.0 or not toy.is_dangerous():
+		return false
+	if not can_be_hurt_by(toy):
+		# Reads as a hit so the throw is not silently ignored, but nobody goes out.
+		toy.deflect_from(self)
+		Sfx.play("bounce", 0.95, -6.0)
 		return false
 	if practice_safe:
 		# Still reads as a hit so a catch can be practised, but never eliminates.

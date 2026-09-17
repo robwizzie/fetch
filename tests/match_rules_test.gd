@@ -149,12 +149,14 @@ func _practice_round_is_free() -> void:
 		if is_instance_valid(pen):
 			pen._set_ready()
 	await get_tree().create_timer(1.4).timeout
-	_check(game_match.phase != game_match.Phase.TUTORIAL, "checking in starts the real match")
-	_check(game_match.round_number == 1, "the first scored round is round 1")
+	_check(game_match.phase != game_match.Phase.TUTORIAL, "checking in drops the pens")
+	# The warm-up is a real fight now: dogs can bonk each other out. It just is not a round.
+	_check(game_match.practice_round, "a warm-up round runs once the pens open")
+	_check(game_match.round_number == 0, "the warm-up does not consume a round")
 	var total := 0
 	for slot in Game.slots:
 		total += slot.score
-	_check(total == 0, "the practice round scores nothing")
+	_check(total == 0, "the warm-up scores nothing")
 	# Everyone leaves the booths and is back in play for the real round.
 	var still_safe := 0
 	for dog in game_match.dogs:
@@ -162,5 +164,18 @@ func _practice_round_is_free() -> void:
 			still_safe += 1
 	_check(still_safe == 0, "practice safety is lifted once the walls drop")
 	_check((game_match.get("_pens") as Array).is_empty(), "the booths are gone once the match starts")
+	# Win the warm-up outright: the board must still read nil-nil afterwards, and the first
+	# scored round begins only now.
+	# The match sets ROUND_OVER before calling _end_round; _finish_round only acts in that phase.
+	game_match.phase = game_match.Phase.ROUND_OVER
+	game_match._end_round(Game.slots[0])
+	game_match._finish_round()
+	await get_tree().process_frame
+	_check(not game_match.practice_round, "the warm-up hands over to the real match")
+	_check(game_match.round_number == 1, "the first scored round is round 1")
+	var after := 0
+	for slot in Game.slots:
+		after += slot.score
+	_check(after == 0, "winning the warm-up is worth no points")
 	game_match.queue_free()
 	await get_tree().process_frame
