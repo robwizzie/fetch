@@ -48,7 +48,35 @@ var show_start_prompt := false
 var navigation_busy := false
 
 
+## Godot's built-in ui_accept / ui_cancel ship with keyboard events only, so a gamepad can move
+## the menu highlight but cannot choose anything or back out — the menus look frozen on a pad.
+## These are added at runtime rather than redefined in project.godot so the keyboard defaults
+## stay exactly as Godot shipped them. Buttons match what DeviceInput uses in gameplay.
+func _bind_menu_gamepad() -> void:
+	var bindings := {
+		&"ui_accept": [JOY_BUTTON_A, JOY_BUTTON_X, JOY_BUTTON_START],
+		&"ui_cancel": [JOY_BUTTON_B, JOY_BUTTON_BACK],
+	}
+	for action in bindings:
+		if not InputMap.has_action(action):
+			continue
+		var already: Array[int] = []
+		for existing in InputMap.action_get_events(action):
+			if existing is InputEventJoypadButton:
+				already.append((existing as InputEventJoypadButton).button_index)
+		for button in bindings[action]:
+			if already.has(button):
+				continue
+			var event := InputEventJoypadButton.new()
+			# device -1 so every connected pad drives the menus, not just the first.
+			event.device = -1
+			event.button_index = button
+			event.pressed = true
+			InputMap.action_add_event(action, event)
+
+
 func _ready() -> void:
+	_bind_menu_gamepad()
 	_load_content()
 	_apply_defaults()
 

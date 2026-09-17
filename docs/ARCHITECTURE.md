@@ -12,6 +12,12 @@ left alone. The lobby can add/remove CPUs, change their dogs, and retains their 
 Match setup offers only fully implemented modes/toys; galleries can still show prototypes.
 
 The match has a 45-second round clock, no-score timeout draws, and real tree pause on Esc/Start.
+Menus run on Godot's built-in focus navigation. Godot ships `ui_accept` and `ui_cancel` with
+keyboard events only, so `Game._bind_menu_gamepad()` adds the pad buttons at runtime (A/X/Start
+to confirm, B/Back to cancel, on device -1 so every connected pad works). They are added rather
+than redefined in `project.godot` so the keyboard defaults stay exactly as Godot shipped them.
+Without this the menus look frozen on a controller: the highlight moves and nothing else does.
+
 A brand new session opens on a **practice round** (`Phase.TUTORIAL`), not a scored one. Each
 player gets a walled `ReadyPen` with a toy to try and a pad to stand on; the walls are taller
 than a toy flies, so nobody can be knocked out while they are still finding the buttons. The
