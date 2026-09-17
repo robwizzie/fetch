@@ -17,6 +17,9 @@ const SPIN := 34.0
 const RESTING_YAW := -24.0
 ## Framing: the subject is scaled so its height fills this much of the viewport.
 const FILL := 0.74
+## How much bare ground shows beneath the subject, as a fraction of its height. Small: the
+## subject should look like it is standing on the bottom of the card, not posed above it.
+const GROUND_MARGIN := 0.05
 
 var _view: SubViewport
 var _pivot: Node3D
@@ -78,9 +81,10 @@ func show_dog(data: DogData) -> void:
 	_pivot.add_child(model)
 	# Face the camera rather than away from it: the models are authored facing +Z.
 	model.rotation_degrees = Vector3(0, 180, 0)
-	_ground()
+	var height := maxf(0.4, data.model_height * data.model_scale)
+	_ground(height * 0.34)
 	set_spinning(false)
-	_frame(maxf(0.4, data.model_height * data.model_scale), 0.0)
+	_frame(height, 0.0)
 
 
 ## A toy, sized from its own radius so a tennis ball and a frisbee both fill the frame.
@@ -116,10 +120,10 @@ func set_spinning(on: bool) -> void:
 		_pivot.rotation_degrees.y = RESTING_YAW
 
 
-## A shadow under the subject. Without one it reads as hovering in the middle of the card
-## rather than standing on anything.
-func _ground() -> void:
-	Mats.contact_shadow(_pivot, 0.42)
+## A shadow under the subject, sized to it. Without one it reads as hovering in the middle of
+## the card rather than standing on anything.
+func _ground(radius: float) -> void:
+	Mats.contact_shadow(_pivot, radius)
 
 
 func _clear() -> void:
@@ -128,13 +132,24 @@ func _clear() -> void:
 	_pivot.rotation_degrees = Vector3.ZERO
 
 
-## Points the camera at a subject standing on y = 0, so its feet sit on the bottom of the
+## Points the camera at a subject standing on y = 0, so its feet sit near the bottom of the
 ## frame rather than floating in the middle of it.
+##
+## Framed from the bottom edge rather than from the subject's middle, because the two pull in
+## opposite directions: LOWERING the camera raises the subject in frame. Aiming at the middle
+## and then nudging down - which reads as the obvious thing to do - pushes the dog further up
+## the card, which is exactly the wrong way.
 func _frame(height: float, lift: float) -> void:
 	_camera.size = height / FILL
-	# Centre on the subject's middle, then drop it slightly so the ground line reads.
-	_camera.position = Vector3(0, height * 0.46 + lift, height * 2.4 + 1.0)
+	var ground_line := _camera.size * 0.5 - height * GROUND_MARGIN
+	_camera.position = Vector3(0, ground_line + lift, height * 2.4 + 1.0)
 	_camera.rotation_degrees = Vector3(-6, 0, 0)
+
+
+## Where the bottom of the frame sits relative to the ground the subject stands on. Zero means
+## the ground line is exactly on the bottom edge; slightly negative shows a little beneath it.
+func frame_floor() -> float:
+	return _camera.position.y - _camera.size * 0.5
 
 
 func _process(delta: float) -> void:

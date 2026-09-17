@@ -56,6 +56,13 @@ func _previews_accept_every_kind() -> void:
 		preview.show_dog(dog)
 		await get_tree().process_frame
 		_check(_subject_count(preview) > 0, "%s has something to show" % dog.display_name)
+		# Standing on the bottom of the card, not hovering above it. The ground the dog stands
+		# on is y = 0, so the bottom of the frame has to sit just below it - a little under is
+		# a strip of floor, well under is a dog floating in mid-air.
+		var height: float = maxf(0.4, dog.model_height * dog.model_scale)
+		var floor_at := preview.frame_floor()
+		_check(floor_at <= 0.0, "%s stands on the frame floor, not above it (%.3f)" % [dog.display_name, floor_at])
+		_check(floor_at > -height * 0.18, "%s is not left floating over a gap (%.3f)" % [dog.display_name, floor_at])
 	for toy in Game.toys:
 		preview.show_toy(toy)
 		await get_tree().process_frame
