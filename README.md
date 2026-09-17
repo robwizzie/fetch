@@ -22,6 +22,19 @@ asset validator, and reference studio are ready; matching authored meshes and te
 
 You can also run a scene directly with **F6** while it's open (e.g. `scenes/match/match.tscn` auto-fills two keyboard players).
 
+Godot **4.7.2** specifically — the project declares the `4.7` feature and will not open on 4.6 or
+earlier. Nothing else is needed: no export templates, no Git LFS, no asset downloads. Everything
+the game uses (dog models, textures, fonts, arena thumbnails) is in the repo.
+
+On a **fresh clone the first import reports a handful of font/theme errors**. They are an ordering
+artefact — the theme loads before the font has been imported — and a second pass clears them. The
+editor does this for you; from the command line, run `--import` twice:
+
+```bash
+godot --headless --path . --import   # first pass: expect font/theme errors
+godot --headless --path . --import   # second pass: clean
+```
+
 ## Controls
 
 | Action | Gamepad | Keyboard 1 | Keyboard 2 |

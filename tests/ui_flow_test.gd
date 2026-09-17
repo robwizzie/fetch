@@ -66,6 +66,25 @@ func _ready() -> void:
 	_check(AudioServer.get_bus_index("Music") != -1, "a Music bus exists")
 	_check(AudioServer.get_bus_index("SFX") != -1, "an SFX bus exists")
 
+	# A pad has to be able to drive the menus, not just highlight things in them. Godot ships
+	# ui_accept and ui_cancel with keyboard events only, so without the runtime binding the
+	# menus look frozen on a controller: the highlight moves and nothing else happens.
+	for spec in [["ui_accept", "confirm"], ["ui_cancel", "back"]]:
+		var action: String = spec[0]
+		var joy_buttons := 0
+		for event in InputMap.action_get_events(action):
+			if event is InputEventJoypadButton:
+				joy_buttons += 1
+		_check(joy_buttons > 0, "menu %s is reachable from a gamepad" % spec[1])
+	# Navigation should work from both the stick and the d-pad.
+	var has_axis := false
+	var has_dpad := false
+	for event in InputMap.action_get_events("ui_down"):
+		has_axis = has_axis or event is InputEventJoypadMotion
+		has_dpad = has_dpad or event is InputEventJoypadButton
+	_check(has_axis, "menu navigation responds to the stick")
+	_check(has_dpad, "menu navigation responds to the d-pad")
+
 	# The soundtrack is rendered rather than loaded, and an empty track fails silently: it
 	# still "plays", just with nothing in it. So the sequencer output is checked directly.
 	var track: PackedFloat32Array = Music._render(Music._menu_spec())
