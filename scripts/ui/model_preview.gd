@@ -26,7 +26,9 @@ func _init(size: Vector2i = Vector2i(420, 420)) -> void:
 	_view.size = size
 	_view.own_world_3d = true
 	_view.transparent_bg = true
-	_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	# Only while it is actually on screen: a gallery left open in the background should not be
+	# paying for a 3D pass per card.
+	_view.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
 	_view.msaa_3d = Viewport.MSAA_4X
 	add_child(_view)
 

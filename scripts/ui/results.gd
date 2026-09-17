@@ -16,13 +16,31 @@ func _ready() -> void:
 
 	root.add_child(UiKit.title("MATCH RESULTS", 34, Color(1, 1, 1, 0.6)))
 	if winner:
-		root.add_child(UiKit.title("%s WINS!" % winner.dog.display_name.to_upper(), 120, winner.dog.card_color))
-		root.add_child(UiKit.dog_portrait(winner.dog, winner.color, Vector2(460, 320), 1.0, 0.6))
+		# In teams the pack won, not the dog that happened to be left standing.
+		if Game.team_mode and winner.team >= 0:
+			root.add_child(UiKit.title("%s WINS!" % Game.team_name(winner.team), 108, Game.team_color(winner.team)))
+		else:
+			root.add_child(UiKit.title("%s WINS!" % winner.dog.display_name.to_upper(), 120, winner.dog.card_color))
+		var trophy := PanelContainer.new()
+		var trophy_style := StyleBoxFlat.new()
+		trophy_style.bg_color = Color(0, 0, 0, 0.2)
+		trophy_style.border_color = winner.color.lightened(0.2)
+		trophy_style.set_border_width_all(4)
+		trophy_style.set_corner_radius_all(20)
+		trophy.add_theme_stylebox_override("panel", trophy_style)
+		trophy.custom_minimum_size = Vector2(460, 320)
+		var preview := ModelPreview.new(Vector2i(520, 400))
+		preview.show_dog(winner.dog)
+		trophy.add_child(preview)
+		root.add_child(trophy)
 	else:
 		root.add_child(UiKit.title("GAME OVER", 110, UiKit.ACCENT))
 
 	var standings := Game.slots.duplicate()
-	standings.sort_custom(func(a: PlayerSlot, b: PlayerSlot) -> bool: return a.score > b.score)
+	# score_for reads the pack's board in teams and the player's own otherwise; sorting on
+	# slot.score alone showed every player on nil in a team match.
+	standings.sort_custom(func(a: PlayerSlot, b: PlayerSlot) -> bool:
+		return Game.score_for(a) > Game.score_for(b))
 	var table := VBoxContainer.new()
 	table.add_theme_constant_override("separation", 6)
 	root.add_child(table)
@@ -33,7 +51,9 @@ func _ready() -> void:
 		row.add_theme_constant_override("separation", 14)
 		row.add_child(UiKit.title("%d" % place, 34, UiKit.YELLOW if place == 1 else Color(1, 1, 1, 0.6)))
 		row.add_child(UiKit.chip(s.label, s.color, 20))
-		var l := UiKit.label("%s   ·   %d %s" % [s.dog.display_name, s.score, "point" if s.score == 1 else "points"], 28, UiKit.CREAM)
+		var points: int = Game.score_for(s)
+		var side := "  ·  %s" % Game.team_name(s.team) if Game.team_mode and s.team >= 0 else ""
+		var l := UiKit.label("%s   ·   %d %s%s" % [s.dog.display_name, points, "point" if points == 1 else "points", side], 28, UiKit.CREAM)
 		l.autowrap_mode = TextServer.AUTOWRAP_OFF
 		row.add_child(l)
 		table.add_child(row)
@@ -44,7 +64,12 @@ func _ready() -> void:
 		Game.reset_scores()
 		Game.goto(Game.SCENE_MATCH))
 	root.add_child(again)
-	var change := UiKit.button("Change Dogs / Arena")
+	# Three separate exits, because "again" and "change something" are different wants and a
+	# cabinet should not make you walk back through the whole menu to reach either.
+	var settings := UiKit.button("Change Settings")
+	settings.pressed.connect(func() -> void: Game.goto(Game.SCENE_MATCH_SETUP))
+	root.add_child(settings)
+	var change := UiKit.button("Change Dogs")
 	change.pressed.connect(func() -> void: Game.goto(Game.SCENE_DOG_SELECT))
 	root.add_child(change)
 	var menu := UiKit.button("Back to Menu")
