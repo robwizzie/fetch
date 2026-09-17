@@ -39,6 +39,7 @@ var _base_transparency: Array[int] = []
 var _fade_meshes: Array[MeshInstance3D] = []
 var _base_shadows: Array[int] = []
 var _shadow_proxies: Array[MeshInstance3D] = []
+var _ground_shade: MeshInstance3D
 
 
 func _ready() -> void:
@@ -57,6 +58,10 @@ func _rebuild() -> void:
 		add_child(_shape)
 	(_shape.shape as BoxShape3D).size = size
 	_shape.position = Vector3(0, size.y / 2.0, 0)
+	if _ground_shade != null and is_instance_valid(_ground_shade):
+		_ground_shade.queue_free()
+	# Seats the prop on the ground. Without it a primitive reads as hovering over the grass.
+	_ground_shade = Mats.contact_shadow(self, maxf(size.x, size.z) * 0.58)
 	if _visual:
 		_visual.queue_free()
 	_visual = Node3D.new()

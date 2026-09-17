@@ -7,20 +7,20 @@
 
 [sub_resource type="Environment" id="Environment_sky"]
 background_mode = 1
-background_color = Color(0.55, 0.78, 0.95, 1)
+background_color = Color(0.35, 0.72, 0.99, 1)
 ambient_light_source = 2
 ambient_light_color = Color(0.86, 0.91, 1, 1)
-ambient_light_energy = 0.65
+ambient_light_energy = 0.70
 tonemap_mode = 0
 
 [node name="Backyard" type="Node3D"]
 script = ExtResource("1_arena")
 size = Vector2(26, 14.6)
-ground_color = Color(0.32, 0.46, 0.22, 1)
-ground_accent = Color(0.30, 0.43, 0.20, 1)
-wall_color = Color(0.66, 0.46, 0.27, 1)
-wall_accent = Color(0.51, 0.33, 0.18, 1)
-surround_color = Color(0.32, 0.48, 0.25, 1)
+ground_color = Color(0.49, 0.57, 0.16, 1)
+ground_accent = Color(0.44, 0.52, 0.15, 1)
+wall_color = Color(0.81, 0.47, 0.24, 1)
+wall_accent = Color(0.60, 0.33, 0.15, 1)
+surround_color = Color(0.21, 0.29, 0.10, 1)
 sign_text = "THE DOG PARK"
 
 [node name="Camera" type="Camera3D" parent="."]
@@ -30,8 +30,8 @@ script = ExtResource("4_camera")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866, -0.3214, 0.383, 0, 0.766, 0.6428, -0.5, -0.5567, 0.6634, 0, 12, 0)
-light_color = Color(1, 0.96, 0.88, 1)
-light_energy = 0.85
+light_color = Color(1, 0.957, 0.878, 1)
+light_energy = 0.95
 shadow_enabled = true
 directional_shadow_max_distance = 60.0
 

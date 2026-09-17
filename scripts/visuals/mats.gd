@@ -64,6 +64,28 @@ static func mesh_plain(parent: Node3D, m: Mesh, color: Color, pos: Vector3 = Vec
 	return mi
 
 
+## A soft contact shadow disc, laid flat just above the ground. Unshaded and transparent, so
+## it costs nothing and never fights the real shadow map.
+static func contact_shadow(parent: Node3D, radius: float, at: Vector3 = Vector3.ZERO) -> MeshInstance3D:
+	var disc := MeshInstance3D.new()
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = radius
+	mesh.bottom_radius = radius
+	mesh.height = 0.012
+	mesh.radial_segments = 20
+	disc.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Palette.CONTACT_SHADOW
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	disc.material_override = mat
+	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	disc.position = at + Vector3(0, 0.014, 0)
+	parent.add_child(disc)
+	return disc
+
+
 static func unlit(color: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = color

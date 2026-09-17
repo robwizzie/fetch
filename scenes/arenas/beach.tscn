@@ -7,20 +7,20 @@
 
 [sub_resource type="Environment" id="Environment_beach"]
 background_mode = 1
-background_color = Color(0.45, 0.76, 0.93, 1)
+background_color = Color(0.35, 0.72, 0.99, 1)
 ambient_light_source = 2
 ambient_light_color = Color(1, 0.96, 0.87, 1)
-ambient_light_energy = 0.6
+ambient_light_energy = 0.70
 tonemap_mode = 0
 
 [node name="Beach" type="Node3D"]
 script = ExtResource("1_arena")
 size = Vector2(32, 13.6)
-ground_color = Color(0.83, 0.71, 0.46, 1)
-ground_accent = Color(0.76, 0.63, 0.39, 1)
-wall_color = Color(0.78, 0.68, 0.54, 1)
-wall_accent = Color(0.58, 0.48, 0.37, 1)
-surround_color = Color(0.36, 0.68, 0.78, 1)
+ground_color = Color(0.58, 0.50, 0.29, 1)
+ground_accent = Color(0.53, 0.45, 0.26, 1)
+wall_color = Color(0.83, 0.55, 0.28, 1)
+wall_accent = Color(0.62, 0.38, 0.18, 1)
+surround_color = Color(0.22, 0.48, 0.62, 1)
 flowers = false
 pattern_seed = 33
 sign_text = "PUP BEACH"
@@ -32,8 +32,8 @@ script = ExtResource("4_camera")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866, -0.3214, 0.383, 0, 0.766, 0.6428, -0.5, -0.5567, 0.6634, 0, 12, 0)
-light_color = Color(1, 0.98, 0.9, 1)
-light_energy = 0.8
+light_color = Color(1, 0.957, 0.878, 1)
+light_energy = 0.95
 shadow_enabled = true
 directional_shadow_max_distance = 60.0
 
