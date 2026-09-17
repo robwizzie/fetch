@@ -49,10 +49,20 @@ var friendly_fire := false
 var self_fire := true
 var mixed_toys := true
 var powerups_enabled := true
-## First round that drops treats. The default holds them back so the opening round is a clean
-## fight and the crates arrive once everyone has found their feet; set to 1 to have them from
-## the very start.
-var treats_from_round: int = 2
+## First round that drops treats, or AUTO_TREATS to let the session decide. On a brand new
+## session the first match holds crates back a few rounds so nobody is learning the controls
+## and the treat table at once; every match after that opens with them, because by then the
+## room knows what the crates do and wants them sooner.
+const AUTO_TREATS := -1
+const AUTO_FIRST_MATCH_ROUND := 3
+var treats_from_round: int = AUTO_TREATS
+
+
+## The round crates actually start dropping in, once the auto rule has been resolved.
+func first_treat_round() -> int:
+	if treats_from_round >= 0:
+		return treats_from_round
+	return 1 if matches_played > 0 else AUTO_FIRST_MATCH_ROUND
 var points_to_win: int = 5
 var last_match_winner: PlayerSlot
 

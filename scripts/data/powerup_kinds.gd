@@ -13,8 +13,12 @@ const ZOOMIES := &"zoomies"
 const BIG_CATCH := &"big_catch"
 const CANNON := &"cannon"
 const SPRINGS := &"springs"
+const LITTLE_LEGS := &"little_legs"
+const QUICK_PAWS := &"quick_paws"
+const LONG_REACH := &"long_reach"
 
-const ALL: Array[StringName] = [SHIELD, ZOOMIES, BIG_CATCH, CANNON, SPRINGS]
+const ALL: Array[StringName] = [SHIELD, ZOOMIES, BIG_CATCH, CANNON, SPRINGS,
+	LITTLE_LEGS, QUICK_PAWS, LONG_REACH]
 
 
 static func display_name(kind: StringName) -> String:
@@ -24,16 +28,22 @@ static func display_name(kind: StringName) -> String:
 		BIG_CATCH: return "SOFT PAWS"
 		CANNON: return "CANNON"
 		SPRINGS: return "SPRINGS"
+		LITTLE_LEGS: return "LITTLE LEGS"
+		QUICK_PAWS: return "QUICK PAWS"
+		LONG_REACH: return "LONG REACH"
 	return "TREAT"
 
 
 static func blurb(kind: StringName) -> String:
 	match kind:
-		SHIELD: return "Soaks one hit each round"
+		SHIELD: return "Soaks one hit, then it is gone"
 		ZOOMIES: return "Run faster, dash sooner"
 		BIG_CATCH: return "A bigger, longer catch"
 		CANNON: return "Throws fly harder"
 		SPRINGS: return "Dash further, more often"
+		LITTLE_LEGS: return "A smaller target to hit"
+		QUICK_PAWS: return "Catch again sooner"
+		LONG_REACH: return "Whack from further away"
 	return ""
 
 
@@ -44,6 +54,9 @@ static func color(kind: StringName) -> Color:
 		BIG_CATCH: return Color("8ee06a")
 		CANNON: return Color("ff8a5c")
 		SPRINGS: return Color("c78bff")
+		LITTLE_LEGS: return Color("ff9ecb")
+		QUICK_PAWS: return Color("7fe3c4")
+		LONG_REACH: return Color("f2c94c")
 	return Color.WHITE
 
 
@@ -55,6 +68,9 @@ static func glyph(kind: StringName) -> String:
 		BIG_CATCH: return "P"
 		CANNON: return "C"
 		SPRINGS: return "J"
+		LITTLE_LEGS: return "L"
+		QUICK_PAWS: return "Q"
+		LONG_REACH: return "R"
 	return "?"
 
 

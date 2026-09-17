@@ -96,10 +96,66 @@ func _ready() -> void:
 		_check(get_tree().get_nodes_in_group("powerups").is_empty(), "round clears old treats")
 		game_match.queue_free()
 		await get_tree().process_frame
+	await _treat_cadence_and_comebacks()
 	await _practice_round_is_free()
 	if not failed:
-		print("[match-rules] PASSED: empty starts, six toys, fair placement, delayed treats, collection, reset and a free practice round")
+		print("[match-rules] PASSED: empty starts, six toys, fair placement, treat cadence, mercy shields, icons and a free practice round")
 	get_tree().quit(1 if failed else 0)
+
+
+## Crate cadence and the mercy shield: the rules that decide when power-ups show up and who
+## gets a hand when a match runs away from them.
+func _treat_cadence_and_comebacks() -> void:
+	var was_matches := Game.matches_played
+	var was_setting := Game.treats_from_round
+	Game.treats_from_round = Game.AUTO_TREATS
+	Game.matches_played = 0
+	_check(Game.first_treat_round() == Game.AUTO_FIRST_MATCH_ROUND, "a brand new session holds crates back a few rounds")
+	Game.matches_played = 1
+	_check(Game.first_treat_round() == 1, "every match after the first opens with crates")
+	Game.treats_from_round = 1
+	_check(Game.first_treat_round() == 1, "an explicit setting overrides the auto rule")
+	Game.treats_from_round = was_setting
+	Game.matches_played = was_matches
+
+	# Every kind a crate can hold needs an icon, or the HUD shows an empty socket.
+	for kind in PowerupKinds.ALL:
+		_check(PowerupIcon.texture(kind, 32, Color.WHITE) != null, "%s has an icon" % kind)
+		_check(not PowerupKinds.display_name(kind).is_empty(), "%s has a name" % kind)
+		_check(not PowerupKinds.blurb(kind).is_empty(), "%s says what it does" % kind)
+
+	Game.powerups_enabled = true
+	Game.team_mode = false
+	Game.assign_teams()
+	Game.reset_scores()
+	var game_match: Node = load("res://scenes/match/match.tscn").instantiate()
+	add_child(game_match)
+	await get_tree().physics_frame
+	# Nobody is behind yet, so nobody is handed anything.
+	for slot in Game.slots:
+		slot.powerups.clear()
+	Game.slots[0].score = 3
+	Game.slots[1].score = 3
+	game_match._grant_comeback_shields()
+	_check(Game.slots[0].powerups.is_empty(), "a leader gets no mercy shield")
+	# Now open a gap. The trailing players get one; the leader still does not.
+	Game.slots[1].score = 0
+	Game.slots[2].score = 0
+	Game.slots[3].score = 0
+	game_match._grant_comeback_shields()
+	_check(Game.slots[0].powerups.is_empty(), "the leader is still not handed one")
+	_check(Game.slots[1].has_powerup(PowerupKinds.SHIELD), "someone well behind is handed a shield")
+	# A full belt is left alone: the mercy rule never throws away something they chose.
+	Game.slots[2].powerups.clear()
+	for i in PowerupKinds.MAX_SLOTS:
+		Game.slots[2].powerups.append(PowerupKinds.CANNON)
+	game_match._grant_comeback_shields()
+	_check(Game.slots[2].powerup_count(PowerupKinds.CANNON) == PowerupKinds.MAX_SLOTS, "a full belt is not disturbed")
+	for slot in Game.slots:
+		slot.powerups.clear()
+		slot.score = 0
+	game_match.queue_free()
+	await get_tree().process_frame
 
 
 func _check(ok: bool, message: String) -> void:

@@ -139,14 +139,17 @@ func banner(text: String, color: Color, seconds: float) -> void:
 func _belt_slot() -> Panel:
 	var socket := Panel.new()
 	socket.custom_minimum_size = Vector2(28, 28)
-	var glyph := Label.new()
+	# A drawn icon rather than a letter: a belt has to be readable in the corner of an eye.
+	var glyph := TextureRect.new()
 	glyph.name = "Glyph"
 	glyph.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	glyph.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	glyph.add_theme_font_override("font", UiKit.FONT_DISPLAY)
-	glyph.add_theme_font_size_override("font_size", 17)
-	glyph.add_theme_color_override("font_color", UiKit.INK)
+	glyph.offset_left = 4
+	glyph.offset_top = 4
+	glyph.offset_right = -4
+	glyph.offset_bottom = -4
+	glyph.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glyph.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	socket.add_child(glyph)
 	_paint_slot(socket, &"")
 	return socket
@@ -163,8 +166,9 @@ func _paint_slot(socket: Panel, kind: StringName) -> void:
 		style.border_color = PowerupKinds.color(kind).lightened(0.4)
 	style.set_border_width_all(2)
 	socket.add_theme_stylebox_override("panel", style)
-	var glyph := socket.get_node("Glyph") as Label
-	glyph.text = "" if kind == &"" else PowerupKinds.glyph(kind)
+	var glyph := socket.get_node("Glyph") as TextureRect
+	glyph.texture = null if kind == &"" else PowerupIcon.texture(kind, 40, UiKit.INK)
+	glyph.visible = kind != &""
 
 
 func _make_chip(slot: PlayerSlot) -> PanelContainer:
