@@ -222,8 +222,20 @@ func _fill_player_card(holder: Control, slot: PlayerSlot) -> void:
 	# The portrait takes whatever height the rest of the card does not, so the card fills
 	# instead of leaving dead colour under the buttons — and every dog is scaled to the same
 	# height, so they read as one set.
-	var portrait := UiKit.dog_portrait(dog, slot.color, Vector2(340, 228), 1.0, 0.0, true)
+	# The live model rather than a crop of the reference sheet: what you pick is what walks
+	# out of the pen. It keeps turning so the card reads as a thing, not a picture of one.
+	var portrait := PanelContainer.new()
+	var frame_style := StyleBoxFlat.new()
+	frame_style.bg_color = Color(1, 1, 1, 0.13)
+	frame_style.border_color = slot.color.lightened(0.15)
+	frame_style.set_border_width_all(3)
+	frame_style.set_corner_radius_all(16)
+	portrait.add_theme_stylebox_override("panel", frame_style)
+	portrait.custom_minimum_size = Vector2(340, 228)
 	portrait.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var preview := ModelPreview.new(Vector2i(420, 300))
+	preview.show_dog(dog)
+	portrait.add_child(preview)
 	v.add_child(portrait)
 
 	var stats := VBoxContainer.new()
