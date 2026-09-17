@@ -32,7 +32,26 @@ func _ready() -> void:
 				flow.add_child(_card(t.color, t.display_name + ("" if t.fully_implemented else " (prototype)"), t.description))
 		"arenas":
 			for a in Game.arenas:
-				flow.add_child(_card(a.swatch, a.display_name, a.description))
+				var card := _card(a.swatch, a.display_name, a.description)
+				if a.thumbnail != null:
+					var shot := TextureRect.new()
+					shot.texture = a.thumbnail
+					shot.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+					shot.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+					shot.custom_minimum_size = Vector2(260, 146)
+					var box := card.get_node("VBox")
+					box.add_child(shot)
+					box.move_child(shot, 1)
+				flow.add_child(card)
+		"powerups":
+			for kind in PowerupKinds.ALL:
+				var tint := PowerupKinds.color(kind)
+				var card := _card(tint, PowerupKinds.display_name(kind), PowerupKinds.blurb(kind))
+				var box := card.get_node("VBox")
+				var badge := _powerup_badge(kind)
+				box.add_child(badge)
+				box.move_child(badge, 1)
+				flow.add_child(card)
 		"modes":
 			for m in Game.modes:
 				flow.add_child(_card(m.swatch, m.display_name + ("" if m.fully_implemented else " (coming soon)"), m.description))
@@ -55,6 +74,25 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		Game.goto(Game.SCENE_MAIN_MENU)
+
+
+## The same coloured chip the HUD belt shows, drawn large so people can learn the glyphs.
+func _powerup_badge(kind: StringName) -> Control:
+	var holder := CenterContainer.new()
+	var badge := Panel.new()
+	badge.custom_minimum_size = Vector2(96, 96)
+	var style := StyleBoxFlat.new()
+	style.bg_color = PowerupKinds.color(kind)
+	style.border_color = PowerupKinds.color(kind).lightened(0.4)
+	style.set_border_width_all(4)
+	style.set_corner_radius_all(22)
+	badge.add_theme_stylebox_override("panel", style)
+	var glyph := UiKit.title(PowerupKinds.glyph(kind), 52, UiKit.INK)
+	glyph.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	glyph.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	badge.add_child(glyph)
+	holder.add_child(badge)
+	return holder
 
 
 func _card(color: Color, title: String, desc: String) -> PanelContainer:

@@ -24,6 +24,13 @@ var selected_arena: ArenaData
 var random_arena_each_round := true
 ## Matches finished this session. Crates arrive sooner the more everyone has played.
 var matches_played := 0
+## The control tutorial runs once per session, on the very first round played.
+var tutorial_shown := false
+
+## How control prompts are worded for gamepads. AUTO reads the pad's reported name, which is
+## enough to spot the usual arcade encoders; the override exists because cabinets vary.
+enum ArcadeHints { AUTO, ALWAYS, NEVER }
+var arcade_hints: ArcadeHints = ArcadeHints.AUTO
 var selected_toy: ToyData
 var selected_mode: GameModeData
 var mixed_toys := true

@@ -9,11 +9,11 @@ display_name = "Super Ball"
 description = "Quick rubber ball. Six wild ricochets."
 color = Color(0.6, 0.25, 0.85, 1)
 radius = 0.29
-throw_speed = 17.16
+throw_speed = 14.93
 bounciness = 0.98
 max_bounces = 6
-friction = 2.31
-danger_speed = 4.91
+friction = 1.75
+danger_speed = 4.27
 special = 3
 fully_implemented = true
 

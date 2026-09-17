@@ -7,6 +7,8 @@ var out_dir := "user://shots"
 
 
 func _ready() -> void:
+	# These suites assert on a normal scored round, so skip the one-off practice round.
+	Game.tutorial_shown = true
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--out="):
 			out_dir = arg.trim_prefix("--out=")

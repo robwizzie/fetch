@@ -61,14 +61,14 @@ enum Breed { LABRADOR, PITBULL, CORGI, DACHSHUND, GOLDEN, SPANIEL }
 
 @export_group("Gameplay numbers")
 ## Top speed in metres per second.
-@export var move_speed: float = 5.5
+@export var move_speed: float = 4.8
 ## Multiplier applied to the toy's base throw speed.
 @export var throw_power: float = 1.0
 ## Pressing catch while a dangerous toy is inside this radius catches it immediately.
 @export var catch_radius: float = 2.0
 ## A catch press also stays "armed" for this many seconds: a toy that would hit the dog in that
 ## window is caught instead. This is the real skill window; bigger = more forgiving.
-@export var catch_window: float = 0.18
+@export var catch_window: float = 0.22
 ## After a missed catch press the dog can't try again for this long (stops button mashing).
 @export var catch_cooldown: float = 0.35
 ## Distance covered by one dash, in metres.

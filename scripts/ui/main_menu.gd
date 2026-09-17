@@ -45,6 +45,7 @@ func _build_menu() -> void:
 	_add(menu, "MEET THE PACK", func() -> void: _gallery("dogs"))
 	_add(menu, "TOYS", func() -> void: _gallery("toys"))
 	_add(menu, "ARENAS", func() -> void: _gallery("arenas"))
+	_add(menu, "POWER-UPS", func() -> void: _gallery("powerups"))
 	_add(menu, "SETTINGS", _show_settings)
 
 	var footer := HBoxContainer.new()
@@ -196,6 +197,13 @@ func _show_settings() -> void:
 		Music.enabled = not Music.enabled
 		music.text = "MUSIC: ON" if Music.enabled else "MUSIC: OFF")
 	body.add_child(music)
+	# Cabinets report their encoder name, but the override is here because they vary.
+	var arcade_names := ["ARCADE CONTROLS: AUTO", "ARCADE CONTROLS: ALWAYS", "ARCADE CONTROLS: NEVER"]
+	var arcade := UiKit.wood_button(arcade_names[int(Game.arcade_hints)], 770)
+	arcade.pressed.connect(func() -> void:
+		Game.arcade_hints = ((int(Game.arcade_hints) + 1) % 3) as Game.ArcadeHints
+		arcade.text = arcade_names[int(Game.arcade_hints)])
+	body.add_child(arcade)
 	body.add_child(CoverStage.copy("MASTER VOLUME", 25))
 	body.add_child(_volume_slider("Master"))
 	body.add_child(CoverStage.copy("MUSIC VOLUME", 25))

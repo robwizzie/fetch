@@ -12,6 +12,20 @@ left alone. The lobby can add/remove CPUs, change their dogs, and retains their 
 Match setup offers only fully implemented modes/toys; galleries can still show prototypes.
 
 The match has a 45-second round clock, no-score timeout draws, and real tree pause on Esc/Start.
+A brand new session opens on a **practice round** (`Phase.TUTORIAL`), not a scored one. Each
+player gets a walled `ReadyPen` with a toy to try and a pad to stand on; the walls are taller
+than a toy flies, so nobody can be knocked out while they are still finding the buttons. The
+real first round only begins once every pen has been stepped on — bots check themselves in after
+a few seconds. Nothing is scored and `round_number` stays at 0, so the first scored round is
+still round 1. `TutorialCoach` rides on top showing the controls, ticking each step off as
+someone performs it, with a timeout on every step so a table that already knows the game is
+never held up. Button names come from `DeviceInput.button_label()`, which
+words them for an arcade cabinet when one is detected (`DeviceInput.is_arcade()` reads the pad's
+reported name; Settings can force it either way).
+
+Arena thumbnails in `images/arenas/` are rendered by `tools/build_arena_thumbnails.gd` and shown
+on the setup screen and in the gallery. Re-run it after changing an arena's layout.
+
 Audio is synthesised, not loaded: `Sfx` builds its one-shots at startup and `Music` sequences
 three looping tracks on a worker thread, mixed on separate `SFX` and `Music` buses. Screens ask
 for a track by name and repeating the current one is a no-op, so the front end keeps one piece

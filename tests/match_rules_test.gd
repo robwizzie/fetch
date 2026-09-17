@@ -6,6 +6,8 @@ var failed := false
 
 func _ready() -> void:
 	Sfx.enabled = false
+	# The arena loop asserts on a normal scored round; the practice round is covered on its own.
+	Game.tutorial_shown = true
 	Game.mixed_toys = true
 	Game.powerups_enabled = true
 	Game.clear_players()
@@ -89,8 +91,9 @@ func _ready() -> void:
 		_check(get_tree().get_nodes_in_group("powerups").is_empty(), "round clears old treats")
 		game_match.queue_free()
 		await get_tree().process_frame
+	await _practice_round_is_free()
 	if not failed:
-		print("[match-rules] PASSED: empty starts, six toys, fair placement, delayed treats, collection and reset")
+		print("[match-rules] PASSED: empty starts, six toys, fair placement, delayed treats, collection, reset and a free practice round")
 	get_tree().quit(1 if failed else 0)
 
 
@@ -98,3 +101,61 @@ func _check(ok: bool, message: String) -> void:
 	if not ok:
 		failed = true
 		push_error("[match-rules] " + message)
+
+
+## The practice round must cost nothing: no points, no round consumed, and the real round only
+## starts once every pen has been stepped on. A regression here would quietly hand out a point.
+func _practice_round_is_free() -> void:
+	Game.tutorial_shown = false
+	Game.random_arena_each_round = false
+	Game.selected_arena = Game.arenas[0]
+	Game.reset_scores()
+	var game_match: Node = load("res://scenes/match/match.tscn").instantiate()
+	add_child(game_match)
+	await get_tree().process_frame
+	await get_tree().physics_frame
+	_check(game_match.phase == game_match.Phase.TUTORIAL, "a fresh session opens on the practice round")
+	_check(game_match.round_number == 0, "the practice round does not consume a round")
+	var pens: Array = game_match.get("_pens")
+	_check(pens.size() == Game.slots.size(), "every player gets a pen")
+	# Booths must not touch: there has to be open ground between every pair.
+	var tightest := INF
+	for i in pens.size():
+		for j in range(i + 1, pens.size()):
+			var a: Node3D = pens[i]
+			var b: Node3D = pens[j]
+			var apart := Vector2(a.global_position.x - b.global_position.x, a.global_position.z - b.global_position.z).length()
+			tightest = minf(tightest, apart - 5.0)
+	_check(tightest > 0.5, "practice booths are separated by open ground")
+	# Nothing in a booth can put a dog out, not even a point-blank lethal throw.
+	var victim: Dog = game_match.dogs[0]
+	var practice_toy: Toy = game_match.toys[0]
+	practice_toy.set_physics_process(false)
+	practice_toy.state = Toy.State.FLYING
+	practice_toy.thrower = game_match.dogs[1]
+	practice_toy.global_position = victim.global_position - Vector3(0, 0, 1.2) + Vector3(0, Toy.FLY_HEIGHT, 0)
+	practice_toy.velocity = Vector3(0, 0, 18.0)
+	_check(not victim.hit_by(practice_toy), "a lethal throw in the booth does not land")
+	_check(victim.alive, "nobody can be knocked out during practice")
+	# Nobody is ready yet, so the match must still be waiting.
+	await get_tree().create_timer(0.4).timeout
+	_check(game_match.phase == game_match.Phase.TUTORIAL, "the match waits until everyone checks in")
+	for pen in pens:
+		if is_instance_valid(pen):
+			pen._set_ready()
+	await get_tree().create_timer(1.4).timeout
+	_check(game_match.phase != game_match.Phase.TUTORIAL, "checking in starts the real match")
+	_check(game_match.round_number == 1, "the first scored round is round 1")
+	var total := 0
+	for slot in Game.slots:
+		total += slot.score
+	_check(total == 0, "the practice round scores nothing")
+	# Everyone leaves the booths and is back in play for the real round.
+	var still_safe := 0
+	for dog in game_match.dogs:
+		if is_instance_valid(dog) and dog.practice_safe:
+			still_safe += 1
+	_check(still_safe == 0, "practice safety is lifted once the walls drop")
+	_check((game_match.get("_pens") as Array).is_empty(), "the booths are gone once the match starts")
+	game_match.queue_free()
+	await get_tree().process_frame

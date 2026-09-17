@@ -22,15 +22,15 @@ enum Special { NONE, KNOCKBACK, SQUEAK, RICOCHET, HEAVY }
 
 @export_group("Flight")
 ## Base speed when thrown, before the dog's throw_power multiplier.
-@export var throw_speed: float = 14.0
+@export var throw_speed: float = 12.2
 ## Fraction of speed kept after bouncing off a wall.
 @export var bounciness: float = 0.85
 ## After this many bounces the toy loses half its speed each bounce (prevents endless ricochets).
 @export var max_bounces: int = 3
 ## Slow-down while flying, in metres per second squared.
-@export var friction: float = 4.6
+@export var friction: float = 3.5
 ## Below this speed the toy is harmless and can be picked up.
-@export var danger_speed: float = 4.5
+@export var danger_speed: float = 3.9
 
 @export_group("Special")
 @export var special: Special = Special.NONE

@@ -9,11 +9,11 @@ display_name = "Bone"
 description = "Heavy straight shot. Ploughs through dogs; stops at walls."
 color = Color(0.95, 0.93, 0.85, 1)
 radius = 0.36
-throw_speed = 12.48
+throw_speed = 10.86
 bounciness = 0.08
 max_bounces = 0
-friction = 4.14
-danger_speed = 3.9
+friction = 3.13
+danger_speed = 3.39
 special = 4
 fully_implemented = true
 

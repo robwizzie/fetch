@@ -16,13 +16,25 @@ reference_sheet = "res://images/models/barkley-model.png"
 portrait_region = Rect2(27, 148, 307, 354)
 card_color = Color(0.3, 0.85, 0.45, 1)
 card_color_dark = Color(0.08, 0.38, 0.2, 1)
-model_scene_path = "res://assets/models/dogs/barkley/barkley.glb"
+model_scene_path = "res://assets/models/dogs/barkley/barkley.tscn"
+model_height = 1.2
+model_rotation_degrees = Vector3(0, 180, 0)
+mouth_socket_bone = &"headend"
+model_animations = {
+"catch": &"catch",
+"dash": &"dash",
+"idle": &"idle",
+"ko": &"ko",
+"run": &"run",
+"throw": &"throw",
+"win": &"win"
+}
 model_scale = 0.95
 speed_rating = 3
 throw_rating = 2
 catch_rating = 4
 dash_rating = 5
-move_speed = 5.62
+move_speed = 4.89
 throw_power = 0.85
 catch_radius = 2.2
 catch_window = 0.24

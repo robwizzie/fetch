@@ -81,7 +81,8 @@ CI imports the project and runs the regression suites on every push (`.github/wo
 - ✅ MindGoblin studio bumper on boot, then one home screen built on the supplied home-screen art
 - ✅ Reference-art dog portraits; wooden-plank menu buttons; matching wood/cream/forest UI
 - ✅ 3D: shared camera with smooth pan/zoom and KO emphasis, placeholder dogs/props, real-time shadows, garden scenery
-- ✅ Pause/resume, round timer, CPU opponents, quicker round transitions, action status in HUD
+- ✅ Pause/resume, round timer, CPU opponents, action status in HUD
+- ✅ Practice round on a new session (walled pens, ready pads, nothing scored), arcade-cabinet control wording, map previews and a power-up guide
 - ✅ Timed Shield/Zoomies treats, animated mouth grips, safe wall ricochets and swept projectile hits
 - ✅ Hit-stop followed by KO slow motion, particles, floating text
 - ✅ Procedural soundtrack (menu / match / victory) and a synthesised effects kit, on separate mixable buses

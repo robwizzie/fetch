@@ -1,7 +1,7 @@
 extends Node
 ## Runs one match: brief countdowns, bounded rounds, pause, and an immediate rematch loop.
 
-enum Phase { COUNTDOWN, PLAYING, ROUND_OVER, MATCH_OVER }
+enum Phase { TUTORIAL, COUNTDOWN, PLAYING, ROUND_OVER, MATCH_OVER }
 
 const DOG_SCENE := preload("res://scenes/actors/dog.tscn")
 const TOY_SCENE := preload("res://scenes/actors/toy.tscn")
@@ -21,6 +21,8 @@ const MIN_TOY_SPAWN_DISTANCE := 5.0
 
 var arena: Arena
 var arena_data: ArenaData
+var _coach: TutorialCoach
+var _pens: Array[ReadyPen] = []
 var dogs: Array[Dog] = []
 var toys: Array[Toy] = []
 var mode: GameMode
@@ -56,7 +58,13 @@ func _ready() -> void:
 	hud.banner_finished.connect(_finish_round)
 	Events.dog_eliminated.connect(_on_dog_eliminated)
 	Music.play("match")
-	start_round()
+	# A brand new session gets a practice round first. It is not a round: nothing is scored,
+	# the round counter does not move, and nobody can be knocked out behind the walls.
+	if not Game.tutorial_shown and round_number == 0:
+		Game.tutorial_shown = true
+		_start_tutorial()
+	else:
+		start_round()
 
 
 func _physics_process(delta: float) -> void:
@@ -159,6 +167,7 @@ func _begin_play() -> void:
 	if phase != Phase.COUNTDOWN:
 		return
 	phase = Phase.PLAYING
+	_maybe_coach()
 	actors.process_mode = Node.PROCESS_MODE_PAUSABLE
 	Sfx.play("whistle")
 	Events.round_started.emit(round_number)
@@ -259,6 +268,96 @@ func _layout_imbalance(points: Array[Vector3], spawns: Array[Vector3]) -> float:
 	return longest - shortest
 
 
+## The practice round. Each player gets a walled pen with a toy and a pad to stand on when
+## they are done learning; the real first round only begins once everyone has stepped on one.
+## Nothing here is scored.
+func _start_tutorial() -> void:
+	phase = Phase.TUTORIAL
+	_clear_actors()
+	_pens.clear()
+	actors.process_mode = Node.PROCESS_MODE_PAUSABLE
+	var count := Game.slots.size()
+	var half := arena.size * 0.5
+	var pen_size := Vector2(5.0, 4.6)
+	for i in count:
+		var slot := Game.slots[i]
+		var centre := Vector3(_pen_spot(i, count).x * half.x, 0.0, _pen_spot(i, count).y * half.y)
+		var dog: Dog = DOG_SCENE.instantiate()
+		dog.setup(slot)
+		dog.position = centre + Vector3(0, 0, -pen_size.y * 0.22)
+		dog.facing = Vector3(0, 0, 1)
+		actors.add_child(dog)
+		dog.practice_safe = true
+		dogs.append(dog)
+		# A toy each, so throwing and catching can actually be tried in here.
+		var practice: ToyData = Game.toys[i % Game.toys.size()]
+		_spawn_toy(centre + Vector3(0, 0, pen_size.y * 0.02), practice)
+		var pen := ReadyPen.new()
+		arena.add_child(pen)
+		pen.build(slot, centre, pen_size)
+		pen.dog = dog
+		pen.readied.connect(_on_pen_ready)
+		_pens.append(pen)
+		if slot.is_bot:
+			pen.auto_ready_after(randf_range(4.0, 8.0))
+
+	hud.update_match(dogs, ROUND_SECONDS, 1)
+	hud.practice_clock()
+	hud.announce("PRACTICE — nothing is scored")
+	_coach = TutorialCoach.new()
+	_coach.setup(dogs)
+	hud.add_child(_coach)
+	_coach.watch_events()
+	_coach.finished.connect(func() -> void: _coach = null)
+
+
+## Booths sit apart with clear ground between them and an open middle, so nobody can reach a
+## neighbour and the arena still reads as one space. Fractions of the arena half-extents, so
+## the layout holds on every map.
+func _pen_spot(index: int, count: int) -> Vector2:
+	var spots: Array[Vector2] = []
+	match count:
+		1:
+			spots = [Vector2(0.0, 0.0)]
+		2:
+			spots = [Vector2(-0.58, 0.0), Vector2(0.58, 0.0)]
+		3:
+			spots = [Vector2(-0.62, -0.46), Vector2(0.62, -0.46), Vector2(0.0, 0.48)]
+		_:
+			spots = [Vector2(-0.62, -0.46), Vector2(0.62, -0.46), Vector2(-0.62, 0.46), Vector2(0.62, 0.46)]
+	return spots[index % spots.size()]
+
+
+func _on_pen_ready(_pen: ReadyPen) -> void:
+	for pen in _pens:
+		if is_instance_valid(pen) and not pen.is_ready:
+			return
+	_finish_tutorial()
+
+
+## Everyone has checked in: drop the walls and start the match for real.
+func _finish_tutorial() -> void:
+	if phase != Phase.TUTORIAL:
+		return
+	phase = Phase.COUNTDOWN
+	_dismiss_coach()
+	for pen in _pens:
+		if is_instance_valid(pen):
+			pen.open()
+	_pens.clear()
+	# Safety comes off with the walls; start_round() then respawns everyone in the open.
+	for dog in dogs:
+		if is_instance_valid(dog):
+			dog.practice_safe = false
+	Sfx.play("whistle", 1.0, -3.0)
+	await get_tree().create_timer(0.75).timeout
+	start_round()
+
+
+func _maybe_coach() -> void:
+	pass
+
+
 ## Replaces the live arena, taking the new scene's camera with it. The outgoing camera is
 ## only freed at the end of the frame, so the incoming one has to claim the viewport itself.
 func _install_arena(data: ArenaData) -> void:
@@ -273,6 +372,12 @@ func _install_arena(data: ArenaData) -> void:
 	var camera := arena.get_node_or_null("Camera") as Camera3D
 	if camera != null:
 		camera.make_current()
+
+
+func _dismiss_coach() -> void:
+	if is_instance_valid(_coach):
+		_coach.dismiss()
+		_coach = null
 
 
 func _clear_actors() -> void:
@@ -293,6 +398,7 @@ func _on_dog_eliminated(dog: Node, _by: Node) -> void:
 
 
 func _end_round(winner: PlayerSlot, message: String = "") -> void:
+	_dismiss_coach()
 	# Lock the result immediately: collision changes must wait until callbacks finish.
 	for dog in dogs:
 		dog.round_locked = true

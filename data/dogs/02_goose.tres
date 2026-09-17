@@ -16,13 +16,25 @@ reference_sheet = "res://images/models/goose-model.png"
 portrait_region = Rect2(96, 147, 220, 359)
 card_color = Color(1.0, 0.36, 0.36, 1)
 card_color_dark = Color(0.5, 0.1, 0.16, 1)
-model_scene_path = "res://assets/models/dogs/goose/goose.glb"
+model_scene_path = "res://assets/models/dogs/goose/goose.tscn"
+model_height = 1.2
+model_rotation_degrees = Vector3(0, 180, 0)
+mouth_socket_bone = &"headend"
+model_animations = {
+"catch": &"catch",
+"dash": &"dash",
+"idle": &"idle",
+"ko": &"ko",
+"run": &"run",
+"throw": &"throw",
+"win": &"win"
+}
 model_scale = 1.02
 speed_rating = 2
 throw_rating = 5
 catch_rating = 3
 dash_rating = 2
-move_speed = 4.84
+move_speed = 4.21
 throw_power = 1.35
 catch_radius = 2.0
 catch_window = 0.18

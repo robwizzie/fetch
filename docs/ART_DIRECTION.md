@@ -6,12 +6,9 @@ Selection portraits use the supplied artwork. Gameplay stays fully 3D.
 
 ## Character quality: still awaiting authored art
 
-The current procedural dogs do **not** match the sheets closely enough. They remain temporary
-placeholders, isolated in `ProceduralDogModel`. They now carry an inverted-hull ink outline on the
-silhouette masses (body, head, ears, legs, paws, tail, muzzle) so they read as cartoon characters
-and separate a dark dog from a dark arena; tails are built from stacked, overlapping segments that
-arc back over the rump instead of standing up as a single spike. No final dog mesh, coat texture or animation rig
-has been delivered. The small GLB under `tests/fixtures` is a technical test, never production art.
+All five dogs now use authored, rigged models; `ProceduralDogModel` survives only as the
+per-dog fallback for an invalid or missing delivery. Six of the seven animation clips are
+generated stand-ins from `tools/build_dog_clips.gd` and are the next thing to replace.
 
 The production path is implemented: `DogModel` loads each dog's configured GLB/wrapper, validates
 skinning, seven animation clips and a rig-bound mouth socket, and blends gameplay poses. Invalid
@@ -80,6 +77,9 @@ Boomerang Fu's internal camera parameters are not available for an exact impleme
 - Author and review the five matching 3D dogs; the import pipeline is ready to receive them.
 - Playtest movement, catching, weapon balance and camera comfort with two to four people on controllers.
   Automated matches establish function, not couch-play balance.
+- Props are primitives, but they now share a surface grain and a calmed palette so they sit with
+  the authored dogs rather than reading as untextured placeholder. Large surfaces (the lawn, the
+  surround) deliberately skip the grain: a tiling detail texture on a 46 m plane reads as a grid.
 - Replace temporary props and the synthesised audio with art/sound matching the cover. The
   soundtrack is sequenced in `Music` (chord charts per track); swapping in real recordings means
   pointing the track names at streams, not rewriting the callers.

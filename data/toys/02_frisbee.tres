@@ -9,11 +9,11 @@ display_name = "Frisbee"
 description = "Fast, flat flight. Barely bounces; skids to a stop."
 color = Color(0.95, 0.3, 0.3, 1)
 radius = 0.38
-throw_speed = 15.6
+throw_speed = 13.57
 bounciness = 0.65
 max_bounces = 1
-friction = 2.92
-danger_speed = 5.23
+friction = 2.21
+danger_speed = 4.55
 special = 0
 fully_implemented = true
 

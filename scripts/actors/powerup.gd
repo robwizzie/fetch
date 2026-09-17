@@ -19,10 +19,9 @@ func _ready() -> void:
 	add_to_group("powerups")
 	_crate = Node3D.new()
 	add_child(_crate)
-	var wood := Color("b5793c")
-	var trim := Color("7d4f26")
+	var wood := Color("a9763f")
+	var trim := Color("70492a")
 	var body := Mats.mesh(_crate, Mats.box(Vector3(0.66, 0.5, 0.66)), wood, Vector3(0, 0.25, 0))
-	Mats.outline(body, 0.02, Color(0.12, 0.08, 0.06))
 	for z in [-0.34, 0.34]:
 		Mats.mesh(_crate, Mats.box(Vector3(0.7, 0.1, 0.05)), trim, Vector3(0, 0.25, z))
 	for x in [-0.34, 0.34]:
@@ -31,7 +30,6 @@ func _ready() -> void:
 	_lid.position = Vector3(0, 0.5, 0)
 	_crate.add_child(_lid)
 	var lid := Mats.mesh(_lid, Mats.box(Vector3(0.72, 0.12, 0.72)), trim, Vector3(0, 0.06, 0))
-	Mats.outline(lid, 0.02, Color(0.12, 0.08, 0.06))
 
 	# The question mark is the whole point: the contents stay secret until it opens.
 	var mark := Label3D.new()

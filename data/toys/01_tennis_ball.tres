@@ -9,11 +9,11 @@ display_name = "Tennis Ball"
 description = "Easy to aim. Bounces off walls for trick shots."
 color = Color(0.85, 0.95, 0.3, 1)
 radius = 0.32
-throw_speed = 14.04
+throw_speed = 12.21
 bounciness = 0.86
 max_bounces = 3
-friction = 4.26
-danger_speed = 4.52
+friction = 3.22
+danger_speed = 3.93
 special = 0
 fully_implemented = true
 

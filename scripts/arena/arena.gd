@@ -59,8 +59,8 @@ func _build_ground() -> void:
 	var root := Node3D.new()
 	root.name = "Ground"
 	add_child(root)
-	Mats.mesh(root, Mats.box(Vector3(size.x + 40.0, 0.5, size.y + 40.0)), surround_color, Vector3(0, -0.3, 0))
-	Mats.mesh(root, Mats.box(Vector3(size.x, 0.5, size.y)), ground_color, Vector3(0, -0.24, 0))
+	Mats.mesh_plain(root, Mats.box(Vector3(size.x + 40.0, 0.5, size.y + 40.0)), surround_color, Vector3(0, -0.3, 0))
+	Mats.mesh_plain(root, Mats.box(Vector3(size.x, 0.5, size.y)), ground_color, Vector3(0, -0.24, 0))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = pattern_seed
 	var style := ground_style

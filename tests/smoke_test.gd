@@ -40,6 +40,8 @@ func _ready() -> void:
 	# Opening toy placement is randomised per round, so pin the stream: this suite asserts on
 	# emergent play (eliminations, a catch) and must not vary run to run.
 	seed(4271)
+	# These suites assert on a normal scored round, so skip the one-off practice round.
+	Game.tutorial_shown = true
 	Game.mixed_toys = false
 	Game.powerups_enabled = false
 	print("[smoke] content: dogs=%d toys=%d arenas=%d modes=%d" % [Game.dogs.size(), Game.toys.size(), Game.arenas.size(), Game.modes.size()])

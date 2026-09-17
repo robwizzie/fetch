@@ -16,13 +16,25 @@ reference_sheet = "res://images/models/luna-model.png"
 portrait_region = Rect2(47, 154, 277, 361)
 card_color = Color(0.69, 0.54, 0.97, 1)
 card_color_dark = Color(0.30, 0.21, 0.52, 1)
-model_scene_path = "res://assets/models/dogs/luna/luna.glb"
+model_scene_path = "res://assets/models/dogs/luna/luna.tscn"
+model_height = 1.2
+model_rotation_degrees = Vector3(0, 180, 0)
+mouth_socket_bone = &"headend"
+model_animations = {
+"catch": &"catch",
+"dash": &"dash",
+"idle": &"idle",
+"ko": &"ko",
+"run": &"run",
+"throw": &"throw",
+"win": &"win"
+}
 model_scale = 0.95
 speed_rating = 5
 throw_rating = 2
 catch_rating = 3
 dash_rating = 4
-move_speed = 6.47
+move_speed = 5.63
 throw_power = 0.8
 catch_radius = 1.9
 catch_window = 0.18

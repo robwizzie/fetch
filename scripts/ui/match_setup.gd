@@ -9,6 +9,7 @@ var _points_row: CarouselRow
 var _powerups_row: CarouselRow
 var _start: Button
 var _desc: Label
+var _preview: TextureRect
 var _playable_modes: Array[GameModeData] = []
 var _playable_toys: Array[ToyData] = []
 
@@ -45,6 +46,14 @@ func _ready() -> void:
 		return t.display_name), 0 if Game.mixed_toys else _playable_toys.find(Game.selected_toy) + 1)
 	_powerups_row = _row(root, "Treats", ["From round 2", "Off"], 0 if Game.powerups_enabled else 1)
 	_points_row = _row(root, "First to", POINT_OPTIONS.map(func(p: int) -> String: return "%d points" % p), maxi(POINT_OPTIONS.find(Game.points_to_win), 0))
+
+	_preview = TextureRect.new()
+	_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_preview.custom_minimum_size = Vector2(420, 172)
+	var preview_box := CenterContainer.new()
+	preview_box.add_child(_preview)
+	root.add_child(preview_box)
 
 	_desc = UiKit.label("", 22, Color(1, 1, 1, 0.75))
 	_desc.custom_minimum_size = Vector2(900, 90)
@@ -84,6 +93,13 @@ func _apply() -> void:
 		Game.selected_toy = _playable_toys[_toy_row.index - 1]
 	Game.powerups_enabled = _powerups_row.index == 0
 	Game.points_to_win = POINT_OPTIONS[_points_row.index]
+	# Shuffle has no single map to show, so the preview steps aside for it.
+	if Game.random_arena_each_round:
+		_preview.texture = null
+		_preview.visible = false
+	else:
+		_preview.texture = Game.selected_arena.thumbnail
+		_preview.visible = Game.selected_arena.thumbnail != null
 	var where := "A different arena every round, drawn from all %d." % Game.arenas.size() if Game.random_arena_each_round else Game.selected_arena.description
 	_desc.text = "%s\n%s  ·  %s" % [Game.selected_mode.description, where, ("Start empty-handed. Fetch a toy from the arena!" if Game.mixed_toys else Game.selected_toy.description)]
 	var ok := Game.selected_mode.fully_implemented and Game.selected_mode.mode_script != null
