@@ -11,11 +11,17 @@ func _ready() -> void:
 	add_child(root)
 	root.add_child(UiKit.title(Game.gallery_kind.to_upper(), 72, UiKit.ACCENT))
 
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.follow_focus = true
+	root.add_child(scroll)
 	var flow := HFlowContainer.new()
 	flow.alignment = FlowContainer.ALIGNMENT_CENTER
+	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	flow.add_theme_constant_override("h_separation", 20)
 	flow.add_theme_constant_override("v_separation", 20)
-	root.add_child(flow)
+	scroll.add_child(flow)
 
 	match Game.gallery_kind:
 		"dogs":
@@ -32,14 +38,18 @@ func _ready() -> void:
 		"toys":
 			for t in Game.toys:
 				var card := _card(t.color, t.display_name + ("" if t.fully_implemented else " (prototype)"), t.description)
+				# Even cards make an even grid; ragged heights were most of why this page
+				# looked thrown together.
+				card.custom_minimum_size = Vector2(320, 486)
 				var box := card.get_node("VBox")
-				var shot := _stage(ModelPreview.new(Vector2i(320, 260)), Vector2(260, 180), t.color)
+				var shot := _stage(ModelPreview.new(Vector2i(360, 300)), Vector2(272, 210), t.color)
 				(shot.get_child(0) as ModelPreview).show_toy(t)
 				box.add_child(shot)
 				box.move_child(shot, 1)
+				box.add_child(_chip_row(_toy_trait(t), t.color))
 				box.add_child(_facts([
 					["Throw", "%.0f m/s" % t.throw_speed],
-					["Size", "%.2f m" % t.radius],
+					["Size", "%.2f m across" % (t.radius * 2.0)],
 				], t.color))
 				flow.add_child(card)
 		"arenas":
@@ -103,6 +113,39 @@ func _stage(preview: ModelPreview, size: Vector2, tint: Color) -> PanelContainer
 	return holder
 
 
+## What makes this toy different from the rest, in two words.
+func _toy_trait(data: ToyData) -> String:
+	match data.special:
+		ToyData.Special.KNOCKBACK:
+			return "SHOVES RIVALS"
+		ToyData.Special.SQUEAK:
+			return "SQUEAK DISARMS"
+		ToyData.Special.RICOCHET:
+			return "WILD RICOCHETS"
+		ToyData.Special.HEAVY:
+			return "PLOUGHS THROUGH"
+	return "STRAIGHT AND TRUE"
+
+
+## The trait as a filled chip, so it reads before the description does.
+func _chip_row(text: String, tint: Color) -> CenterContainer:
+	var holder := CenterContainer.new()
+	var chip := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = tint.darkened(0.15)
+	style.set_corner_radius_all(12)
+	style.content_margin_left = 14
+	style.content_margin_right = 14
+	style.content_margin_top = 5
+	style.content_margin_bottom = 5
+	chip.add_theme_stylebox_override("panel", style)
+	var label := UiKit.label(text, 18, UiKit.INK)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	chip.add_child(label)
+	holder.add_child(chip)
+	return holder
+
+
 ## A short spec table. "What does it do" is a number as often as it is a sentence.
 func _facts(rows: Array, tint: Color) -> VBoxContainer:
 	var box := VBoxContainer.new()
@@ -145,8 +188,12 @@ func _card(color: Color, title: String, desc: String) -> PanelContainer:
 	v.name = "VBox"
 	v.add_theme_constant_override("separation", 8)
 	p.add_child(v)
-	v.add_child(UiKit.title(title, 32, color))
-	var d := UiKit.label(desc, 20, Color(1, 1, 1, 0.8))
-	d.custom_minimum_size = Vector2(260, 0)
+	var heading := UiKit.title(title, 30, color)
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(heading)
+	var d := UiKit.label(desc, 19, Color(1, 1, 1, 0.82))
+	d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	d.custom_minimum_size = Vector2(260, 56)
 	v.add_child(d)
 	return p
