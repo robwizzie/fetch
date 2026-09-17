@@ -12,6 +12,7 @@ const SCENE_MATCH_SETUP := "res://scenes/ui/match_setup.tscn"
 const SCENE_MATCH := "res://scenes/match/match.tscn"
 const SCENE_RESULTS := "res://scenes/ui/results.tscn"
 const SCENE_GALLERY := "res://scenes/ui/gallery.tscn"
+const SETTINGS_PATH := "user://settings.cfg"
 
 var dogs: Array[DogData] = []
 var toys: Array[ToyData] = []
@@ -31,10 +32,16 @@ var tutorial_shown := false
 ## enough to spot the usual arcade encoders; the override exists because cabinets vary.
 enum ArcadeHints { AUTO, ALWAYS, NEVER }
 var arcade_hints: ArcadeHints = ArcadeHints.AUTO
+## Remembered across launches so a cabinet comes up filling its screen.
+var fullscreen := false
 var selected_toy: ToyData
 var selected_mode: GameModeData
 var mixed_toys := true
 var powerups_enabled := true
+## First round that drops treats. The default holds them back so the opening round is a clean
+## fight and the crates arrive once everyone has found their feet; set to 1 to have them from
+## the very start.
+var treats_from_round: int = 2
 var points_to_win: int = 5
 var last_match_winner: PlayerSlot
 
@@ -105,10 +112,87 @@ func _has_unmapped_pad() -> bool:
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_bind_menu_gamepad()
 	Input.joy_connection_changed.connect(func(_device: int, _connected: bool) -> void: _bind_menu_gamepad())
 	_load_content()
 	_apply_defaults()
+	_load_settings()
+
+
+## A cabinet has no keyboard and nobody wants to dig through a menu on every boot, so the
+## display mode is remembered and can be toggled from anywhere: F11, or Start+Select together
+## on a pad. The combo takes two buttons so it cannot be hit by accident mid-round.
+func _input(event: InputEvent) -> void:
+	var toggle := false
+	if event is InputEventKey:
+		var key := event as InputEventKey
+		toggle = key.pressed and not key.echo and key.keycode == KEY_F11
+	elif event is InputEventJoypadButton:
+		var pad := event as InputEventJoypadButton
+		toggle = pad.pressed and pad.button_index == JOY_BUTTON_START \
+			and Input.is_joy_button_pressed(pad.device, JOY_BUTTON_BACK)
+	if toggle:
+		set_fullscreen(not is_fullscreen())
+		get_viewport().set_input_as_handled()
+
+
+func is_fullscreen() -> bool:
+	var mode := DisplayServer.window_get_mode()
+	return mode == DisplayServer.WINDOW_MODE_FULLSCREEN or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+
+
+func set_fullscreen(on: bool) -> void:
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if on else DisplayServer.WINDOW_MODE_WINDOWED)
+	fullscreen = on
+	save_settings()
+
+
+## Settings live in user:// so a cabinet keeps them across reboots. A missing or unreadable file
+## is not an error: it just means this machine has never been set up, and a cabinet defaults to
+## fullscreen because that is the only way it is ever used.
+func _load_settings() -> void:
+	var config := ConfigFile.new()
+	if config.load(SETTINGS_PATH) == OK:
+		fullscreen = config.get_value("display", "fullscreen", fullscreen)
+		arcade_hints = config.get_value("input", "arcade_hints", int(arcade_hints)) as ArcadeHints
+		treats_from_round = config.get_value("match", "treats_from_round", treats_from_round)
+		points_to_win = config.get_value("match", "points_to_win", points_to_win)
+	elif _has_unmapped_pad():
+		# First run on a cabinet. Nobody plays an arcade machine in a window.
+		fullscreen = true
+	if fullscreen and not is_fullscreen():
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	# Sfx and Music load after this autoload, so their settings wait a frame for them to exist.
+	_apply_audio_settings.call_deferred()
+
+
+func _apply_audio_settings() -> void:
+	var config := ConfigFile.new()
+	if config.load(SETTINGS_PATH) != OK:
+		return
+	var sfx := get_node_or_null(^"/root/Sfx")
+	if sfx != null:
+		sfx.enabled = config.get_value("audio", "sfx", true)
+	var music := get_node_or_null(^"/root/Music")
+	if music != null:
+		music.enabled = config.get_value("audio", "music", true)
+
+
+func save_settings() -> void:
+	var config := ConfigFile.new()
+	config.load(SETTINGS_PATH)
+	config.set_value("display", "fullscreen", fullscreen)
+	var sfx := get_node_or_null(^"/root/Sfx")
+	if sfx != null:
+		config.set_value("audio", "sfx", sfx.enabled)
+	var music := get_node_or_null(^"/root/Music")
+	if music != null:
+		config.set_value("audio", "music", music.enabled)
+	config.set_value("input", "arcade_hints", int(arcade_hints))
+	config.set_value("match", "treats_from_round", treats_from_round)
+	config.set_value("match", "points_to_win", points_to_win)
+	config.save(SETTINGS_PATH)
 
 
 func _load_content() -> void:

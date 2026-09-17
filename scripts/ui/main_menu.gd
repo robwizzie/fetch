@@ -190,11 +190,13 @@ func _show_settings() -> void:
 	var sound := UiKit.wood_button("SOUND EFFECTS: ON" if Sfx.enabled else "SOUND EFFECTS: OFF", 770)
 	sound.pressed.connect(func() -> void:
 		Sfx.enabled = not Sfx.enabled
+		Game.save_settings()
 		sound.text = "SOUND EFFECTS: ON" if Sfx.enabled else "SOUND EFFECTS: OFF")
 	body.add_child(sound)
 	var music := UiKit.wood_button("MUSIC: ON" if Music.enabled else "MUSIC: OFF", 770)
 	music.pressed.connect(func() -> void:
 		Music.enabled = not Music.enabled
+		Game.save_settings()
 		music.text = "MUSIC: ON" if Music.enabled else "MUSIC: OFF")
 	body.add_child(music)
 	# Cabinets report their encoder name, but the override is here because they vary.
@@ -205,6 +207,7 @@ func _show_settings() -> void:
 	var arcade := UiKit.wood_button(arcade_names[int(Game.arcade_hints)], 770)
 	arcade.pressed.connect(func() -> void:
 		Game.arcade_hints = ((int(Game.arcade_hints) + 1) % 3) as Game.ArcadeHints
+		Game.save_settings()
 		arcade.text = arcade_names[int(Game.arcade_hints)])
 	body.add_child(arcade)
 	body.add_child(CoverStage.copy("MASTER VOLUME", 25))
@@ -215,7 +218,8 @@ func _show_settings() -> void:
 	body.add_child(_volume_slider("SFX"))
 	var fullscreen := UiKit.wood_button("FULLSCREEN: ON" if _is_fullscreen() else "FULLSCREEN: OFF", 770)
 	fullscreen.pressed.connect(func() -> void:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if _is_fullscreen() else DisplayServer.WINDOW_MODE_FULLSCREEN)
+		# Remembered, so a cabinet comes back up filling its screen. F11 or Start+Select also works.
+		Game.set_fullscreen(not _is_fullscreen())
 		fullscreen.text = "FULLSCREEN: ON" if _is_fullscreen() else "FULLSCREEN: OFF")
 	body.add_child(fullscreen)
 	body.add_child(CoverStage.copy("Settings apply for this play session.", 21, Color("6b754d")))
