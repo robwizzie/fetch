@@ -106,8 +106,14 @@ func just_pressed(action: StringName) -> bool:
 ## Join buttons: gamepad A/Start, Space (WASD layout), Enter (arrows layout).
 static func join_device_from_event(event: InputEvent) -> int:
 	if event is InputEventJoypadButton and event.pressed:
-		if event.button_index == JOY_BUTTON_A or event.button_index == JOY_BUTTON_START:
-			return event.device
+		var pad := event as InputEventJoypadButton
+		if pad.button_index == JOY_BUTTON_A or pad.button_index == JOY_BUTTON_START:
+			return pad.device
+		# An arcade encoder carries no SDL mapping, so Godot reports raw hardware indices and
+		# "button A" names nothing in particular. On a cabinet any action button should sit you
+		# down; index 1 is left alone because that is what backing out uses.
+		if not Input.is_joy_known(pad.device) and pad.button_index != JOY_BUTTON_B:
+			return pad.device
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_SPACE:
 			return KEYBOARD_WASD
@@ -162,7 +168,9 @@ static func controls_line(p_device: int) -> String:
 
 ## The button wording for one action, given who is playing.
 static func button_label(action: StringName, slots: Array) -> String:
-	var arcade := any_arcade(slots)
+	# Before anyone has joined there are no slots to read, so fall back to what is plugged in:
+	# a lobby on a cabinet must word its prompts for the cabinet from the first frame.
+	var arcade := any_arcade(slots) or (slots.is_empty() and any_arcade_connected())
 	match action:
 		&"throw":
 			return "Button 1  /  Space  /  Enter" if arcade else "X  /  Space  /  Enter"
@@ -170,7 +178,25 @@ static func button_label(action: StringName, slots: Array) -> String:
 			return "Button 2  /  Shift  /  Ctrl" if arcade else "A  /  Shift  /  Ctrl"
 		&"move":
 			return "Joystick  /  WASD  /  Arrows" if arcade else "Stick  /  WASD  /  Arrows"
+		&"confirm":
+			# An unmapped encoder numbers its buttons however the board's firmware chose, so a
+			# cabinet is told "any button" rather than a number that might name nothing.
+			return "any button" if arcade else "A  /  Space  /  Enter"
+		&"back":
+			return "Button 2" if arcade else "B  /  Esc  /  Backspace"
 	return ""
+
+
+## True when a cabinet-looking pad is plugged in at all, whether or not anyone is using it.
+static func any_arcade_connected() -> bool:
+	if Game.arcade_hints == Game.ArcadeHints.ALWAYS:
+		return true
+	if Game.arcade_hints == Game.ArcadeHints.NEVER:
+		return false
+	for device in Input.get_connected_joypads():
+		if is_arcade(device) or not Input.is_joy_known(device):
+			return true
+	return false
 
 
 static func describe(p_device: int) -> String:
