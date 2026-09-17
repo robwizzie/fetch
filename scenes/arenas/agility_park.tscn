@@ -14,6 +14,7 @@ tonemap_mode = 0
 
 [node name="AgilityPark" type="Node3D"]
 script = ExtResource("1_arena")
+size = Vector2(32, 15.2)
 ground_color = Color(0.35, 0.51, 0.24, 1)
 ground_accent = Color(0.33, 0.48, 0.22, 1)
 wall_color = Color(0.72, 0.52, 0.31, 1)
@@ -28,7 +29,7 @@ height = 17.0
 script = ExtResource("4_camera")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.866025, -0.321394, 0.383022, 0, 0.766044, 0.642788, -0.5, -0.55667, 0.663414, 0, 12, 0)
+transform = Transform3D(0.866, -0.3214, 0.383, 0, 0.766, 0.6428, -0.5, -0.5567, 0.6634, 0, 12, 0)
 light_color = Color(1, 0.97, 0.89, 1)
 light_energy = 0.92
 shadow_enabled = true
@@ -40,41 +41,41 @@ environment = SubResource("Environment_sky")
 [node name="SpawnPoints" type="Node3D" parent="."]
 
 [node name="P1" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(-10.5, 0, -5.2)
+position = Vector3(-12.9231, 0, -5.4137)
 
 [node name="P2" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(10.5, 0, 5.2)
+position = Vector3(12.9231, 0, 5.4137)
 
 [node name="P3" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(10.5, 0, -5.2)
+position = Vector3(12.9231, 0, -5.4137)
 
 [node name="P4" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(-10.5, 0, 5.2)
+position = Vector3(-12.9231, 0, 5.4137)
 
 [node name="ToySpawns" type="Node3D" parent="."]
 
 [node name="T1" type="Marker3D" parent="ToySpawns"]
-position = Vector3(-8, 0, -5.4)
+position = Vector3(-9.8462, 0, -5.6219)
 
 [node name="T2" type="Marker3D" parent="ToySpawns"]
-position = Vector3(8, 0, 5.4)
+position = Vector3(9.8462, 0, 5.6219)
 
 [node name="T3" type="Marker3D" parent="ToySpawns"]
-position = Vector3(8, 0, -5.4)
+position = Vector3(9.8462, 0, -5.6219)
 
 [node name="T4" type="Marker3D" parent="ToySpawns"]
-position = Vector3(-8, 0, 5.4)
+position = Vector3(-9.8462, 0, 5.6219)
 
 [node name="T5" type="Marker3D" parent="ToySpawns"]
-position = Vector3(-1.6, 0, 0.2)
+position = Vector3(-1.9692, 0, 0.2082)
 
 [node name="T6" type="Marker3D" parent="ToySpawns"]
-position = Vector3(1.6, 0, 0.2)
+position = Vector3(1.9692, 0, 0.2082)
 
 [node name="Obstacles" type="Node3D" parent="."]
 
 [node name="Tunnel" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.2, 0, -2.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.4, 0, -2.7068)
 script = ExtResource("2_obstacle")
 kind = 12
 size = Vector3(4.6, 1.5, 1.7)
@@ -82,7 +83,7 @@ color = Color(0.33, 0.53, 0.78, 1)
 accent = Color(0.95, 0.95, 0.97, 1)
 
 [node name="AFrame" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.4, 0, 2.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.6462, 0, 2.4986)
 script = ExtResource("2_obstacle")
 kind = 11
 size = Vector3(3.8, 1.8, 2.4)
@@ -90,7 +91,7 @@ color = Color(0.78, 0.36, 0.33, 1)
 accent = Color(0.95, 0.83, 0.35, 1)
 
 [node name="Weave" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 5.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 5.4137)
 script = ExtResource("2_obstacle")
 kind = 13
 size = Vector3(4.4, 1.25, 1.2)
@@ -98,21 +99,21 @@ color = Color(0.86, 0.72, 0.34, 1)
 accent = Color(0.35, 0.6, 0.9, 1)
 
 [node name="TireJump" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0, -3.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11.0769, 0, -3.7479)
 script = ExtResource("2_obstacle")
 kind = 9
 size = Vector3(1.7, 0.5, 1.7)
 color = Color(0.16, 0.16, 0.18, 1)
 
 [node name="Bush" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0, 3.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.3077, 0, 3.7479)
 script = ExtResource("2_obstacle")
 kind = 4
 size = Vector3(2.2, 1.3, 1.8)
 color = Color(0.34, 0.52, 0.31, 1)
 
 [node name="Crate" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -5.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -5.8301)
 script = ExtResource("2_obstacle")
 kind = 1
 size = Vector3(1.5, 1.3, 1.5)

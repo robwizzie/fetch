@@ -15,6 +15,7 @@ tonemap_mode = 0
 
 [node name="Kitchen" type="Node3D"]
 script = ExtResource("1_arena")
+size = Vector2(19, 17)
 wall_style = 1
 ground_style = 3
 wall_height = 1.6
@@ -33,7 +34,7 @@ height = 17.0
 script = ExtResource("4_camera")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.866025, -0.321394, 0.383022, 0, 0.766044, 0.642788, -0.5, -0.55667, 0.663414, 0, 12, 0)
+transform = Transform3D(0.866, -0.3214, 0.383, 0, 0.766, 0.6428, -0.5, -0.5567, 0.6634, 0, 12, 0)
 light_color = Color(1, 0.95, 0.85, 1)
 light_energy = 0.82
 shadow_enabled = true
@@ -45,41 +46,41 @@ environment = SubResource("Environment_kitchen")
 [node name="SpawnPoints" type="Node3D" parent="."]
 
 [node name="P1" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(-10.5, 0, -5)
+position = Vector3(-7.6731, 0, -5.8219)
 
 [node name="P2" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(10.5, 0, 5)
+position = Vector3(7.6731, 0, 5.8219)
 
 [node name="P3" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(10.5, 0, -5)
+position = Vector3(7.6731, 0, -5.8219)
 
 [node name="P4" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(-10.5, 0, 5)
+position = Vector3(-7.6731, 0, 5.8219)
 
 [node name="ToySpawns" type="Node3D" parent="."]
 
 [node name="T1" type="Marker3D" parent="ToySpawns"]
-position = Vector3(-8.5, 0, 5.4)
+position = Vector3(-6.2115, 0, 6.2877)
 
 [node name="T2" type="Marker3D" parent="ToySpawns"]
-position = Vector3(4.2, 0, 5.4)
+position = Vector3(3.0692, 0, 6.2877)
 
 [node name="T3" type="Marker3D" parent="ToySpawns"]
-position = Vector3(-7, 0, -5.6)
+position = Vector3(-5.1154, 0, -6.5205)
 
 [node name="T4" type="Marker3D" parent="ToySpawns"]
-position = Vector3(3.6, 0, -5.6)
+position = Vector3(2.6308, 0, -6.5205)
 
 [node name="T5" type="Marker3D" parent="ToySpawns"]
-position = Vector3(-0.2, 0, 3.4)
+position = Vector3(-0.1462, 0, 3.9589)
 
 [node name="T6" type="Marker3D" parent="ToySpawns"]
-position = Vector3(-0.2, 0, -3.4)
+position = Vector3(-0.1462, 0, -3.9589)
 
 [node name="Obstacles" type="Node3D" parent="."]
 
 [node name="Island" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.2, 0, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1462, 0, 0)
 script = ExtResource("2_obstacle")
 kind = 14
 size = Vector3(5.2, 1.15, 2.1)
@@ -87,7 +88,7 @@ color = Color(0.93, 0.9, 0.84, 1)
 accent = Color(0.72, 0.5, 0.29, 1)
 
 [node name="Counter" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11.2, 0, 1.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.1846, 0, 1.3973)
 script = ExtResource("2_obstacle")
 kind = 14
 size = Vector3(2.8, 1.1, 5.4)
@@ -95,7 +96,7 @@ color = Color(0.86, 0.68, 0.45, 1)
 accent = Color(0.66, 0.45, 0.26, 1)
 
 [node name="Fridge" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, 0, -0.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.0385, 0, -0.6986)
 script = ExtResource("2_obstacle")
 kind = 15
 size = Vector3(2, 2.7, 1.7)
@@ -103,7 +104,7 @@ color = Color(0.88, 0.34, 0.31, 1)
 accent = Color(0.95, 0.94, 0.92, 1)
 
 [node name="DiningTable" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.6, 0, -3.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.8231, 0, -3.9589)
 script = ExtResource("2_obstacle")
 kind = 3
 size = Vector3(2.8, 0.95, 1.9)
@@ -111,7 +112,7 @@ color = Color(0.72, 0.5, 0.3, 1)
 accent = Color(0.48, 0.32, 0.18, 1)
 
 [node name="Plant" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.4, 0, 4.9)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.6769, 0, 5.7055)
 script = ExtResource("2_obstacle")
 kind = 8
 size = Vector3(1.4, 1.8, 1.4)
@@ -119,7 +120,7 @@ color = Color(0.32, 0.6, 0.3, 1)
 accent = Color(0.75, 0.45, 0.32, 1)
 
 [node name="SpilledBowl" type="Area3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.4, 0, 2.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.9462, 0, 3.0274)
 script = ExtResource("3_slow")
 radius = 1.25
 look = 2

@@ -15,6 +15,7 @@ tonemap_mode = 0
 
 [node name="Beach" type="Node3D"]
 script = ExtResource("1_arena")
+size = Vector2(30, 12.8)
 ground_color = Color(0.83, 0.71, 0.46, 1)
 ground_accent = Color(0.76, 0.63, 0.39, 1)
 wall_color = Color(0.78, 0.68, 0.54, 1)
@@ -30,7 +31,7 @@ height = 17.0
 script = ExtResource("4_camera")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.866025, -0.321394, 0.383022, 0, 0.766044, 0.642788, -0.5, -0.55667, 0.663414, 0, 12, 0)
+transform = Transform3D(0.866, -0.3214, 0.383, 0, 0.766, 0.6428, -0.5, -0.5567, 0.6634, 0, 12, 0)
 light_color = Color(1, 0.98, 0.9, 1)
 light_energy = 0.8
 shadow_enabled = true
@@ -42,41 +43,41 @@ environment = SubResource("Environment_beach")
 [node name="SpawnPoints" type="Node3D" parent="."]
 
 [node name="P1" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(-10.8, 0, -5)
+position = Vector3(-12.4615, 0, -4.3836)
 
 [node name="P2" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(10.8, 0, 5)
+position = Vector3(12.4615, 0, 4.3836)
 
 [node name="P3" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(10.8, 0, -5)
+position = Vector3(12.4615, 0, -4.3836)
 
 [node name="P4" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(-10.8, 0, 5)
+position = Vector3(-12.4615, 0, 4.3836)
 
 [node name="ToySpawns" type="Node3D" parent="."]
 
 [node name="T1" type="Marker3D" parent="ToySpawns"]
-position = Vector3(-8.2, 0, -5.4)
+position = Vector3(-9.4615, 0, -4.7342)
 
 [node name="T2" type="Marker3D" parent="ToySpawns"]
-position = Vector3(8.2, 0, 5.4)
+position = Vector3(9.4615, 0, 4.7342)
 
 [node name="T3" type="Marker3D" parent="ToySpawns"]
-position = Vector3(8.2, 0, -5.4)
+position = Vector3(9.4615, 0, -4.7342)
 
 [node name="T4" type="Marker3D" parent="ToySpawns"]
-position = Vector3(-8.2, 0, 5.4)
+position = Vector3(-9.4615, 0, 4.7342)
 
 [node name="T5" type="Marker3D" parent="ToySpawns"]
-position = Vector3(-3.2, 0, 0.4)
+position = Vector3(-3.6923, 0, 0.3507)
 
 [node name="T6" type="Marker3D" parent="ToySpawns"]
-position = Vector3(3.2, 0, 0.4)
+position = Vector3(3.6923, 0, 0.3507)
 
 [node name="Obstacles" type="Node3D" parent="."]
 
 [node name="Umbrella" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.2, 0, -3.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.1538, 0, -2.8055)
 script = ExtResource("2_obstacle")
 kind = 16
 size = Vector3(2.8, 2.8, 2.8)
@@ -84,21 +85,21 @@ color = Color(0.9, 0.34, 0.3, 1)
 accent = Color(0.84, 0.74, 0.55, 1)
 
 [node name="BigRock" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.4, 0, 3.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.6923, 0, 2.8055)
 script = ExtResource("2_obstacle")
 kind = 17
 size = Vector3(2.5, 1.4, 2.2)
 color = Color(0.46, 0.45, 0.44, 1)
 
 [node name="SmallRock" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.4, 0, 4.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.8462, 0, 3.6822)
 script = ExtResource("2_obstacle")
 kind = 17
 size = Vector3(1.9, 1.1, 1.8)
 color = Color(0.5, 0.49, 0.47, 1)
 
 [node name="Cooler" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, -4.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.9231, 0, -3.6822)
 script = ExtResource("2_obstacle")
 kind = 1
 size = Vector3(1.7, 1.2, 1.5)
@@ -106,7 +107,7 @@ color = Color(0.35, 0.68, 0.85, 1)
 accent = Color(0.92, 0.93, 0.95, 1)
 
 [node name="TidePool" type="Area3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.3507)
 script = ExtResource("3_slow")
 radius = 1.75
 color = Color(0.35, 0.72, 0.95, 1)

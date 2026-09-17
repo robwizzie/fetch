@@ -84,6 +84,8 @@ func _physics_process(delta: float) -> void:
 			_treat_clock = _treat_delay(false)
 	round_time_left = maxf(0.0, round_time_left - delta)
 	hud.update_match(dogs, round_time_left, round_number)
+	if practice_round:
+		hud.practice_clock()
 	if round_time_left <= 0.0:
 		phase = Phase.ROUND_OVER
 		_end_round(null, "Time's up! Draw — no points")
@@ -150,7 +152,16 @@ func start_round() -> void:
 		if slot.is_bot:
 			dog.add_child(BotBrain.new())
 		dogs.append(dog)
-	# Every dog starts empty and every toy starts out in the open, away from the pack.
+	_spawn_round_toys()
+	mode.on_round_start(dogs)
+	hud.update_match(dogs, round_time_left, round_number)
+	if Game.random_arena_each_round:
+		hud.announce(arena_data.display_name.to_upper())
+	hud.countdown(round_number)
+
+
+## Every dog starts empty and every toy starts out in the open, away from the pack.
+func _spawn_round_toys() -> void:
 	var available: Array[ToyData] = []
 	for item in Game.toys:
 		if item.fully_implemented:
@@ -163,11 +174,6 @@ func start_round() -> void:
 			item = available[(i + round_number - 1) % available.size()]
 		var at := arena.clear_pickup_position(points[i], item.radius + 0.25)
 		_spawn_toy(at, item)
-	mode.on_round_start(dogs)
-	hud.update_match(dogs, round_time_left, round_number)
-	if Game.random_arena_each_round:
-		hud.announce(arena_data.display_name.to_upper())
-	hud.countdown(round_number)
 
 
 func _begin_play() -> void:
@@ -350,7 +356,6 @@ func _on_pen_ready(_pen: ReadyPen) -> void:
 func _finish_tutorial() -> void:
 	if phase != Phase.TUTORIAL:
 		return
-	phase = Phase.COUNTDOWN
 	_dismiss_coach()
 	_set_furniture_active(true)
 	for pen in _pens:
@@ -362,10 +367,40 @@ func _finish_tutorial() -> void:
 	for dog in dogs:
 		if is_instance_valid(dog):
 			dog.practice_safe = false
-	practice_round = true
 	Sfx.play("whistle", 1.0, -3.0)
-	await get_tree().create_timer(0.75).timeout
-	start_round()
+	_begin_warmup()
+
+
+## The warm-up starts where the pens end: the same dogs, standing where they were, playing on
+## from the moment the walls drop. No respawn and no second countdown - the walls coming down
+## IS the start. It scores nothing, so losing it costs nothing.
+func _begin_warmup() -> void:
+	practice_round = true
+	_treat_clock = _treat_delay(true)
+	_treat_count = 0
+	round_time_left = ROUND_SECONDS
+	# The pen toys have done their job. Anything still in a mouth stays there; the rest make way
+	# for the arena's normal scatter.
+	var kept: Array[Toy] = []
+	for toy in toys:
+		if not is_instance_valid(toy):
+			continue
+		if toy.state == Toy.State.HELD:
+			kept.append(toy)
+		else:
+			toy.queue_free()
+	toys = kept
+	_spawn_round_toys()
+	# Bots were kept calm in their pens; now they have somewhere to be.
+	for dog in dogs:
+		if is_instance_valid(dog) and dog.slot.is_bot and dog.get_node_or_null("BotBrain") == null:
+			var brain := BotBrain.new()
+			brain.name = "BotBrain"
+			dog.add_child(brain)
+	mode.on_round_start(dogs)
+	hud.practice_clock()
+	phase = Phase.PLAYING
+	Events.round_started.emit(round_number)
 
 
 ## Portals and switches are the only arena pieces that move a dog without being asked, so they
