@@ -48,9 +48,12 @@ func _ready() -> void:
 	var back := _mouse_button("Back", 170)
 	back.pressed.connect(func() -> void: Game.goto(Game.SCENE_MAIN_MENU))
 	actions.add_child(back)
-	var cpu := _mouse_button("Add CPU", 220)
+	var cpu := _mouse_button("Add CPU", 200)
 	cpu.pressed.connect(_add_bot)
 	actions.add_child(cpu)
+	var drop := _mouse_button("Remove CPU", 220)
+	drop.pressed.connect(_remove_bot)
+	actions.add_child(drop)
 	_continue = _mouse_button("Let's play!", 300)
 	_continue.pressed.connect(func() -> void:
 		if _all_ready():
@@ -84,6 +87,12 @@ func _process(_delta: float) -> void:
 				_cycle(slot, -1)
 			if inp.just_pressed(&"right"):
 				_cycle(slot, 1)
+		# Anyone at the panel can change the pack, ready or not: push up for another CPU,
+		# down to send one home.
+		if inp.just_pressed(&"up"):
+			_add_bot()
+		if inp.just_pressed(&"down"):
+			_remove_bot()
 		if inp.just_pressed(&"confirm"):
 			if not slot.ready:
 				slot.ready = true
@@ -129,12 +138,22 @@ func _refresh_all() -> void:
 			_fill_player_card(holder, slot)
 		else:
 			_fill_empty_card(holder, i)
+	# The pack line is always shown: not being able to find the CPUs is worse than repeating it.
+	var pack := "Push UP for a CPU  ·  DOWN to send one home"
 	if _all_ready():
-		_footer.text = "Everyone's ready!  Press A / Space / Enter to continue"
+		_footer.text = "Everyone's ready!  Press %s to continue   ·   %s" % [_join_wording(), pack]
 	elif Game.slots.size() < MIN_PLAYERS:
-		_footer.text = "Join: A / Start  ·  Space (WASD)  ·  Enter (Arrows)  —  Add a CPU to practise solo"
+		_footer.text = "Join: %s   ·   %s" % [_join_wording(), pack]
 	else:
-		_footer.text = "Left / Right: pick a dog   ·   A / Enter: ready   ·   B / Esc: un-ready or leave"
+		_footer.text = "Left / Right: pick a dog   ·   %s: ready   ·   %s: un-ready or leave   ·   %s" \
+			% [DeviceInput.button_label(&"confirm", Game.slots), DeviceInput.button_label(&"back", Game.slots), pack]
+
+
+## How to describe the join button. A cabinet has no Space or Enter, and saying so is noise.
+func _join_wording() -> String:
+	if DeviceInput.any_arcade(Game.slots) or DeviceInput.any_arcade_connected():
+		return "any button on your panel"
+	return "A / Start  ·  Space (WASD)  ·  Enter (Arrows)"
 
 
 func _slot_for_index(i: int) -> PlayerSlot:
@@ -160,7 +179,8 @@ func _fill_empty_card(holder: Control, i: int) -> void:
 	c.add_child(paw)
 	v.add_child(c)
 	v.add_child(UiKit.title("P%d" % (i + 1), 44, Color(1, 1, 1, 0.3)))
-	v.add_child(UiKit.label("Press A / Space / Enter\nto join", 24, Color(1, 1, 1, 0.45)))
+	v.add_child(UiKit.label("Press %s\nto join" % _join_wording(), 22, Color(1, 1, 1, 0.45)))
+	v.add_child(UiKit.label("or push UP on a joined stick\nto seat a CPU here", 20, Color(1, 1, 1, 0.34)))
 	var join := _mouse_button("Join the pack", 220)
 	join.pressed.connect(_join_keyboard)
 	v.add_child(join)
@@ -248,6 +268,7 @@ func _fill_player_card(holder: Control, slot: PlayerSlot) -> void:
 			arrow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			arrow.pressed.connect(func() -> void: _cycle(slot, dir))
 			controls.add_child(arrow)
+		v.add_child(UiKit.label("UP: add a CPU   ·   DOWN: remove one", 18, Color(1, 1, 1, 0.5)))
 		var ready_button := _mouse_button("Remove" if slot.is_bot else "Ready!", 200)
 		ready_button.pressed.connect(func() -> void:
 			if slot.is_bot:
@@ -278,6 +299,19 @@ func _join_keyboard() -> void:
 				_inputs[slot] = DeviceInput.new(device)
 				Sfx.play("catch")
 				_refresh_all()
+			return
+
+
+## Sends the most recently added CPU home. Humans are never removed this way - a player
+## leaves with their own back button, so nobody can be kicked out by someone else's stick.
+func _remove_bot() -> void:
+	for i in range(Game.slots.size() - 1, -1, -1):
+		var slot: PlayerSlot = Game.slots[i]
+		if slot.is_bot:
+			Game.remove_player(slot)
+			_inputs.erase(slot)
+			Sfx.play("ui_back")
+			_refresh_all()
 			return
 
 
