@@ -57,7 +57,10 @@ func _ready() -> void:
 	_stage_view.size = STAGE_SIZE
 	_stage_view.own_world_3d = true
 	_stage_view.transparent_bg = true
-	_stage_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	# Off until the board is actually up. Left on UPDATE_ALWAYS it keeps rendering a 3D pass
+	# every frame for the rest of the match behind a hidden control, which is pure waste and
+	# was enough to starve a round of its own frames.
+	_stage_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	_stage_view.msaa_3d = Viewport.MSAA_4X
 	add_child(_stage_view)
 	_stage = ScoreStage.new()
@@ -95,6 +98,7 @@ func show_board(headline: String, sides: Array, target: int, prompt: String) -> 
 	_time = 0.0
 	_done = false
 	visible = true
+	_stage_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_headline.text = headline
 	_continue.text = prompt
 	var camera := _stage_view.get_camera_3d()
@@ -127,4 +131,5 @@ func _finish() -> void:
 		return
 	_done = true
 	visible = false
+	_stage_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	dismissed.emit()

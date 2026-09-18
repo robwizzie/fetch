@@ -9,6 +9,8 @@ var _points_row: CarouselRow
 var _powerups_row: CarouselRow
 var _teams_row: CarouselRow
 var _fire_row: CarouselRow
+var _more: VBoxContainer
+var _more_button: Button
 var _start: Button
 var _desc: Label
 var _preview: TextureRect
@@ -44,18 +46,32 @@ func _ready() -> void:
 	root.add_child(UiKit.title("SET UP THE MATCH", 72, UiKit.ACCENT))
 	root.add_child(UiKit.label("%d dogs ready to play" % Game.slots.size(), 24, Color(1, 1, 1, 0.7)))
 
+	# Seven carousels at once is a wall. Only the three that change how the party actually
+	# plays are up front; everything else has a sensible default and waits behind a button
+	# for the one person in the room who wants to fiddle with it.
 	_mode_row = _row(root, "Mode", _playable_modes.map(func(m: GameModeData) -> String:
 		return m.display_name), _playable_modes.find(Game.selected_mode))
+	_teams_row = _row(root, "Sides", SIDE_OPTIONS, 1 if Game.team_mode else 0)
+	_points_row = _row(root, "First to", POINT_OPTIONS.map(func(p: int) -> String: return "%d points" % p), maxi(POINT_OPTIONS.find(Game.points_to_win), 0))
+
+	_more_button = UiKit.button("More options", 420)
+	_more_button.pressed.connect(_toggle_more)
+	var more_center := CenterContainer.new()
+	more_center.add_child(_more_button)
+	root.add_child(more_center)
+
+	_more = VBoxContainer.new()
+	_more.add_theme_constant_override("separation", 14)
+	_more.visible = false
+	root.add_child(_more)
 	var arena_names: Array[String] = ["Shuffle every round"]
 	for a in Game.arenas:
 		arena_names.append(a.display_name)
-	_arena_row = _row(root, "Arena", arena_names, 0 if Game.random_arena_each_round else Game.arenas.find(Game.selected_arena) + 1)
-	_toy_row = _row(root, "Toy box", ["Mixed dog toys"] + _playable_toys.map(func(t: ToyData) -> String:
+	_arena_row = _row(_more, "Arena", arena_names, 0 if Game.random_arena_each_round else Game.arenas.find(Game.selected_arena) + 1)
+	_toy_row = _row(_more, "Toy box", ["Mixed dog toys"] + _playable_toys.map(func(t: ToyData) -> String:
 		return t.display_name), 0 if Game.mixed_toys else _playable_toys.find(Game.selected_toy) + 1)
-	_powerups_row = _row(root, "Treats", TREAT_OPTIONS, _treat_option_index())
-	_teams_row = _row(root, "Sides", SIDE_OPTIONS, 1 if Game.team_mode else 0)
-	_fire_row = _row(root, "Own toys hurt", FIRE_OPTIONS, _fire_option_index())
-	_points_row = _row(root, "First to", POINT_OPTIONS.map(func(p: int) -> String: return "%d points" % p), maxi(POINT_OPTIONS.find(Game.points_to_win), 0))
+	_powerups_row = _row(_more, "Treats", TREAT_OPTIONS, _treat_option_index())
+	_fire_row = _row(_more, "Own toys hurt", FIRE_OPTIONS, _fire_option_index())
 
 	_preview = TextureRect.new()
 	_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -98,6 +114,14 @@ func _fire_option_index() -> int:
 	if Game.friendly_fire:
 		return 2
 	return 0 if Game.self_fire else 1
+
+
+## Reveals the rest of the settings. Kept as a plain toggle so a cabinet reaches it with the
+## same button as everything else.
+func _toggle_more() -> void:
+	_more.visible = not _more.visible
+	_more_button.text = "Fewer options" if _more.visible else "More options"
+	Sfx.play("ui_move")
 
 
 func _treat_option_index() -> int:
