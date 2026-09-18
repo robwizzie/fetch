@@ -16,9 +16,9 @@ var _playable_modes: Array[GameModeData] = []
 var _playable_toys: Array[ToyData] = []
 
 const POINT_OPTIONS := [3, 5, 7, 10]
-## Holding treats back a round keeps the opening fight clean; starting them in round 1 makes
-## power-ups part of the scramble from the first whistle.
-const TREAT_OPTIONS := ["From round 2", "From the start", "Off"]
+## Auto is the party default: a brand new session gets a few clean rounds first, and every
+## match after that opens with crates already dropping.
+const TREAT_OPTIONS := ["Auto", "From the start", "From round 2", "Off"]
 const SIDE_OPTIONS := ["Free-for-all", "Two packs"]
 ## Who your own toys can hurt. Most groups want neither; the third is for people who enjoy pain.
 const FIRE_OPTIONS := ["Own goals only", "Nobody", "Team-mates too"]
@@ -102,8 +102,10 @@ func _fire_option_index() -> int:
 
 func _treat_option_index() -> int:
 	if not Game.powerups_enabled:
-		return 2
-	return 1 if Game.treats_from_round <= 1 else 0
+		return 3
+	if Game.treats_from_round == Game.AUTO_TREATS:
+		return 0
+	return 1 if Game.treats_from_round <= 1 else 2
 
 
 func _apply() -> void:
@@ -114,8 +116,11 @@ func _apply() -> void:
 	Game.mixed_toys = _toy_row.index == 0
 	if not Game.mixed_toys:
 		Game.selected_toy = _playable_toys[_toy_row.index - 1]
-	Game.powerups_enabled = _powerups_row.index < 2
-	Game.treats_from_round = 1 if _powerups_row.index == 1 else 2
+	Game.powerups_enabled = _powerups_row.index < 3
+	match _powerups_row.index:
+		1: Game.treats_from_round = 1
+		2: Game.treats_from_round = 2
+		_: Game.treats_from_round = Game.AUTO_TREATS
 	Game.team_mode = _teams_row.index == 1
 	Game.assign_teams()
 	Game.self_fire = _fire_row.index != 1

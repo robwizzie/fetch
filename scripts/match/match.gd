@@ -7,13 +7,15 @@ const DOG_SCENE := preload("res://scenes/actors/dog.tscn")
 const TOY_SCENE := preload("res://scenes/actors/toy.tscn")
 ## Crates arrive late in the first round of the first match and steadily sooner after that:
 ## new players get a clean fight to learn on, experienced ones get the toys early.
-const TREAT_FIRST_DELAY := 26.0
-const TREAT_REPEAT_DELAY := 15.0
-const TREAT_MIN_DELAY := 7.0
+const TREAT_FIRST_DELAY := 15.0
+const TREAT_REPEAT_DELAY := 9.5
+const TREAT_MIN_DELAY := 4.5
 ## How much each played round and each finished match pulls the timer forward.
 const TREAT_ROUND_RUSH := 3.5
 const TREAT_MATCH_RUSH := 2.5
-const MAX_TREATS_PER_ROUND := 3
+const MAX_TREATS_PER_ROUND := 5
+## Points behind the leader before the mercy shield kicks in.
+const COMEBACK_GAP := 2
 const ROUND_SECONDS := 55.0
 ## No toy starts within this many metres of any dog's spawn: the opening move is a decision,
 ## not a free pickup. Relaxed in steps only if an arena leaves nowhere else to put one.
@@ -77,7 +79,7 @@ func _physics_process(delta: float) -> void:
 	for toy in toys:
 		if toy.state != Toy.State.HELD and arena.is_outside(toy.global_position):
 			toy.drop(arena.get_toy_spawn_position(0))
-	if Game.powerups_enabled and round_number >= Game.treats_from_round:
+	if Game.powerups_enabled and round_number >= Game.first_treat_round():
 		_treat_clock -= delta
 		if _treat_clock <= 0.0 and _treat_count < MAX_TREATS_PER_ROUND:
 			_spawn_treat()
@@ -135,6 +137,7 @@ func start_round() -> void:
 	_treat_count = 0
 	if not practice_round:
 		round_number += 1
+		_grant_comeback_shields()
 	round_time_left = ROUND_SECONDS
 	phase = Phase.COUNTDOWN
 	# Round 1's arena is already up; later rounds draw a fresh one when shuffling.
@@ -160,6 +163,22 @@ func start_round() -> void:
 	hud.countdown(round_number)
 
 
+## A mercy shield for anyone who has fallen well behind, provided they have a slot free for it.
+## It costs the leader nothing and keeps a runaway match worth playing out.
+func _grant_comeback_shields() -> void:
+	if not Game.powerups_enabled:
+		return
+	var best := 0
+	for slot in Game.slots:
+		best = maxi(best, Game.score_for(slot))
+	for slot in Game.slots:
+		if best - Game.score_for(slot) < COMEBACK_GAP:
+			continue
+		if slot.powerups.size() >= PowerupKinds.MAX_SLOTS:
+			continue
+		slot.powerups.append(PowerupKinds.SHIELD)
+
+
 ## Every dog starts empty and every toy starts out in the open, away from the pack.
 func _spawn_round_toys() -> void:
 	var available: Array[ToyData] = []
@@ -182,6 +201,9 @@ func _begin_play() -> void:
 	phase = Phase.PLAYING
 	_maybe_coach()
 	actors.process_mode = Node.PROCESS_MODE_PAUSABLE
+	for dog in dogs:
+		if is_instance_valid(dog):
+			dog.show_belt_parade()
 	Sfx.play("whistle")
 	Events.round_started.emit(round_number)
 

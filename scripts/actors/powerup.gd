@@ -107,6 +107,20 @@ func _open(dog: Dog) -> void:
 	Sfx.play("bark", randf_range(1.05, 1.18), -9.0)
 	Juice.burst(get_parent(), here + Vector3.UP * 0.6, tint, 26, 5.0)
 	Juice.float_text(get_parent(), here + Vector3.UP * 1.25, PowerupKinds.display_name(kind), tint, 1.0)
+	# The icon flies up with the name, so the shape gets learned alongside the words.
+	var badge := Sprite3D.new()
+	badge.texture = PowerupIcon.texture(kind, 128, tint)
+	badge.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	badge.pixel_size = 0.006
+	badge.no_depth_test = true
+	badge.render_priority = 8
+	badge.position = here + Vector3.UP * 0.85
+	get_parent().add_child(badge)
+	var lift := badge.create_tween()
+	lift.tween_property(badge, "scale", Vector3.ONE * 1.35, 0.22).from(Vector3.ZERO).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	lift.tween_property(badge, "position:y", here.y + 1.9, 0.75)
+	lift.parallel().tween_property(badge, "modulate:a", 0.0, 0.75)
+	lift.tween_callback(badge.queue_free)
 	if dropped != &"":
 		Juice.float_text(get_parent(), here + Vector3.UP * 0.75, "swapped " + PowerupKinds.display_name(dropped), Color(1, 1, 1, 0.75), 0.9)
 	Events.powerup_collected.emit(dog, kind)

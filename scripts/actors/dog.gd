@@ -37,6 +37,10 @@ var _catch_mult := 1.0
 var _throw_mult := 1.0
 var _dash_mult := 1.0
 var _cooldown_mult := 1.0
+## Body radius scale: a smaller dog is genuinely harder to hit, not just harder to see.
+var _size_mult := 1.0
+var _catch_cooldown_mult := 1.0
+var _reach_mult := 1.0
 
 var _dash_timer := 0.0
 var _iframe_timer := 0.0
@@ -121,7 +125,7 @@ func _physics_process(delta: float) -> void:
 	if _catch_buffer > 0.0:
 		_catch_buffer -= delta
 		if _catch_buffer <= 0.0:
-			_catch_cooldown = data.catch_cooldown
+			_catch_cooldown = data.catch_cooldown * _catch_cooldown_mult
 			model.set_catching(false)
 
 	var move2 := input.move_vector()
@@ -225,7 +229,7 @@ func _whack_target() -> Dog:
 	if _whack_cooldown > 0.0 or not alive or round_locked:
 		return null
 	var best: Dog = null
-	var best_distance := WHACK_RANGE
+	var best_distance := WHACK_RANGE * _reach_mult
 	for node in get_tree().get_nodes_in_group("dogs"):
 		var other := node as Dog
 		if other == self or not other.alive or other.round_locked:
@@ -351,8 +355,11 @@ func hit_by(toy: Toy) -> bool:
 		_catch(toy)
 		return false
 	if shield_charges > 0:
-		# One charge per shield held; the belt restores them at the start of the next round.
+		# A shield is spent, not rented: it comes off the belt for the rest of the match, so
+		# taking a hit behind one actually costs something.
 		shield_charges -= 1
+		if slot != null:
+			slot.powerups.erase(PowerupKinds.SHIELD)
 		_powerup_halo.visible = shield_charges > 0
 		toy.deflect_from(self)
 		Juice.float_text(get_parent(), global_position + Vector3.UP * 1.6, "SHIELD!", Color(1.0, 0.88, 0.4), 0.6)
@@ -422,6 +429,9 @@ func apply_powerups() -> void:
 	_throw_mult = 1.0
 	_dash_mult = 1.0
 	_cooldown_mult = 1.0
+	_size_mult = 1.0
+	_catch_cooldown_mult = 1.0
+	_reach_mult = 1.0
 	shield_charges = 0
 	if slot == null:
 		return
@@ -439,10 +449,50 @@ func apply_powerups() -> void:
 			PowerupKinds.SPRINGS:
 				_dash_mult *= 1.3
 				_cooldown_mult *= 0.8
+			PowerupKinds.LITTLE_LEGS:
+				_size_mult *= 0.82
+			PowerupKinds.QUICK_PAWS:
+				_catch_cooldown_mult *= 0.72
+			PowerupKinds.LONG_REACH:
+				_reach_mult *= 1.35
 	if is_instance_valid(catch_shape) and catch_shape.shape is SphereShape3D:
 		(catch_shape.shape as SphereShape3D).radius = data.catch_radius * _catch_mult
+	if is_instance_valid(body_shape) and body_shape.shape is CapsuleShape3D:
+		var capsule := body_shape.shape as CapsuleShape3D
+		capsule.radius = data.body_radius * _size_mult
+		capsule.height = data.body_radius * _size_mult * 2.0 + 0.6
+		body_shape.position.y = capsule.height / 2.0
+	if is_instance_valid(model):
+		model.scale = Vector3.ONE * _size_mult
 	if is_instance_valid(_powerup_halo):
 		_powerup_halo.visible = shield_charges > 0
+
+
+## Shows what is on the belt above the dog's head as a round opens, so the table can see who
+## is carrying what before the whistle rather than finding out the hard way.
+func show_belt_parade() -> void:
+	if slot == null or slot.powerups.is_empty():
+		return
+	var top := 1.55 * data.model_scale + 0.8
+	for i in slot.powerups.size():
+		var kind: StringName = slot.powerups[i]
+		var icon := Sprite3D.new()
+		icon.texture = PowerupIcon.texture(kind, 96, PowerupKinds.color(kind))
+		icon.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		icon.pixel_size = 0.0045
+		icon.no_depth_test = true
+		icon.render_priority = 9
+		var spread := (float(i) - float(slot.powerups.size() - 1) * 0.5) * 0.45
+		icon.position = Vector3(spread, top, 0)
+		add_child(icon)
+		var show := icon.create_tween()
+		show.tween_interval(0.07 * float(i))
+		show.tween_property(icon, "scale", Vector3.ONE, 0.28).from(Vector3.ZERO) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		show.tween_interval(1.1)
+		show.tween_property(icon, "position:y", top + 0.4, 0.45)
+		show.parallel().tween_property(icon, "modulate:a", 0.0, 0.45)
+		show.tween_callback(icon.queue_free)
 
 
 ## Takes a crate: adds to the belt, re-applies, and reports what (if anything) was displaced.

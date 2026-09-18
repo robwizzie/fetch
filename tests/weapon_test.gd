@@ -241,10 +241,19 @@ func _powerups() -> void:
 	_check(dog.shield_charges == 1, "a collected shield arms a charge")
 	_check(dog.hit_by(toy) and dog.alive, "shield absorbs a dangerous hit")
 	_check(dog.shield_charges == 0 and not toy.is_dangerous(), "shield spends its charge and defuses the toy")
-	# The belt still holds the shield, so the next round re-arms it.
-	_check(dog.slot.has_powerup(PowerupKinds.SHIELD), "the shield stays on the belt after absorbing")
+	# A shield is spent, not rented: it leaves the belt, so it cannot come back next round.
+	_check(not dog.slot.has_powerup(PowerupKinds.SHIELD), "an absorbed shield comes off the belt")
 	dog.apply_powerups()
-	_check(dog.shield_charges == 1, "the shield recharges for the next round")
+	_check(dog.shield_charges == 0, "a spent shield does not return next round")
+	# Two shields are two hits, taken one at a time.
+	dog.slot.powerups.clear()
+	dog.collect_powerup(PowerupKinds.SHIELD)
+	dog.collect_powerup(PowerupKinds.SHIELD)
+	_check(dog.shield_charges == 2, "two shields arm two charges")
+	toy.state = Toy.State.FLYING
+	toy.velocity = Vector3.RIGHT * 18.0
+	_check(dog.hit_by(toy) and dog.alive, "the first of two shields absorbs")
+	_check(dog.slot.powerup_count(PowerupKinds.SHIELD) == 1, "only one shield is spent per hit")
 
 	# Duplicates stack rather than refreshing: a second Zoomies is still worth taking.
 	dog.slot.powerups.clear()
@@ -274,7 +283,8 @@ func _powerups() -> void:
 		dog.slot.powerups.append(kind)
 		dog.apply_powerups()
 		var changed := dog.shield_charges > 0 or dog._speed_mult != 1.0 or dog._catch_mult != 1.0 \
-			or dog._throw_mult != 1.0 or dog._dash_mult != 1.0 or dog._cooldown_mult != 1.0
+			or dog._throw_mult != 1.0 or dog._dash_mult != 1.0 or dog._cooldown_mult != 1.0 \
+			or dog._size_mult != 1.0 or dog._catch_cooldown_mult != 1.0 or dog._reach_mult != 1.0
 		_check(changed, "%s changes the dog" % PowerupKinds.display_name(kind))
 	dog.slot.powerups.clear()
 	dog.apply_powerups()
