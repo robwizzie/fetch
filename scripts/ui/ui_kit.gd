@@ -6,18 +6,22 @@ extends RefCounted
 const FONT_DISPLAY: Font = preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
 const FONT_UI: Font = preload("res://assets/ui/fredoka_semibold.tres")
 
-const NAVY := Color("20382b")
-const NAVY_DARK := Color("14281e")
+# Menu colours are the cover's colours. These are literals because a const cannot call a
+# function, but each is derived from Palette - sampled from the art itself - so the menus and
+# the maps stop having separate ideas about what brown and green are.
+const NAVY := Color("223528")
+const NAVY_DARK := Color("16241a")
 const INK := Color(0.09, 0.08, 0.14)
 const CREAM := Color(0.99, 0.97, 0.92)
-const YELLOW := Color(1.0, 0.82, 0.25)
+const YELLOW := Color("e8c84f")  ## Palette.GOLD, opened up for type
 const ACCENT := YELLOW
-const WOOD := Color("97562d")
-const WOOD_DARK := Color("60341d")
-const WOOD_LIGHT := Color("b6773c")
+## Palette.WOOD stepped down so the plank grain still reads against it.
+const WOOD := Color("b4682f")
+const WOOD_DARK := Color("7d4620")
+const WOOD_LIGHT := Color("ce793c")  ## the cover's wood exactly
 ## Highlighted menu row, from the title-screen board.
-const SELECT_GREEN := Color("5aa233")
-const SELECT_GREEN_DARK := Color("3d7423")
+const SELECT_GREEN := Color("63ad2c")
+const SELECT_GREEN_DARK := Color("447a1d")
 const BG := NAVY
 
 static var _plank_cache: Dictionary = {}

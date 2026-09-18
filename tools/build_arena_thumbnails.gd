@@ -12,6 +12,8 @@ const OUT_DIR := "res://images/arenas"
 
 
 func _ready() -> void:
+	# Whatever ran before this, the world renders at normal speed here.
+	Engine.time_scale = 1.0
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
 	for data in Game.arenas:
 		await _shoot(data)
@@ -49,9 +51,11 @@ func _shoot(data: ArenaData) -> void:
 		arena.add_child(toy)
 		toy_index += 1
 
-	await get_tree().process_frame
-	await get_tree().process_frame
-	await get_tree().create_timer(0.35).timeout
+	# Frame-based rather than a SceneTreeTimer: create_timer is scaled by Engine.time_scale, so
+	# a leftover hitstop would leave it waiting forever. Each arena takes roughly half a minute
+	# now that the maps are bigger, so the whole run is a few minutes - it is not stuck.
+	for _i in 12:
+		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 
 	var image := viewport.get_texture().get_image()

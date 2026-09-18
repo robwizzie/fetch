@@ -14,8 +14,14 @@ const DWELL := 3.2
 ## Below this the board is left alone; a press only skips once the numbers have landed.
 const SKIP_AFTER := 0.6
 
+## How tall the 3D stage is drawn, in pixels. Rendered at this size and scaled to fit, so the
+## plaques stay crisp on a 1080p cabinet without paying for a full-screen 3D pass.
+const STAGE_SIZE := Vector2i(1280, 620)
+
 var _time := 0.0
-var _rows: VBoxContainer
+var _stage: ScoreStage
+var _stage_view: SubViewport
+var _stage_rect: TextureRect
 var _headline: Label
 var _continue: Label
 var _done := false
@@ -45,11 +51,30 @@ func _ready() -> void:
 	_headline.autowrap_mode = TextServer.AUTOWRAP_OFF
 	column.add_child(_headline)
 
-	_rows = VBoxContainer.new()
-	_rows.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_rows.add_theme_constant_override("separation", 14)
-	_rows.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_child(_rows)
+	# The standings are real geometry in their own little world, composited over the frozen
+	# arena. Flat bars never looked like they belonged in the same game as the dogs.
+	_stage_view = SubViewport.new()
+	_stage_view.size = STAGE_SIZE
+	_stage_view.own_world_3d = true
+	_stage_view.transparent_bg = true
+	_stage_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_stage_view.msaa_3d = Viewport.MSAA_4X
+	add_child(_stage_view)
+	_stage = ScoreStage.new()
+	_stage_view.add_child(_stage)
+	var camera := Camera3D.new()
+	_stage_view.add_child(camera)
+	_stage.frame_camera(camera, 4)
+	camera.make_current()
+
+	_stage_rect = TextureRect.new()
+	_stage_rect.texture = _stage_view.get_texture()
+	_stage_rect.custom_minimum_size = Vector2(STAGE_SIZE) * 0.72
+	_stage_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_stage_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_stage_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_stage_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(_stage_rect)
 
 	_continue = UiKit.label("", 26, Color(1, 1, 1, 0.8))
 	_continue.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -72,88 +97,11 @@ func show_board(headline: String, sides: Array, target: int, prompt: String) -> 
 	visible = true
 	_headline.text = headline
 	_continue.text = prompt
-	for child in _rows.get_children():
-		child.queue_free()
-	var best := 0
-	for side in sides:
-		best = maxi(best, int(side.get("score", 0)))
-	for side in sides:
-		_rows.add_child(_bar(side, target, best))
+	var camera := _stage_view.get_camera_3d()
+	if camera != null:
+		_stage.frame_camera(camera, sides.size())
+	_stage.build(sides, target)
 	Juice.pop(_headline, 1.25, 0.35)
-
-
-## One side's bar: a name plate in their colour, then a pip per point.
-func _bar(side: Dictionary, target: int, best: int) -> Control:
-	var color: Color = side.get("color", UiKit.CREAM)
-	var score: int = int(side.get("score", 0))
-	var bar := PanelContainer.new()
-	# Shrink-centre, or the VBox stretches every bar the full width of the screen.
-	bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	bar.custom_minimum_size = Vector2(700, 70)
-	var style := CoverStage.paper_style(Color(color, 0.82), color.lightened(0.35), 16)
-	style.shadow_size = 0
-	bar.add_theme_stylebox_override("panel", style)
-	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 14)
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bar.add_child(row)
-
-	var margin := Control.new()
-	margin.custom_minimum_size = Vector2(6, 0)
-	row.add_child(margin)
-
-	var name_label := UiKit.label(str(side.get("label", "")), 27, Color(1, 1, 1, 0.97))
-	name_label.custom_minimum_size = Vector2(238, 54)
-	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	name_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	row.add_child(name_label)
-
-	# A paw marks whoever is ahead, so the standings read without counting pips. The UI fonts
-	# carry no emoji, so this is the drawn paw rather than a character.
-	var crown := TextureRect.new()
-	crown.custom_minimum_size = Vector2(40, 54)
-	crown.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	crown.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	crown.texture = UiKit.paw_texture()
-	crown.modulate = UiKit.YELLOW
-	crown.visible = score >= best and best > 0
-	crown.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(crown)
-
-	var pips := HBoxContainer.new()
-	# Takes whatever width is left after the name, so the pips sit across the bar instead of
-	# bunching up against the name plate.
-	pips.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	pips.add_theme_constant_override("separation", 7)
-	pips.alignment = BoxContainer.ALIGNMENT_CENTER
-	pips.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(pips)
-	for i in maxi(1, target):
-		pips.add_child(_pip(i < score, color))
-	var tail := Control.new()
-	tail.custom_minimum_size = Vector2(10, 0)
-	row.add_child(tail)
-
-	if bool(side.get("winner", false)):
-		bar.modulate = Color(1.18, 1.18, 1.18)
-		Juice.pop(bar, 1.1, 0.45)
-	return bar
-
-
-func _pip(filled: bool, color: Color) -> Control:
-	var dot := Panel.new()
-	dot.custom_minimum_size = Vector2(30, 30)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(1, 1, 1, 0.92) if filled else color.darkened(0.42)
-	style.corner_radius_top_left = 15
-	style.corner_radius_top_right = 15
-	style.corner_radius_bottom_left = 15
-	style.corner_radius_bottom_right = 15
-	dot.add_theme_stylebox_override("panel", style)
-	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return dot
 
 
 func _process(delta: float) -> void:
