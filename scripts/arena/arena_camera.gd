@@ -20,6 +20,10 @@ var _focus_left := 0.0
 var _focus_duration := 0.0
 var _final_focus := false
 var _snap_next := true
+## Pinned to the whole arena, with no fitting and no easing. The practice round wants a stable,
+## complete view: every pen has to be visible at once, and a camera breathing in and out while
+## people are still finding the buttons reads as a fault rather than as framing.
+var locked_wide := false
 
 
 func _ready() -> void:
@@ -55,8 +59,13 @@ func _process(_delta: float) -> void:
 
 func _update_framing(real_delta: float) -> void:
 	_focus_left = maxf(0.0, _focus_left - real_delta)
-	var points := _gather_points()
 	var aspect := _aspect()
+	if locked_wide:
+		_target = _home
+		size = _maximum_size(aspect)
+		_place()
+		return
+	var points := _gather_points()
 	var frame := _fit_points(points, aspect)
 	var goal: Vector3 = frame.target
 	var goal_size: float = frame.size

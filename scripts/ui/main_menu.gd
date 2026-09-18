@@ -210,21 +210,34 @@ func _show_settings() -> void:
 		Game.save_settings()
 		arcade.text = arcade_names[int(Game.arcade_hints)])
 	body.add_child(arcade)
-	body.add_child(CoverStage.copy("MASTER VOLUME", 25))
-	body.add_child(_volume_slider("Master"))
-	body.add_child(CoverStage.copy("MUSIC VOLUME", 25))
-	body.add_child(_volume_slider("Music"))
-	body.add_child(CoverStage.copy("EFFECTS VOLUME", 25))
-	body.add_child(_volume_slider("SFX"))
+	body.add_child(_volume_row("MASTER VOLUME", "Master"))
+	body.add_child(_volume_row("MUSIC VOLUME", "Music"))
+	body.add_child(_volume_row("EFFECTS VOLUME", "SFX"))
 	var fullscreen := UiKit.wood_button("FULLSCREEN: ON" if _is_fullscreen() else "FULLSCREEN: OFF", 770)
 	fullscreen.pressed.connect(func() -> void:
 		# Remembered, so a cabinet comes back up filling its screen. F11 or Start+Select also works.
 		Game.set_fullscreen(not _is_fullscreen())
 		fullscreen.text = "FULLSCREEN: ON" if _is_fullscreen() else "FULLSCREEN: OFF")
 	body.add_child(fullscreen)
-	body.add_child(CoverStage.copy("Settings apply for this play session.", 21, Color("6b754d")))
+	body.add_child(CoverStage.copy("Sound, display and controls are remembered on this machine.", 21, Color("6b754d")))
 	_modal_close_button(body)
 	sound.grab_focus()
+
+
+## Label and slider on one row rather than two, which is most of what was pushing the settings
+## panel past the bottom of the screen.
+func _volume_row(label: String, bus: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	var caption := CoverStage.copy(label, 24)
+	caption.custom_minimum_size = Vector2(280, 0)
+	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(caption)
+	var slider := _volume_slider(bus)
+	slider.custom_minimum_size = Vector2(470, 44)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(slider)
+	return row
 
 
 ## One slider per audio bus, so music and effects can be balanced against each other.
@@ -263,10 +276,22 @@ func _open_modal(title: String) -> VBoxContainer:
 	style.content_margin_bottom = 34
 	panel.add_theme_stylebox_override("panel", style)
 	_modal.add_child(panel)
+	# Heading pinned, everything else scrolling. Settings had grown to about 900px of content
+	# inside a 642px panel, so the last rows - fullscreen and the way out - fell off the
+	# bottom of the screen with no way to reach them.
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 14)
+	panel.add_child(column)
+	column.add_child(CoverStage.heading(title, 42))
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.follow_focus = true
+	column.add_child(scroll)
 	var body := VBoxContainer.new()
-	body.add_theme_constant_override("separation", 22)
-	panel.add_child(body)
-	body.add_child(CoverStage.heading(title, 42))
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_theme_constant_override("separation", 16)
+	scroll.add_child(body)
 	return body
 
 

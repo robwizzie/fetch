@@ -245,22 +245,21 @@ func _powerups() -> void:
 	_check(not dog.slot.has_powerup(PowerupKinds.SHIELD), "an absorbed shield comes off the belt")
 	dog.apply_powerups()
 	_check(dog.shield_charges == 0, "a spent shield does not return next round")
-	# Two shields are two hits, taken one at a time.
+	# A belt holds each kind once: a second shield is a dud pickup, so it is refused outright
+	# rather than quietly doubling up.
 	dog.slot.powerups.clear()
 	dog.collect_powerup(PowerupKinds.SHIELD)
 	dog.collect_powerup(PowerupKinds.SHIELD)
-	_check(dog.shield_charges == 2, "two shields arm two charges")
-	toy.state = Toy.State.FLYING
-	toy.velocity = Vector3.RIGHT * 18.0
-	_check(dog.hit_by(toy) and dog.alive, "the first of two shields absorbs")
-	_check(dog.slot.powerup_count(PowerupKinds.SHIELD) == 1, "only one shield is spent per hit")
+	_check(dog.slot.powerup_count(PowerupKinds.SHIELD) == 1, "a second shield is not added to the belt")
+	_check(dog.shield_charges == 1, "and it still arms exactly one charge")
 
-	# Duplicates stack rather than refreshing: a second Zoomies is still worth taking.
+	# Same rule for every kind: one of each, so every crate you open is something new.
 	dog.slot.powerups.clear()
 	dog.collect_powerup(PowerupKinds.ZOOMIES)
 	var once := dog._speed_mult
 	dog.collect_powerup(PowerupKinds.ZOOMIES)
-	_check(dog._speed_mult > once, "a second zoomies stacks on the first")
+	_check(dog._speed_mult == once, "a duplicate zoomies changes nothing")
+	_check(dog.slot.powerups.size() == 1, "and does not take a slot")
 	dog._start_dash()
 	_check(dog._dash_cooldown < dog.data.dash_cooldown, "zoomies shortens dash recovery")
 	_check(dog.powerup_status().contains("ZOOMIES"), "the belt is readable by the HUD")
@@ -305,7 +304,10 @@ func _whacking() -> void:
 	_check(victim.alive and victim.dizzy_time <= 0.0, "being disarmed is not an elimination and not dizzying")
 	_check(bully._whack_cooldown > 0.0, "a whack goes on cooldown")
 
+	# Reaching past both gates: the whack's own cooldown, and the short lockout that stops one
+	# press being read as several. This test drives the action directly, frame by frame.
 	bully._whack_cooldown = 0.0
+	bully._action_lockout = 0.0
 	bully._throw_or_catch()
 	_check(victim.dizzy_time > 0.0, "whacking an empty-pawed dog makes it dizzy")
 	_check(victim.alive, "a whack never eliminates")

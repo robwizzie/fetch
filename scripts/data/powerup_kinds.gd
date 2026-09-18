@@ -74,13 +74,28 @@ static func glyph(kind: StringName) -> String:
 	return "?"
 
 
+## A kind the belt does not already hold. Falls back to any kind only when every one is taken,
+## which cannot happen while MAX_SLOTS is below the size of the table.
+static func random_new_kind(held: Array, rng: RandomNumberGenerator = null) -> StringName:
+	var fresh: Array[StringName] = []
+	for kind in ALL:
+		if not held.has(kind):
+			fresh.append(kind)
+	if fresh.is_empty():
+		return random_kind(rng)
+	if rng == null:
+		return fresh[randi() % fresh.size()]
+	return fresh[rng.randi() % fresh.size()]
+
+
 static func random_kind(rng: RandomNumberGenerator = null) -> StringName:
 	if rng == null:
 		return ALL[randi() % ALL.size()]
 	return ALL[rng.randi() % ALL.size()]
 
 
-## How many of a kind a slot list holds. Duplicates stack, so a second Zoomies is still a win.
+## How many of a kind a slot list holds. A belt keeps each kind at most once, so this is 0 or
+## 1 in practice - it stays a count because that is what the callers want to ask.
 static func count(slots: Array, kind: StringName) -> int:
 	var total := 0
 	for entry in slots:

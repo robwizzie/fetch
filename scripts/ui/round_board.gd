@@ -8,10 +8,12 @@ extends Control
 
 signal dismissed
 
-## How long the board stays up on its own. Long enough to read the pips, short enough that
-## nobody reaches for the button.
+## The board waits to be dismissed: rounds should not run away from a table still arguing
+## about what just happened. Only an all-bot lobby, with nobody there to press anything,
+## moves on by itself after this long.
 const DWELL := 3.2
-## Below this the board is left alone; a press only skips once the numbers have landed.
+## Below this a press is ignored, so whatever button someone was mashing when the round ended
+## does not skip the board before the bones have landed.
 const SKIP_AFTER := 0.6
 
 ## How tall the 3D stage is drawn, in pixels. Rendered at this size and scaled to fit, so the
@@ -19,6 +21,8 @@ const SKIP_AFTER := 0.6
 const STAGE_SIZE := Vector2i(1280, 620)
 
 var _time := 0.0
+## True when no human is playing, in which case the board advances on its own.
+var _auto := true
 var _stage: ScoreStage
 var _stage_view: SubViewport
 var _stage_rect: TextureRect
@@ -98,6 +102,10 @@ func show_board(headline: String, sides: Array, target: int, prompt: String) -> 
 	_time = 0.0
 	_done = false
 	visible = true
+	_auto = true
+	for slot in Game.slots:
+		if not slot.is_bot and slot.device != DeviceInput.VIRTUAL:
+			_auto = false
 	_stage_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_headline.text = headline
 	_continue.text = prompt
@@ -112,8 +120,13 @@ func _process(delta: float) -> void:
 	if not visible or _done:
 		return
 	_time += delta
-	if _time >= DWELL:
-		_finish()
+	if _auto:
+		if _time >= DWELL:
+			_finish()
+	elif _time > SKIP_AFTER:
+		# The prompt breathes once the board can be dismissed, so it reads as a button waiting
+		# on you rather than a caption that happens to be there.
+		_continue.modulate.a = 0.70 + sin(_time * 4.2) * 0.30
 
 
 func _unhandled_input(event: InputEvent) -> void:
