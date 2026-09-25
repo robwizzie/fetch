@@ -20,7 +20,7 @@ func _ready() -> void:
 	_put(canvas, CoverStage.copy("WELCOME TO FETCH", 23, Color(0.84, 0.9, 0.66)), Vector2(x + 2, 330), Vector2(w, 32))
 	_put(canvas, CoverStage.heading("SMALL PAWS.\nBIG PLAY.", 62), Vector2(x, 372), Vector2(760, 170))
 	_put(canvas, CoverStage.copy("A backyard full of friends.\nA whole new way to play fetch.", 26), Vector2(x + 2, 566), Vector2(660, 84))
-	_status = CoverStage.copy("Getting the pack together…", 24, Color(0.86, 0.92, 0.7))
+	_status = CoverStage.copy(DogTalk.loading_line(), 24, Color(0.86, 0.92, 0.7))
 	_put(canvas, _status, Vector2(x + 2, 684), Vector2(w + 120, 34))
 	_progress = ProgressBar.new()
 	_progress.show_percentage = false

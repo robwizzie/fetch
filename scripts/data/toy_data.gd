@@ -3,7 +3,7 @@ extends Resource
 ## One throwable toy. All toys share the same Toy scene; these numbers change how it flies.
 ## Special behaviours (knockback, squeak, ...) are dispatched on [member special] in Toy.gd.
 
-enum Special { NONE, KNOCKBACK, SQUEAK, RICOCHET, HEAVY }
+enum Special { NONE, RICOCHET, HEAVY }
 
 @export var id: StringName = &"tennis_ball"
 @export var display_name: String = "Tennis Ball"

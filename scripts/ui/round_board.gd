@@ -16,9 +16,12 @@ const DWELL := 3.2
 ## does not skip the board before the bones have landed.
 const SKIP_AFTER := 0.6
 
-## How tall the 3D stage is drawn, in pixels. Rendered at this size and scaled to fit, so the
-## plaques stay crisp on a 1080p cabinet without paying for a full-screen 3D pass.
-const STAGE_SIZE := Vector2i(1280, 620)
+## How wide the 3D stage renders, in pixels. Its height follows the shape of the plaques, so
+## the board fills its picture: a fixed 1280x620 frame left four rows covering less than half
+## the width, which is what made the standings look small and lost.
+const STAGE_WIDTH := 1120
+## How wide the stage is drawn on screen.
+const STAGE_ON_SCREEN := 880.0
 
 var _time := 0.0
 ## True when no human is playing, in which case the board advances on its own.
@@ -39,7 +42,9 @@ func _ready() -> void:
 	visible = false
 	var scrim := ColorRect.new()
 	scrim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	scrim.color = Color(0.04, 0.06, 0.05, 0.55)
+	# Deep enough that a pale bone still reads while it is falling past the plaques, whatever
+	# arena is frozen behind the board.
+	scrim.color = Color(0.04, 0.06, 0.05, 0.74)
 	scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(scrim)
 
@@ -58,7 +63,7 @@ func _ready() -> void:
 	# The standings are real geometry in their own little world, composited over the frozen
 	# arena. Flat bars never looked like they belonged in the same game as the dogs.
 	_stage_view = SubViewport.new()
-	_stage_view.size = STAGE_SIZE
+	_stage_view.size = Vector2i(STAGE_WIDTH, 560)
 	_stage_view.own_world_3d = true
 	_stage_view.transparent_bg = true
 	# Off until the board is actually up. Left on UPDATE_ALWAYS it keeps rendering a 3D pass
@@ -76,7 +81,7 @@ func _ready() -> void:
 
 	_stage_rect = TextureRect.new()
 	_stage_rect.texture = _stage_view.get_texture()
-	_stage_rect.custom_minimum_size = Vector2(STAGE_SIZE) * 0.72
+	_stage_rect.custom_minimum_size = Vector2(STAGE_ON_SCREEN, STAGE_ON_SCREEN * 0.5)
 	_stage_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_stage_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_stage_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -97,6 +102,21 @@ func _fit() -> void:
 	size = get_viewport().get_visible_rect().size
 
 
+## Shapes the stage viewport to the plaques it is about to hold, then frames the camera to
+## match, so two packs and four dogs both fill the picture instead of one of them rattling
+## around inside a frame cut for the other.
+func _fit_stage(rows: int) -> void:
+	var content := _stage.content_size(rows)
+	var aspect := content.x / maxf(content.y, 0.001)
+	var height := int(round(float(STAGE_WIDTH) / maxf(aspect, 0.001)))
+	_stage_view.size = Vector2i(STAGE_WIDTH, clampi(height, 240, 1000))
+	_stage_rect.custom_minimum_size = Vector2(STAGE_ON_SCREEN, STAGE_ON_SCREEN / aspect)
+	_stage_rect.texture = _stage_view.get_texture()
+	var camera := _stage_view.get_camera_3d()
+	if camera != null:
+		_stage.frame_camera(camera, rows)
+
+
 ## `sides` is one entry per bar: {label, color, score, winner}. `target` is points to win.
 func show_board(headline: String, sides: Array, target: int, prompt: String) -> void:
 	_time = 0.0
@@ -109,9 +129,7 @@ func show_board(headline: String, sides: Array, target: int, prompt: String) -> 
 	_stage_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_headline.text = headline
 	_continue.text = prompt
-	var camera := _stage_view.get_camera_3d()
-	if camera != null:
-		_stage.frame_camera(camera, sides.size())
+	_fit_stage(sides.size())
 	_stage.build(sides, target)
 	Juice.pop(_headline, 1.25, 0.35)
 

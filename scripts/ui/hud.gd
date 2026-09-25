@@ -23,6 +23,7 @@ var _countdown_index := 0
 var _sequence_time := 0.0
 var _banner_time := 0.0
 var _board: RoundBoard
+var _awards: Dictionary = {}
 
 
 func _ready() -> void:
@@ -41,13 +42,16 @@ func _ready() -> void:
 	center.add_theme_font_size_override("font_size", 88)
 	_build_clock()
 	_build_pause()
+	Events.powerup_collected.connect(_show_powerup_award)
 
 
 func setup(slots: Array[PlayerSlot], mode_hint: String) -> void:
 	_slots = slots
-	hint.text = "%s · First to %d
-%s" % [mode_hint, Game.points_to_win, _control_hint(slots)]
-	hint.offset_top = -74
+	var controls := _control_hint(slots)
+	hint.text = "%s · First to %d" % [mode_hint, Game.points_to_win]
+	if not controls.is_empty():
+		hint.text += "\n" + controls
+	hint.offset_top = -50 - 24 * hint.text.count("\n")
 	hint.offset_left = -850
 	hint.offset_right = 850
 	hint.add_theme_font_override("font", UiKit.FONT_UI)
@@ -75,6 +79,7 @@ func refresh_scores() -> void:
 
 
 func countdown(round_number: int) -> void:
+	_clear_awards()
 	_announcement_time = 0.0
 	_announcement.hide()
 	_countdown_steps = ["ROUND %d" % round_number, "3", "2", "1", "FETCH!"] if round_number == 1 else ["ROUND %d" % round_number, "READY?", "FETCH!"]
@@ -138,7 +143,7 @@ func banner(text: String, color: Color, seconds: float) -> void:
 ## One power-up socket: an empty outline until something fills it.
 func _belt_slot() -> Panel:
 	var socket := Panel.new()
-	socket.custom_minimum_size = Vector2(28, 28)
+	socket.custom_minimum_size = Vector2(34, 34)
 	# A drawn icon rather than a letter: a belt has to be readable in the corner of an eye.
 	var glyph := TextureRect.new()
 	glyph.name = "Glyph"
@@ -162,13 +167,84 @@ func _paint_slot(socket: Panel, kind: StringName) -> void:
 		style.bg_color = Color(1, 1, 1, 0.07)
 		style.border_color = Color(1, 1, 1, 0.22)
 	else:
-		style.bg_color = PowerupKinds.color(kind)
-		style.border_color = PowerupKinds.color(kind).lightened(0.4)
+		style.bg_color = PowerupKinds.color(kind).darkened(0.64)
+		style.border_color = PowerupKinds.color(kind)
 	style.set_border_width_all(2)
 	socket.add_theme_stylebox_override("panel", style)
 	var glyph := socket.get_node("Glyph") as TextureRect
-	glyph.texture = null if kind == &"" else PowerupIcon.texture(kind, 40, UiKit.INK)
+	glyph.texture = null if kind == &"" else PowerupIcon.texture(kind, 64, PowerupKinds.color(kind).lightened(0.28))
 	glyph.visible = kind != &""
+	socket.tooltip_text = "Empty power-up slot" if kind == &"" else PowerupKinds.display_name(kind) + " · " + PowerupKinds.blurb(kind)
+
+
+## A small award below the recipient's score connects the reveal to their belt.
+## Each player owns their own toast so simultaneous pickups remain readable.
+func _show_powerup_award(node: Node, kind: StringName) -> void:
+	var dog := node as Dog
+	if dog == null or not _chips.has(dog.slot):
+		return
+	var chip: PanelContainer = _chips[dog.slot]
+	if _awards.has(dog.slot):
+		var old: Control = _awards[dog.slot]
+		old.hide()
+		old.queue_free()
+	var award := PanelContainer.new()
+	award.name = "PowerupAward"
+	award.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("302c3c")
+	style.border_color = PowerupKinds.color(kind)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(12)
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 10
+	style.content_margin_bottom = 10
+	style.shadow_color = Color(0.05, 0.03, 0.09, 0.25)
+	style.shadow_size = 6
+	award.add_theme_stylebox_override("panel", style)
+	# Kept outside the chip's container layout, so an award never shifts the scoreboard.
+	add_child(award)
+	award.position = chip.global_position + Vector2(0, chip.size.y + 8)
+	award.custom_minimum_size.x = chip.size.x
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	award.add_child(row)
+	var icon := TextureRect.new()
+	icon.texture = PowerupIcon.badge(kind, 96)
+	icon.custom_minimum_size = Vector2(44, 44)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	row.add_child(icon)
+	var copy := VBoxContainer.new()
+	copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	copy.add_theme_constant_override("separation", 1)
+	row.add_child(copy)
+	var title := UiKit.title(PowerupKinds.display_name(kind), 23, PowerupKinds.color(kind))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	copy.add_child(title)
+	var detail := UiKit.label(PowerupKinds.blurb(kind), 16, UiKit.CREAM)
+	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	copy.add_child(detail)
+	_awards[dog.slot] = award
+	var reveal := award.create_tween()
+	reveal.tween_property(award, "modulate:a", 1.0, 0.16).from(0.0)
+	reveal.parallel().tween_property(award, "position:y", award.position.y, 0.24).from(award.position.y - 12).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	reveal.tween_interval(2.4)
+	reveal.tween_property(award, "modulate:a", 0.0, 0.25)
+	reveal.tween_callback(func() -> void:
+		if _awards.get(dog.slot) == award:
+			_awards.erase(dog.slot)
+		award.queue_free())
+
+
+func _clear_awards() -> void:
+	for award: Control in _awards.values():
+		if is_instance_valid(award):
+			award.hide()
+			award.queue_free()
+	_awards.clear()
 
 
 func _make_chip(slot: PlayerSlot) -> PanelContainer:
@@ -212,12 +288,35 @@ func _make_chip(slot: PlayerSlot) -> PanelContainer:
 		dot.custom_minimum_size = Vector2(24, 10)
 		dots.add_child(dot)
 	vbox.add_child(dots)
+	vbox.add_child(_wind_up_bar())
 	var status := UiKit.label("FIND A TOY · DASH READY", 16, UiKit.CREAM)
 	status.name = "Status"
 	status.autowrap_mode = TextServer.AUTOWRAP_OFF
 	status.add_theme_font_override("font", UiKit.FONT_UI)
 	vbox.add_child(status)
 	return chip
+
+
+## A thin power bar under the score dots. It is only there while a throw is being wound up,
+## so the chip stays quiet the rest of the time.
+func _wind_up_bar() -> Control:
+	var bar := Control.new()
+	bar.name = "WindUp"
+	bar.custom_minimum_size = Vector2(0, 8)
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.modulate.a = 0.0
+	var track := ColorRect.new()
+	track.name = "Track"
+	track.color = Color(0, 0, 0, 0.38)
+	track.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bar.add_child(track)
+	var fill := ColorRect.new()
+	fill.name = "Fill"
+	fill.color = UiKit.YELLOW
+	fill.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
+	fill.offset_right = 0.0
+	bar.add_child(fill)
+	return bar
 
 
 func _build_clock() -> void:
@@ -265,10 +364,20 @@ func update_match(dogs: Array[Dog], seconds: float, round_number: int) -> void:
 		var chip: PanelContainer = _chips[dog.slot]
 		var status: Label = chip.get_node("VBox/Status")
 		chip.modulate = Color.WHITE if dog.alive else Color(0.7, 0.7, 0.7, 0.65)
+		var charge := dog.charge_ratio() if dog.alive else 0.0
+		var wind_up: Control = chip.get_node("VBox/WindUp")
+		wind_up.modulate.a = lerpf(wind_up.modulate.a, 1.0 if charge > 0.0 else 0.0, 0.3)
+		var fill: ColorRect = wind_up.get_node("Fill")
+		fill.offset_right = wind_up.size.x * charge
+		fill.color = Color.WHITE if charge >= 1.0 else UiKit.YELLOW
 		if not dog.alive:
-			status.text = "OUT · BACK NEXT ROUND"
+			status.text = "DOGHOUSE · BACK NEXT ROUND"
 		else:
 			var toy_status := dog.held_toy.data.display_name.to_upper() if dog.held_toy else "FIND A TOY"
+			if charge >= 1.0:
+				toy_status = "MAX POWER!"
+			elif charge > 0.0:
+				toy_status = "WINDING UP"
 			if dog.dizzy_time > 0.0:
 				toy_status = "SEEING STARS"
 			status.text = "%s · %s" % [toy_status, "DASH READY" if dog.dash_ready() else "DASH RECHARGING"]
@@ -284,16 +393,26 @@ func update_match(dogs: Array[Dog], seconds: float, round_number: int) -> void:
 					Juice.pop(socket, 1.5, 0.3)
 
 
+## Each human's own controls, named as printed on what they are holding. Players sharing a
+## layout share a line ("P1 P3 · ..."), and bots are left out.
 func _control_hint(slots: Array[PlayerSlot]) -> String:
-	var layouts: Array[String] = []
+	var lines: Array[String] = []
+	var owners: Array[String] = []
 	for slot in slots:
-		if slot.is_bot:
+		if slot.is_bot or slot.device == DeviceInput.VIRTUAL:
 			continue
 		var line := DeviceInput.controls_line(slot.device)
-		if not layouts.has(line):
-			layouts.append(line)
-	layouts.append("Esc / Start pause")
-	return "   |   ".join(layouts)
+		var at := lines.find(line)
+		if at < 0:
+			lines.append(line)
+			owners.append(slot.label)
+		else:
+			owners[at] += " " + slot.label
+	var parts: Array[String] = []
+	for i in lines.size():
+		parts.append("%s  %s" % [owners[i], lines[i]])
+	# Two layouts fit side by side; more stack, one line each, so nothing runs off the screen.
+	return ("   |   " if parts.size() <= 2 else "\n").join(parts)
 
 
 func _build_pause() -> void:
@@ -326,7 +445,7 @@ func _build_pause() -> void:
 	var leave := UiKit.wood_button("MAIN MENU", 540)
 	leave.pressed.connect(func() -> void: quit_requested.emit())
 	box.add_child(leave)
-	box.add_child(UiKit.label("Esc / Start to resume", 20, Color(1, 1, 1, 0.7)))
+	box.add_child(UiKit.label("%s to resume" % DeviceInput.button_label(&"pause", Game.slots), 20, Color(1, 1, 1, 0.7)))
 	_pause_overlay.hide()
 
 

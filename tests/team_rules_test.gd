@@ -149,12 +149,11 @@ func _tutorial_furniture_is_inert() -> void:
 	await get_tree().process_frame
 	await get_tree().physics_frame
 	_check(game_match.phase == game_match.Phase.TUTORIAL, "the practice round opens")
-	var live := 0
-	for node in game_match.arena.find_children("*", "Area3D", true, false):
-		if node is Portal or node is SwitchPad:
-			if (node as Area3D).monitoring:
-				live += 1
-	_check(live == 0, "no portal or switch is live while the pens are up")
+	# The practice round runs on the bare training yard whatever arena was chosen, so the
+	# hazard this used to guard against - a portal inside somebody's pen warping them out of
+	# it, leaving them unable to check in - cannot arise at all any more.
+	_check(game_match.arena_data.id == &"training_yard", "the practice round opens on the training yard")
+	_check(_furniture_live(game_match) == 0, "no portal or switch is live while the pens are up")
 
 	# Every dog must be inside its own pen and must stay there.
 	var pens: Array = game_match.get("_pens")
@@ -173,16 +172,45 @@ func _tutorial_furniture_is_inert() -> void:
 	var bounds: Vector2 = stray._size * 0.5
 	_check(absf(back.x) <= bounds.x and absf(back.z) <= bounds.y, "a dog knocked out of its pen is put back")
 
-	# Once everyone checks in the furniture comes back to life for the warm-up.
+	# Checking in drops the walls, but the warm-up plays on where it is: still bare ground.
 	for pen in pens:
 		if is_instance_valid(pen):
 			pen._set_ready()
 	await get_tree().create_timer(1.4).timeout
-	var woken := 0
+	_check(game_match.practice_round, "the warm-up runs once the pens drop")
+	_check(_furniture_live(game_match) == 0, "and is still on the bare training yard")
+
+	# Round one is still the training yard: a first win should come from the game, not from
+	# already knowing a map.
+	_win_a_round(game_match)
+	await get_tree().process_frame
+	_check(game_match.round_number == 1, "the first scored round follows the warm-up")
+	_check(game_match.arena_data.id == &"training_yard", "and stays on the training yard")
+
+	# Round two is where the arena people actually chose arrives, furniture and all. A yard
+	# whose portals stayed asleep through the handover would be a dead map for a whole match.
+	_win_a_round(game_match)
+	await get_tree().process_frame
+	await get_tree().physics_frame
+	_check(game_match.round_number == 2, "round two follows it")
+	_check(game_match.arena_data.id == &"warp_yard", "and installs the chosen arena")
+	_check(_furniture_live(game_match) > 0, "with its portals and switches live for the real match")
+	game_match.queue_free()
+	await get_tree().process_frame
+
+
+## Hands the round to P1 and moves the match straight on to the next one.
+func _win_a_round(game_match: Node) -> void:
+	game_match.phase = game_match.Phase.ROUND_OVER
+	game_match._end_round(Game.slots[0])
+	game_match._finish_round()
+
+
+## How many of the arena's interactive pieces are switched on.
+func _furniture_live(game_match: Node) -> int:
+	var live := 0
 	for node in game_match.arena.find_children("*", "Area3D", true, false):
 		if node is Portal or node is SwitchPad:
 			if (node as Area3D).monitoring:
-				woken += 1
-	_check(woken > 0, "portals and switches wake up once the pens drop")
-	game_match.queue_free()
-	await get_tree().process_frame
+				live += 1
+	return live

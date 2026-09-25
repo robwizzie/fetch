@@ -4,6 +4,7 @@ extends RefCounted
 
 
 static var _grain: Texture2D
+static var _contact_material: StandardMaterial3D
 
 
 ## Gentle tonal variation shared by every prop. Authored dog models carry texture detail; a
@@ -68,22 +69,46 @@ static func mesh_plain(parent: Node3D, m: Mesh, color: Color, pos: Vector3 = Vec
 ## it costs nothing and never fights the real shadow map.
 static func contact_shadow(parent: Node3D, radius: float, at: Vector3 = Vector3.ZERO) -> MeshInstance3D:
 	var disc := MeshInstance3D.new()
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = radius
-	mesh.bottom_radius = radius
-	mesh.height = 0.012
-	mesh.radial_segments = 20
+	var mesh := PlaneMesh.new()
+	mesh.size = Vector2.ONE * radius * 2.6
 	disc.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Palette.CONTACT_SHADOW
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	disc.material_override = mat
+	if _contact_material == null:
+		var image := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+		for y in 64:
+			for x in 64:
+				var r := (Vector2(x + 0.5, y + 0.5) / 32.0 - Vector2.ONE).length()
+				image.set_pixel(x, y, Color(1, 1, 1, 1.0 - smoothstep(0.12, 1.0, r)))
+		_contact_material = StandardMaterial3D.new()
+		_contact_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_contact_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_contact_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_contact_material.albedo_texture = ImageTexture.create_from_image(image)
+		_contact_material.albedo_color = Color(0.09, 0.105, 0.09, 0.24)
+	disc.material_override = _contact_material.duplicate()
 	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	disc.position = at + Vector3(0, 0.014, 0)
+	disc.position = at + Vector3(0, 0.055, 0)
 	parent.add_child(disc)
 	return disc
+
+
+## Imported coats are matte fabric/fur. Some source GLBs arrived fully metallic and emissive,
+## which blew out highlights and prevented the dogs from belonging to the arena lighting.
+static func prepare_character(root: Node) -> void:
+	if root is MeshInstance3D:
+		var mesh := root as MeshInstance3D
+		if mesh.mesh != null:
+			for i in mesh.mesh.get_surface_count():
+				var source := mesh.get_active_material(i) as StandardMaterial3D
+				if source == null:
+					continue
+				var material := source.duplicate() as StandardMaterial3D
+				material.metallic = 0.0
+				material.metallic_specular = 0.18
+				material.roughness = 0.86
+				material.emission_enabled = false
+				mesh.set_surface_override_material(i, material)
+	for child in root.get_children():
+		prepare_character(child)
 
 
 static func unlit(color: Color) -> StandardMaterial3D:

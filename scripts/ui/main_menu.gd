@@ -41,7 +41,7 @@ func _build_menu() -> void:
 	var play := _add(menu, "PARTY PLAY", func() -> void: Game.goto(Game.SCENE_DOG_SELECT))
 	play.tooltip_text = "2–4 friends. Join with gamepads or share a keyboard."
 	var solo := _add(menu, "SOLO PRACTICE", func() -> void: Game.start_practice(_activation_device))
-	solo.tooltip_text = "Jump in with three computer-controlled dogs."
+	solo.tooltip_text = "Pick your dog, then take on three computer-controlled dogs."
 	_add(menu, "MEET THE PACK", func() -> void: _gallery("dogs"))
 	_add(menu, "TOYS", func() -> void: _gallery("toys"))
 	_add(menu, "ARENAS", func() -> void: _gallery("arenas"))
@@ -178,11 +178,31 @@ func _gallery(kind: String) -> void:
 
 func _show_controls() -> void:
 	var body := _open_modal("A LITTLE FRIENDLY RIVALRY")
-	body.add_child(CoverStage.copy("Start empty-handed. Run over a toy to pick it up, then aim and throw.\nPress throw with empty paws to catch. Dash through danger.\nTreats arrive from round 2. Last dog standing scores!", 27))
+	body.add_child(_modal_copy("Start empty-handed. Run over a toy to pick it up, then aim and throw.\nPress throw with empty paws to catch. Dash through danger.\nGrab mystery treats for power-ups: carry three, and a fourth swaps out your oldest.\nLast dog standing scores!", 27))
 	body.add_child(HSeparator.new())
-	body.add_child(CoverStage.copy("GAMEPAD   Stick / D-pad move   •   X throw + catch   •   A dash\nWASD   Move   •   Space throw + catch   •   Shift / E dash\nARROWS   Move   •   Enter throw + catch   •   Ctrl or slash dash\nPAUSE   Esc on keyboard / Start on a gamepad", 25))
-	body.add_child(CoverStage.copy("Party play: press A / Start, Space, or Enter to join.\nChoose a dog, ready up, then confirm again to set up the match.\nSolo practice: one player takes on three computer-controlled dogs.", 24, Color("6b754d")))
+	body.add_child(_modal_copy(_controls_table(), 25))
+	body.add_child(_modal_copy(("Party play: press %s to join.\nChoose a dog, ready up, then confirm again to set up the match.\nSolo practice: pick your dog, then take on three computer-controlled dogs." \
+		% DeviceInput.button_label(&"confirm", [])), 24))
 	_modal_close_button(body)
+
+
+## One row per kind of controller actually plugged in, plus both keyboard layouts, each in the
+## words printed on it. With no pad connected, an Xbox-style row shows what a pad would do.
+func _controls_table() -> String:
+	var rows: Array[String] = []
+	var seen: Array[String] = []
+	var pads := Input.get_connected_joypads()
+	if pads.is_empty():
+		pads = [0]
+	for device in pads:
+		var family := DeviceInput.family_name(device).to_upper()
+		if seen.has(family):
+			continue
+		seen.append(family)
+		rows.append("%s   %s" % [family, DeviceInput.controls_line(device)])
+	for device in [DeviceInput.KEYBOARD_WASD, DeviceInput.KEYBOARD_ARROWS]:
+		rows.append("%s   %s" % [DeviceInput.family_name(device).to_upper(), DeviceInput.controls_line(device)])
+	return "\n".join(rows)
 
 
 func _show_settings() -> void:
@@ -219,40 +239,78 @@ func _show_settings() -> void:
 		Game.set_fullscreen(not _is_fullscreen())
 		fullscreen.text = "FULLSCREEN: ON" if _is_fullscreen() else "FULLSCREEN: OFF")
 	body.add_child(fullscreen)
-	body.add_child(CoverStage.copy("Sound, display and controls are remembered on this machine.", 21, Color("6b754d")))
+	body.add_child(_modal_copy("Sound, display and controls are remembered on this machine.", 21))
 	_modal_close_button(body)
 	sound.grab_focus()
 
 
-## Label and slider on one row rather than two, which is most of what was pushing the settings
-## panel past the bottom of the screen.
+## Text on the modal's paper. The cover's cream reads over photography and vanishes over this,
+## which is what made the volume rows look disabled - they were there all along, in cream.
+func _modal_copy(text: String, size_: int = 24) -> Label:
+	return CoverStage.copy(text, size_, CoverStage.BROWN)
+
+
+## Label, slider and a live percentage on one row. The number matters: a bare groove gives no
+## idea what "a bit quieter" actually means, and this screen is often set once and left.
 func _volume_row(label: String, bus: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 16)
-	var caption := CoverStage.copy(label, 24)
-	caption.custom_minimum_size = Vector2(280, 0)
+	row.custom_minimum_size = Vector2(0, 52)
+	var caption := _modal_copy(label, 24)
+	caption.custom_minimum_size = Vector2(268, 0)
 	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(caption)
-	var slider := _volume_slider(bus)
-	slider.custom_minimum_size = Vector2(470, 44)
+	var index := AudioServer.get_bus_index(bus)
+	var level := AudioServer.get_bus_volume_linear(index) if index != -1 else 1.0
+	var readout := _modal_copy("%d%%" % roundi(level * 100.0), 24)
+	readout.custom_minimum_size = Vector2(78, 0)
+	readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	readout.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var slider := _volume_slider(index, level)
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.value_changed.connect(func(value: float) -> void:
+		readout.text = "%d%%" % roundi(value * 100.0))
 	row.add_child(slider)
+	row.add_child(readout)
 	return row
 
 
-## One slider per audio bus, so music and effects can be balanced against each other.
-func _volume_slider(bus: String) -> HSlider:
-	var index := AudioServer.get_bus_index(bus)
+## One slider per audio bus, so music and effects can be balanced against each other. Dressed
+## as a wooden groove with a paw for a knob, because the stock control is a grey line that
+## belongs to a different game.
+func _volume_slider(index: int, level: float) -> HSlider:
 	var slider := HSlider.new()
 	slider.min_value = 0.0
 	slider.max_value = 1.0
 	slider.step = 0.05
-	slider.custom_minimum_size = Vector2(770, 44)
-	slider.value = AudioServer.get_bus_volume_linear(index) if index != -1 else 1.0
+	slider.custom_minimum_size = Vector2(430, 46)
+	slider.value = level
+	slider.add_theme_stylebox_override("slider", _groove(Color("e3d6b4"), Color("c0aa7c")))
+	slider.add_theme_stylebox_override("grabber_area", _groove(UiKit.SELECT_GREEN, UiKit.SELECT_GREEN_DARK))
+	slider.add_theme_stylebox_override("grabber_area_highlight", _groove(UiKit.SELECT_GREEN, UiKit.SELECT_GREEN_DARK))
+	var knob := PawIcon.texture(38, UiKit.WOOD_DARK)
+	slider.add_theme_icon_override("grabber", knob)
+	slider.add_theme_icon_override("grabber_highlight", PawIcon.texture(38, UiKit.WOOD))
 	slider.value_changed.connect(func(value: float) -> void:
 		if index != -1:
 			AudioServer.set_bus_volume_linear(index, value))
+	# Saved on release rather than on every step: dragging writes the file once, not forty times.
+	slider.drag_ended.connect(func(changed: bool) -> void:
+		if changed:
+			Game.save_settings())
 	return slider
+
+
+## The bar a slider runs in: low, rounded and outlined like the rest of the paper furniture.
+func _groove(fill: Color, edge: Color) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill
+	style.border_color = edge
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(9)
+	style.content_margin_top = 9
+	style.content_margin_bottom = 9
+	return style
 
 
 func _open_modal(title: String) -> VBoxContainer:
@@ -267,8 +325,10 @@ func _open_modal(title: String) -> VBoxContainer:
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_modal.add_child(shade)
 	var panel := PanelContainer.new()
-	panel.position = Vector2(460, 190)
-	panel.size = Vector2(1000, 710)
+	# Tall enough for the settings to fit without scrolling. The scroll below is the safety
+	# net for a smaller window, not the way this screen is meant to be read.
+	panel.position = Vector2(440, 104)
+	panel.size = Vector2(1040, 872)
 	var style := CoverStage.paper_style(CoverStage.PAPER, Color("c79859"), 26)
 	style.content_margin_left = 48
 	style.content_margin_right = 48

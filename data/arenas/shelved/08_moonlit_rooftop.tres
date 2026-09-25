@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ArenaData" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/arena_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/arenas/moonlit_rooftop.tscn" id="2"]
+[ext_resource type="Texture2D" path="res://images/arenas/moonlit_rooftop.png" id="3"]
+
+[resource]
+script = ExtResource("1")
+id = &"moonlit_rooftop"
+display_name = "Moonlit Rooftop"
+description = "A cozy rooftop above the city lights. Lounge islands and long planters frame a wide central crossing, with open corner routes for sweeping throws."
+scene = ExtResource("2")
+swatch = Color(0.39, 0.52, 0.64, 1)
+thumbnail = ExtResource("3")

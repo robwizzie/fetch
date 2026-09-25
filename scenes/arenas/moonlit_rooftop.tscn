@@ -1,0 +1,144 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/arena/arena.gd" id="1_arena"]
+[ext_resource type="Script" path="res://scripts/arena/obstacle.gd" id="2_obstacle"]
+[ext_resource type="Script" path="res://scripts/arena/arena_camera.gd" id="3_camera"]
+[ext_resource type="Script" path="res://scripts/arena/new_map_prop.gd" id="4_prop"]
+[ext_resource type="Script" path="res://scripts/arena/new_map_scenery.gd" id="5_scenery"]
+
+[sub_resource type="Environment" id="Environment_mood"]
+background_mode = 1
+background_color = Color(0.24, 0.31, 0.42, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.76, 0.84, 0.94, 1)
+ambient_light_energy = 0.53
+tonemap_mode = 0
+
+[node name="MoonlitRooftop" type="Node3D"]
+script = ExtResource("1_arena")
+size = Vector2(30, 17)
+wall_style = 1
+ground_style = 2
+wall_height = 0.85
+ground_color = Color(0.35, 0.43, 0.51, 1)
+ground_accent = Color(0.39, 0.47, 0.55, 1)
+wall_color = Color(0.43, 0.52, 0.58, 1)
+wall_accent = Color(0.43, 0.52, 0.58, 1)
+surround_color = Color(0.20, 0.26, 0.34, 1)
+flowers = false
+pattern_seed = 47
+sign_text = ""
+decor_theme = "Rooftop"
+
+[node name="Camera" type="Camera3D" parent="."]
+fov = 44.0
+height = 17.0
+script = ExtResource("3_camera")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-54, -28, 0)
+light_color = Color(0.78, 0.86, 1, 1)
+light_energy = 0.64
+shadow_enabled = true
+directional_shadow_max_distance = 60.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_mood")
+
+[node name="Scenery" type="Node3D" parent="."]
+script = ExtResource("5_scenery")
+theme = "Rooftop"
+
+[node name="SpawnPoints" type="Node3D" parent="."]
+
+[node name="P1" type="Marker3D" parent="SpawnPoints"]
+position = Vector3(-12, 0, -6.2)
+
+[node name="P2" type="Marker3D" parent="SpawnPoints"]
+position = Vector3(12, 0, 6.2)
+
+[node name="P3" type="Marker3D" parent="SpawnPoints"]
+position = Vector3(12, 0, -6.2)
+
+[node name="P4" type="Marker3D" parent="SpawnPoints"]
+position = Vector3(-12, 0, 6.2)
+
+[node name="ToySpawns" type="Node3D" parent="."]
+
+[node name="T1" type="Marker3D" parent="ToySpawns"]
+position = Vector3(-8.8, 0, -4.3)
+
+[node name="T2" type="Marker3D" parent="ToySpawns"]
+position = Vector3(8.8, 0, 4.3)
+
+[node name="T3" type="Marker3D" parent="ToySpawns"]
+position = Vector3(8.8, 0, -4.3)
+
+[node name="T4" type="Marker3D" parent="ToySpawns"]
+position = Vector3(-8.8, 0, 4.3)
+
+[node name="T5" type="Marker3D" parent="ToySpawns"]
+position = Vector3(0, 0, -7.0)
+
+[node name="T6" type="Marker3D" parent="ToySpawns"]
+position = Vector3(0, 0, 7.0)
+
+[node name="Obstacles" type="Node3D" parent="."]
+
+[node name="Lounge1" type="StaticBody3D" parent="Obstacles"]
+position = Vector3(-6.3, 0, 0)
+rotation_degrees = Vector3(0, 90, 0)
+script = ExtResource("2_obstacle")
+kind = 5
+size = Vector3(3.7, 1.1, 2.0)
+color = Color(0.43, 0.60, 0.63, 1)
+accent = Color(0.83, 0.67, 0.43, 1)
+
+[node name="Lounge2" type="StaticBody3D" parent="Obstacles"]
+position = Vector3(6.3, 0, 0)
+rotation_degrees = Vector3(0, -90, 0)
+script = ExtResource("2_obstacle")
+kind = 5
+size = Vector3(3.7, 1.1, 2.0)
+color = Color(0.43, 0.60, 0.63, 1)
+accent = Color(0.83, 0.67, 0.43, 1)
+
+[node name="RoofGarden1" type="StaticBody3D" parent="Obstacles"]
+position = Vector3(0, 0, -4.65)
+rotation_degrees = Vector3(0, 0, 0)
+script = ExtResource("4_prop")
+kind = 10
+size = Vector3(5.0, 1.2, 1.6)
+color = Color(0.35, 0.53, 0.46, 1)
+accent = Color(0.58, 0.60, 0.61, 1)
+prop_style = "Roof Planter"
+
+[node name="RoofGarden2" type="StaticBody3D" parent="Obstacles"]
+position = Vector3(0, 0, 4.65)
+rotation_degrees = Vector3(0, 0, 0)
+script = ExtResource("4_prop")
+kind = 10
+size = Vector3(5.0, 1.2, 1.6)
+color = Color(0.35, 0.53, 0.46, 1)
+accent = Color(0.58, 0.60, 0.61, 1)
+prop_style = "Roof Planter"
+
+[node name="AirVent1" type="StaticBody3D" parent="Obstacles"]
+position = Vector3(-12.0, 0, 0)
+rotation_degrees = Vector3(0, 0, 0)
+script = ExtResource("4_prop")
+kind = 10
+size = Vector3(1.75, 0.95, 1.65)
+color = Color(0.53, 0.61, 0.66, 1)
+accent = Color(0.32, 0.40, 0.48, 1)
+prop_style = "Vent"
+
+[node name="AirVent2" type="StaticBody3D" parent="Obstacles"]
+position = Vector3(12.0, 0, 0)
+rotation_degrees = Vector3(0, 0, 0)
+script = ExtResource("4_prop")
+kind = 10
+size = Vector3(1.75, 0.95, 1.65)
+color = Color(0.53, 0.61, 0.66, 1)
+accent = Color(0.32, 0.40, 0.48, 1)
+prop_style = "Vent"

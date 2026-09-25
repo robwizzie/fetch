@@ -87,25 +87,58 @@ func _check(ok: bool, message: String) -> void:
 		push_error("[arena-furniture] " + message)
 
 
-## A dog that walks in comes out at the far end, and does NOT get grabbed straight back.
+## A dog that walks into a doorway comes out of its partner, heading away from that wall, and
+## does NOT get grabbed straight back.
 func _a_dog_travels(portals: Array[Portal]) -> void:
+	for portal in portals:
+		_check(portal.normal().dot(-portal.global_position) > 0.0, "%s faces into the arena" % portal.name)
 	var portal: Portal = portals[0]
 	var dog: Dog = game_match.dogs[0]
 	var exit_portal: Portal = portal.partner
-	dog.velocity = Vector3(0, 0, 4.0)
-	dog.global_position = portal.global_position
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	var landed := Vector2(dog.global_position.x - exit_portal.global_position.x,
-		dog.global_position.z - exit_portal.global_position.z).length()
-	_check(landed < exit_portal.radius + 2.0, "a dog walking into a portal comes out of its partner")
+	var into := -portal.normal()
+	dog.global_position = portal.global_position + portal.normal() * (dog.effective_radius() + 0.4)
+	dog.input.virtual_move = Vector2(into.x, into.z)
+	var warped := false
+	for _i in 40:
+		await get_tree().physics_frame
+		var gap := Vector2(dog.global_position.x - exit_portal.global_position.x,
+			dog.global_position.z - exit_portal.global_position.z).length()
+		if gap < exit_portal.radius + 1.5:
+			warped = true
+			break
+	_check(warped, "a dog walking into a doorway comes out of its partner")
 	_check(dog.alive, "warping does not hurt")
+	_check(dog.facing.dot(exit_portal.normal()) > 0.5, "and it comes out facing away from the partner wall")
 	# The exit must not immediately fire and send them back where they came from.
 	var was_at := dog.global_position
-	for _i in 4:
+	for _i in 6:
 		await get_tree().physics_frame
+	dog.input.virtual_move = Vector2.ZERO
 	var drift := Vector2(dog.global_position.x - was_at.x, dog.global_position.z - was_at.z).length()
 	_check(drift < 3.0, "a dog is not bounced straight back through the portal it came out of")
+
+	# Walking along the wall past a doorway is not walking into it.
+	dog.global_position = portal.global_position + portal.normal() * (dog.effective_radius() + 0.05) - portal.tangent() * 3.0
+	dog.input.virtual_move = Vector2(portal.tangent().x, portal.tangent().z)
+	for _i in 30:
+		await get_tree().physics_frame
+	dog.input.virtual_move = Vector2.ZERO
+	var still := Vector2(dog.global_position.x - portal.global_position.x, dog.global_position.z - portal.global_position.z).length()
+	_check(still < 5.0, "strolling along the wall past a doorway does not warp")
+
+	# Switched off (the practice round), a doorway is just wall.
+	portal.monitoring = false
+	portal.partner.monitoring = false
+	await get_tree().create_timer(Portal.REENTRY_BLOCK + 0.1).timeout
+	dog.global_position = portal.global_position + portal.normal() * (dog.effective_radius() + 0.4)
+	dog.input.virtual_move = Vector2(into.x, into.z)
+	for _i in 30:
+		await get_tree().physics_frame
+	dog.input.virtual_move = Vector2.ZERO
+	var home := Vector2(dog.global_position.x - portal.global_position.x, dog.global_position.z - portal.global_position.z).length()
+	_check(home < 2.5, "an inactive doorway does not warp")
+	portal.monitoring = true
+	portal.partner.monitoring = true
 
 
 ## A throw keeps going after the warp, which is the whole point: aim through one, hit someone
@@ -116,14 +149,28 @@ func _a_throw_travels(portals: Array[Portal]) -> void:
 	var toy: Toy = game_match.toys[0]
 	toy.state = Toy.State.FLYING
 	toy.thrower = game_match.dogs[1]
-	toy.velocity = Vector3(0, 0, 14.0)
-	toy.global_position = portal.global_position + Vector3(0, Toy.FLY_HEIGHT, 0)
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	var gap := Vector2(toy.global_position.x - exit_portal.global_position.x,
-		toy.global_position.z - exit_portal.global_position.z).length()
-	_check(gap < exit_portal.radius + 3.5, "a thrown toy comes out of the far portal")
-	_check(toy.velocity.z > 0.0, "the throw keeps its heading through the warp")
+	toy.velocity = -portal.normal() * 14.0
+	toy.global_position = portal.global_position + portal.normal() * 1.5 + Vector3(0, Toy.FLY_HEIGHT, 0)
+	var arrived := false
+	for _i in 20:
+		await get_tree().physics_frame
+		var gap := Vector2(toy.global_position.x - exit_portal.global_position.x,
+			toy.global_position.z - exit_portal.global_position.z).length()
+		if gap < exit_portal.radius + 2.0:
+			arrived = true
+			break
+	_check(arrived, "a thrown toy comes out of the far doorway")
+	_check(toy.velocity.dot(exit_portal.normal()) > 0.0, "the throw keeps flying out into the arena")
+
+	# The wall beside a doorway is still wall.
+	await get_tree().create_timer(Portal.REENTRY_BLOCK + 0.1).timeout
+	toy.state = Toy.State.FLYING
+	toy.velocity = -portal.normal() * 14.0
+	toy.global_position = portal.global_position + portal.normal() * 1.5 + portal.tangent() * (portal.radius + 1.6) + Vector3(0, Toy.FLY_HEIGHT, 0)
+	for _i in 12:
+		await get_tree().physics_frame
+	_check(toy.velocity.dot(portal.normal()) > 0.0 and toy.global_position.distance_to(portal.global_position) < 5.0,
+		"a throw beside the doorway bounces off the wall")
 
 
 ## Standing on a paw switch moves both gates; standing on it again moves them back.

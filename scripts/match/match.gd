@@ -5,15 +5,23 @@ enum Phase { TUTORIAL, COUNTDOWN, PLAYING, ROUND_OVER, MATCH_OVER }
 
 const DOG_SCENE := preload("res://scenes/actors/dog.tscn")
 const TOY_SCENE := preload("res://scenes/actors/toy.tscn")
-## Crates arrive late in the first round of the first match and steadily sooner after that:
-## new players get a clean fight to learn on, experienced ones get the toys early.
-const TREAT_FIRST_DELAY := 15.0
-const TREAT_REPEAT_DELAY := 9.5
-const TREAT_MIN_DELAY := 4.5
-## How much each played round and each finished match pulls the timer forward.
-const TREAT_ROUND_RUSH := 3.5
-const TREAT_MATCH_RUSH := 2.5
-const MAX_TREATS_PER_ROUND := 5
+## The practice round always plays on bare ground. Finding the buttons and learning a map are
+## two things at once, and a prop to get wedged behind is the last thing a first-timer needs.
+## It is a scene rather than a data/arenas entry, so it never appears in the arena picker.
+const TRAINING_SCENE := preload("res://scenes/arenas/training_yard.tscn")
+## Crates are a budget, not a drip. A round gets two (three with a bigger pack) and that is
+## all it gets however long the dogs survive, so a long scrap never ends buried in treats.
+## The first lands once the opening rush has settled, and the rest follow on a steady gap.
+const TREAT_FIRST_DELAY := 9.0
+## A brand new session's first crate waits a little longer, while everyone finds the buttons.
+const TREAT_FIRST_DELAY_NEW := 13.0
+const TREAT_GAP := 12.0
+const TREATS_SMALL_PACK := 2
+const TREATS_BIG_PACK := 3
+## Crates keep this far from any dog and from one another, so every drop is a new trip.
+const TREAT_DOG_CLEARANCE := 3.0
+const TREAT_SPREAD := 6.0
+const TREAT_TOY_CLEARANCE := 1.6
 ## Points behind the leader before the mercy shield kicks in.
 const COMEBACK_GAP := 2
 const ROUND_SECONDS := 55.0
@@ -37,7 +45,11 @@ var _round_winner: PlayerSlot
 var practice_round := false
 var _treat_clock := TREAT_FIRST_DELAY
 var _treat_count := 0
+## Where this round's crates have already landed, so the next one goes somewhere else.
+var _treat_spots: Array[Vector3] = []
 var _result_delay := 0.0
+## True while the bare training yard is up, so the chosen arena can take over afterwards.
+var _training_yard := false
 var _result_text := ""
 var _result_color := Color.WHITE
 
@@ -55,7 +67,10 @@ func _ready() -> void:
 		Game.debug_fill_players(2)
 	mode = Game.selected_mode.mode_script.new()
 	mode.setup(self)
-	_install_arena(Game.random_arena() if Game.random_arena_each_round else Game.selected_arena)
+	# A brand new session opens on the practice round, and that runs on the training yard
+	# whatever arena was picked. So does the first scored round; see start_round().
+	_training_yard = not Game.tutorial_shown and round_number == 0
+	_install_arena(_training_arena() if _training_yard else _chosen_arena())
 	hud.setup(Game.slots, mode.hud_hint())
 	hud.resume_requested.connect(func() -> void: set_paused(false))
 	hud.quit_requested.connect(_return_to_menu)
@@ -65,7 +80,7 @@ func _ready() -> void:
 	Music.play("match")
 	# A brand new session gets a practice round first. It is not a round: nothing is scored,
 	# the round counter does not move, and nobody can be knocked out behind the walls.
-	if not Game.tutorial_shown and round_number == 0:
+	if _training_yard:
 		Game.tutorial_shown = true
 		_start_tutorial()
 	else:
@@ -81,16 +96,27 @@ func _physics_process(delta: float) -> void:
 			toy.drop(arena.get_toy_spawn_position(0))
 	if Game.powerups_enabled and round_number >= Game.first_treat_round():
 		_treat_clock -= delta
-		if _treat_clock <= 0.0 and _treat_count < MAX_TREATS_PER_ROUND:
+		if _treat_clock <= 0.0 and _treat_count < treats_per_round():
 			_spawn_treat()
-			_treat_clock = _treat_delay(false)
+			_treat_clock = TREAT_GAP
 	round_time_left = maxf(0.0, round_time_left - delta)
 	hud.update_match(dogs, round_time_left, round_number)
 	if practice_round:
 		hud.practice_clock()
+	else:
+		mode.tick(delta, dogs)
+		# A mode can decide a round on its own clock (a bed held long enough), not just on a KO.
+		if phase == Phase.PLAYING and mode.is_round_over(dogs):
+			phase = Phase.ROUND_OVER
+			_end_round(mode.round_winner(dogs))
+			return
 	if round_time_left <= 0.0:
 		phase = Phase.ROUND_OVER
-		_end_round(null, "Time's up! Draw — no points")
+		var decided := mode.timeout_winner(dogs) if not practice_round else null
+		if decided != null:
+			_end_round(decided, "Time's up! %s takes it" % decided.dog.display_name)
+		else:
+			_end_round(null, "Time's up! Everybody's in the doghouse")
 
 
 func _process(delta: float) -> void:
@@ -134,15 +160,22 @@ func _exit_tree() -> void:
 func start_round() -> void:
 	Juice.reset_time_effects()
 	_result_delay = 0.0
-	_treat_clock = _treat_delay(true)
+	_treat_clock = _treat_delay()
 	_treat_count = 0
+	_treat_spots.clear()
 	if not practice_round:
 		round_number += 1
 		_grant_comeback_shields()
 	round_time_left = ROUND_SECONDS
 	phase = Phase.COUNTDOWN
 	# Round 1's arena is already up; later rounds draw a fresh one when shuffling.
-	if Game.random_arena_each_round and round_number > 1 and not practice_round:
+	# The warm-up AND the first scored round both play on the bare training yard: round one is
+	# still about finding your feet, and a first win should come from the game rather than from
+	# knowing a map. The arena people chose arrives with round two.
+	if _training_yard and round_number > 1 and not practice_round:
+		_training_yard = false
+		_install_arena(_chosen_arena())
+	elif Game.random_arena_each_round and round_number > 1 and not practice_round:
 		_install_arena(Game.random_arena(arena_data))
 	_clear_actors()
 	actors.process_mode = Node.PROCESS_MODE_DISABLED
@@ -173,11 +206,12 @@ func _grant_comeback_shields() -> void:
 	for slot in Game.slots:
 		best = maxi(best, Game.score_for(slot))
 	for slot in Game.slots:
+		slot.normalize_powerups()
 		if best - Game.score_for(slot) < COMEBACK_GAP:
 			continue
 		if slot.powerups.size() >= PowerupKinds.MAX_SLOTS:
 			continue
-		slot.powerups.append(PowerupKinds.SHIELD)
+		slot.take_powerup(PowerupKinds.SHIELD)
 
 
 ## Every dog starts empty and every toy starts out in the open, away from the pack.
@@ -218,25 +252,67 @@ func _spawn_toy(at: Vector3, item: ToyData = null) -> Toy:
 	return toy
 
 
-## Seconds until the next crate. Experience pulls it forward; it never goes below the floor.
-func _treat_delay(first: bool) -> float:
-	var base := TREAT_FIRST_DELAY if first else TREAT_REPEAT_DELAY
-	var rush := float(maxi(0, round_number - 1)) * TREAT_ROUND_RUSH + float(Game.matches_played) * TREAT_MATCH_RUSH
-	return maxf(TREAT_MIN_DELAY, base - rush)
+## Seconds until a round's first crate.
+func _treat_delay() -> float:
+	return TREAT_FIRST_DELAY_NEW if Game.matches_played == 0 and round_number <= 1 else TREAT_FIRST_DELAY
+
+
+## The whole round's allowance of crates.
+func treats_per_round() -> int:
+	return TREATS_BIG_PACK if Game.slots.size() >= 3 else TREATS_SMALL_PACK
 
 
 func _spawn_treat() -> void:
 	var pickup := Powerup.new()
 	# A mystery: the kind is rolled here and stays hidden until a dog opens the crate.
 	pickup.kind = PowerupKinds.random_kind()
-	# Crates land out in the open, away from the walls, so reaching one is a real decision.
-	var half := arena.size * 0.5
-	var angle := randf() * TAU
-	var preferred := Vector3(cos(angle) * half.x * 0.5, 0.0, sin(angle) * half.y * 0.45)
-	pickup.position = arena.clear_pickup_position(preferred)
+	pickup.position = _treat_position()
 	actors.add_child(pickup)
+	_treat_spots.append(pickup.position)
 	_treat_count += 1
-	hud.announce("Shield treat! Blocks one hit." if pickup.kind == &"shield" else "Zoomies treat! Run and dash faster.")
+	hud.announce("TREAT DROP!  Sniff it out for a mystery power-up.")
+
+
+## Somewhere open, clear of every dog, and as far as possible from where this round's other
+## crates landed. A dozen random draws are scored and the best kept: that spreads drops across
+## the whole lawn instead of stacking them on one ring, and never hands one to a dog standing
+## on the spot.
+func _treat_position() -> Vector3:
+	var half := arena.size * 0.5
+	var best := Vector3.ZERO
+	var best_score := -INF
+	for attempt in 14:
+		var candidate := Vector3(randf_range(-0.78, 0.78) * half.x, 0.0, randf_range(-0.7, 0.7) * half.y)
+		if not arena.is_clear_position(candidate, 0.85):
+			continue
+		var near_dog := INF
+		for dog in dogs:
+			if is_instance_valid(dog) and dog.alive:
+				near_dog = minf(near_dog, _flat_distance(candidate, dog.global_position))
+		var near_crate := INF
+		for spot in _treat_spots:
+			near_crate = minf(near_crate, _flat_distance(candidate, spot))
+		for node in get_tree().get_nodes_in_group("powerups"):
+			near_crate = minf(near_crate, _flat_distance(candidate, (node as Node3D).global_position))
+		# A crate sat on a loose toy hides the toy and makes one trip win both.
+		for toy in toys:
+			if is_instance_valid(toy) and toy.state == Toy.State.IDLE and _flat_distance(candidate, toy.global_position) < TREAT_TOY_CLEARANCE:
+				near_dog = minf(near_dog, 0.0)
+		var score := minf(near_crate, TREAT_SPREAD * 2.0) * 1.5 + minf(near_dog, TREAT_DOG_CLEARANCE * 2.0)
+		if near_dog < TREAT_DOG_CLEARANCE:
+			score -= 20.0
+		if near_crate < TREAT_SPREAD:
+			score -= 10.0
+		if score > best_score:
+			best_score = score
+			best = candidate
+	if best_score == -INF:
+		return arena.clear_pickup_position(Vector3.ZERO)
+	return best
+
+
+static func _flat_distance(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
 
 
 ## Toys are laid out symmetrically about both arena axes: four in a quad plus a pair on one
@@ -402,8 +478,9 @@ func _begin_warmup() -> void:
 	practice_round = true
 	# Play is starting, so the camera goes back to following the pack.
 	_lock_camera_wide(false)
-	_treat_clock = _treat_delay(true)
+	_treat_clock = _treat_delay()
 	_treat_count = 0
+	_treat_spots.clear()
 	round_time_left = ROUND_SECONDS
 	# The pen toys have done their job. Anything still in a mouth stays there; the rest make way
 	# for the arena's normal scatter.
@@ -454,6 +531,22 @@ func _maybe_coach() -> void:
 	pass
 
 
+## Whatever the setup screen settled on for this match.
+func _chosen_arena() -> ArenaData:
+	return Game.random_arena() if Game.random_arena_each_round else Game.selected_arena
+
+
+## A stand-in record for the training yard, built in code so the bare map stays out of the
+## content folder and therefore out of every menu that lists arenas.
+func _training_arena() -> ArenaData:
+	var data := ArenaData.new()
+	data.id = &"training_yard"
+	data.display_name = "Training Yard"
+	data.description = "Bare ground for finding the buttons."
+	data.scene = TRAINING_SCENE
+	return data
+
+
 ## Replaces the live arena, taking the new scene's camera with it. The outgoing camera is
 ## only freed at the end of the frame, so the incoming one has to claim the viewport itself.
 func _install_arena(data: ArenaData) -> void:
@@ -488,6 +581,13 @@ func _on_dog_eliminated(dog: Node, _by: Node) -> void:
 		return
 	mode.on_dog_eliminated(dog)
 	hud.update_match(dogs, round_time_left, round_number)
+	# Finish the collision batch first: a blast can eliminate several dogs simultaneously.
+	call_deferred("_check_round_end")
+
+
+func _check_round_end() -> void:
+	if phase != Phase.PLAYING:
+		return
 	if mode.is_round_over(dogs):
 		phase = Phase.ROUND_OVER
 		_end_round(mode.round_winner(dogs))
@@ -504,6 +604,8 @@ func _end_round(winner: PlayerSlot, message: String = "") -> void:
 		toy.call_deferred("set_physics_process", false)
 	for pickup in get_tree().get_nodes_in_group("powerups"):
 		pickup.set_deferred("process_mode", Node.PROCESS_MODE_DISABLED)
+	for effect in get_tree().get_nodes_in_group("combat_effects"):
+		effect.set_deferred("process_mode", Node.PROCESS_MODE_DISABLED)
 	if winner:
 		if practice_round:
 			pass
@@ -514,9 +616,9 @@ func _end_round(winner: PlayerSlot, message: String = "") -> void:
 		hud.refresh_scores()
 	Events.round_over.emit(winner)
 	Sfx.play("fanfare" if winner else "tick")
-	var text := "%s wins the round!" % winner.dog.display_name if winner else "Draw! Fetch again."
+	var text := DogTalk.round_win(winner.dog.display_name) if winner else DogTalk.draw()
 	if winner and Game.team_mode and winner.team >= 0:
-		text = "%s wins the round!" % Game.team_name(winner.team)
+		text = DogTalk.round_win(Game.team_name(winner.team))
 	if practice_round:
 		text = "Warm-up over - no points. Here we go!"
 	if not message.is_empty():

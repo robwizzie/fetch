@@ -1,7 +1,10 @@
 extends Node
-## Synthesised one-shots. There are no audio assets in the project, so every sound is built
-## from oscillators and noise at startup. Replace by pointing [method play] names at real
-## AudioStreams (drop files in res://assets/audio/ and register them in [member _streams]).
+## One-shot sound effects. Recorded sounds come first: a folder under res://assets/audio/sfx/
+## named after a sound (paw/, whack/, ...) holds its takes, and one is picked at random each time
+## it plays. Anything without a folder falls back to a sound synthesised at startup, so the dog
+## voices and comic sounds (bark, squeak, boing) still work. Adding a take is dropping in a file.
+##
+## The recorded sounds are Kenney's CC0 packs (assets/audio/KENNEY_LICENSE.txt).
 ##
 ## Sounds are layered rather than single tones: an impact gets a transient AND a body, a
 ## whoosh gets filtered noise, so they read as events instead of beeps.
@@ -10,19 +13,82 @@ const RATE := 44100
 const VOICES := 16
 const BUS := "SFX"
 
+## Only this much stereo spread: a couch game is heard across a room, and hard-panned
+## sounds read as coming from one speaker rather than from one side of the arena.
+const MAX_PAN := 0.6
+const ASSET_DIR := "res://assets/audio/sfx/"
+## Level trims for recorded takes, in dB. Kenney's files are mastered hot compared with the
+## synthesised kit, and footsteps in particular must sit under everything else.
+const ASSET_GAIN := {
+	"paw": -9.0, "paw_hard": -9.0, "splat": -4.0, "dash": -2.0, "charge": -8.0, "tick": -2.0,
+	"bounce": -3.0, "bounce_bone": -3.0, "bounce_disc": -3.0, "ui": -6.0, "ui_back": -6.0,
+}
+
 var _streams: Dictionary = {}
 var _players: Array[AudioStreamPlayer] = []
+var _panners: Array[AudioEffectPanner] = []
 var enabled := true
+## Footsteps change with the floor: set by the arena as it loads.
+var hard_floor := false
+var _rng := RandomNumberGenerator.new()
+var _last_played: Dictionary = {}
+## Alternate takes of the most repeated sounds, so a run is not one sample on a loop.
+var _variants: Dictionary = {}
+## Recorded takes by sound name, loaded from [constant ASSET_DIR].
+var _pools: Dictionary = {}
 
 
 func _ready() -> void:
+	_rng.seed = 982451653
 	_ensure_bus()
 	for i in VOICES:
 		var player := AudioStreamPlayer.new()
-		player.bus = BUS
+		player.bus = _voice_bus(i)
 		add_child(player)
 		_players.append(player)
 	_build()
+	_load_assets()
+
+
+func _load_assets() -> void:
+	for folder in ResourceLoader.list_directory(ASSET_DIR):
+		if not folder.ends_with("/"):
+			continue
+		var takes: Array[AudioStream] = []
+		for file in ResourceLoader.list_directory(ASSET_DIR + folder):
+			if file.get_extension() in ["ogg", "wav", "mp3"]:
+				var stream := load(ASSET_DIR + folder + file) as AudioStream
+				if stream != null:
+					takes.append(stream)
+		if not takes.is_empty():
+			_pools[folder.trim_suffix("/")] = takes
+
+
+## Each voice gets a tiny bus with its own panner, so sounds can sit where they happened.
+func _voice_bus(i: int) -> String:
+	var bus_name := "%s%d" % [BUS, i]
+	var index := AudioServer.get_bus_index(bus_name)
+	if index == -1:
+		index = AudioServer.bus_count
+		AudioServer.add_bus(index)
+		AudioServer.set_bus_name(index, bus_name)
+		AudioServer.set_bus_send(index, BUS)
+		AudioServer.add_bus_effect(index, AudioEffectPanner.new())
+	_panners.append(AudioServer.get_bus_effect(index, 0) as AudioEffectPanner)
+	return bus_name
+
+
+## A room is a little live, a lawn is not. Called by the arena as it loads.
+func set_room(indoor: bool, hard: bool) -> void:
+	hard_floor = hard
+	var index := AudioServer.get_bus_index(BUS)
+	if index == -1:
+		return
+	var reverb := AudioServer.get_bus_effect(index, 1) as AudioEffectReverb
+	reverb.room_size = 0.38 if indoor else 0.2
+	reverb.damping = 0.6 if indoor else 0.85
+	reverb.wet = 0.12 if indoor else 0.04
+	reverb.dry = 1.0
 
 
 func _ensure_bus() -> void:
@@ -32,23 +98,150 @@ func _ensure_bus() -> void:
 	AudioServer.add_bus(index)
 	AudioServer.set_bus_name(index, BUS)
 	AudioServer.set_bus_send(index, "Master")
+	AudioServer.add_bus_effect(index, AudioEffectLimiter.new())
+	var reverb := AudioEffectReverb.new()
+	reverb.room_size = 0.2
+	reverb.wet = 0.04
+	reverb.predelay_msec = 12.0
+	AudioServer.add_bus_effect(index, reverb, 1)
 
 
-func play(sound_name: String, pitch: float = 1.0, volume_db: float = 0.0) -> void:
-	if not enabled or not _streams.has(sound_name):
+## Like [method play], panned toward where [param world] sits on screen.
+func play_at(sound_name: String, world: Vector3, pitch: float = 1.0, volume_db: float = 0.0) -> void:
+	var pan := 0.0
+	var viewport := get_viewport()
+	var camera := viewport.get_camera_3d() if viewport != null else null
+	if camera != null and not camera.is_position_behind(world):
+		var width := maxf(viewport.get_visible_rect().size.x, 1.0)
+		pan = clampf((camera.unproject_position(world).x / width) * 2.0 - 1.0, -1.0, 1.0) * MAX_PAN
+	play(sound_name, pitch, volume_db, pan)
+
+
+func play(sound_name: String, pitch: float = 1.0, volume_db: float = 0.0, pan: float = 0.0) -> void:
+	if not enabled:
 		return
+	if sound_name == "paw" and hard_floor:
+		sound_name = "paw_hard"
+	var stream: AudioStream = null
+	if _pools.has(sound_name):
+		var takes: Array = _pools[sound_name]
+		stream = takes[_rng.randi() % takes.size()]
+		volume_db += ASSET_GAIN.get(sound_name, 0.0)
+	else:
+		var options: Array = _variants.get(sound_name, [])
+		if not options.is_empty():
+			stream = _streams[options[_rng.randi() % options.size()]]
+		elif _streams.has(sound_name):
+			stream = _streams[sound_name]
+	if stream == null:
+		return
+	var now := Time.get_ticks_msec()
+	var interval := 70 if sound_name.begins_with("paw") else (35 if sound_name.begins_with("bounce") else 15)
+	if now - int(_last_played.get(sound_name, -1000)) < interval:
+		return
+	_last_played[sound_name] = now
+	var priority := 3 if sound_name in ["bonk", "hit", "catch", "shield", "blast", "whistle", "fanfare", "whack"] else (0 if sound_name.begins_with("paw") else 1)
+	var chosen: AudioStreamPlayer
 	for player in _players:
 		if not player.playing:
-			player.stream = _streams[sound_name]
-			player.pitch_scale = pitch
-			player.volume_db = volume_db
-			player.play()
-			return
+			chosen = player
+			break
+		if int(player.get_meta("priority", 0)) < priority and (chosen == null or int(player.get_meta("started", 0)) < int(chosen.get_meta("started", 0))):
+			chosen = player
+	if chosen == null:
+		return
+	chosen.stop()
+	chosen.stream = stream
+	var variation := _rng.randf_range(0.96, 1.04) if priority < 3 else 1.0
+	chosen.pitch_scale = clampf(pitch * variation, 0.5, 2.0)
+	chosen.volume_db = volume_db - 3.0
+	_panners[_players.find(chosen)].pan = pan
+	chosen.set_meta("priority", priority)
+	chosen.set_meta("started", now)
+	chosen.play()
+
+
+func toy_impact(id: StringName, speed: float, world: Vector3 = Vector3.INF) -> void:
+	var sound := "bounce_bone" if id == &"bone" else ("bounce_disc" if id == &"frisbee" else "bounce")
+	# Harder hits are louder AND a touch lower, which is what reads as weight.
+	var force := clampf(speed / 25.0, 0.0, 1.0)
+	if world == Vector3.INF:
+		play(sound, lerpf(1.08, 0.94, force), lerpf(-16.0, -5.0, force))
+	else:
+		play_at(sound, world, lerpf(1.08, 0.94, force), lerpf(-16.0, -5.0, force))
 
 
 # ---------------------------------------------------------------- the kit
 
 func _build() -> void:
+	# Short organic contacts sit under the action, while powers each have their own signature.
+	# Four takes each: soft pads on grass and sand, a claw click on boards and tiles.
+	_variants["paw"] = []
+	_variants["paw_hard"] = []
+	for take in 4:
+		var body_hz := 120.0 + take * 14.0
+		var soft := "paw_%d" % take
+		_streams[soft] = _render(0.08, func(t: float, _d: float) -> float:
+			return (_noise() * 0.42 + sin(TAU * body_hz * t) * 0.45) * exp(-t * 58.0), 0.1)
+		_variants["paw"].append(soft)
+		var hard := "paw_hard_%d" % take
+		var click_hz := 2100.0 + take * 260.0
+		_streams[hard] = _render(0.07, func(t: float, _d: float) -> float:
+			var click := sin(TAU * click_hz * t) * exp(-t * 260.0) * 0.35
+			return click + (_noise() * 0.18 + sin(TAU * (body_hz + 40.0) * t) * 0.4) * exp(-t * 70.0), 0.5)
+		_variants["paw_hard"].append(hard)
+	_streams["paw_hard"] = _streams["paw_hard_0"]
+	# A swipe: a short air cut into a padded thwack.
+	_streams["whack"] = _render(0.2, func(t: float, d: float) -> float:
+		var p := t / d
+		var swish := _noise() * sin(PI * minf(1.0, p * 3.0)) * (1.0 - smoothstep(0.25, 0.4, p)) * 0.45
+		var thwack := 0.0
+		if t > 0.055:
+			var local := t - 0.055
+			thwack = (sin(TAU * (210.0 * exp(-local * 18.0) + 80.0) * local) * 0.7 + _noise() * exp(-local * 90.0) * 0.5) * exp(-local * 22.0)
+		return swish + thwack, 0.55)
+	# Seeing stars: a woozy, wobbling slide down.
+	_streams["dizzy"] = _render(0.62, func(t: float, d: float) -> float:
+		var p := t / d
+		var hz := (1250.0 - 520.0 * p) * (1.0 + sin(TAU * 11.0 * t) * 0.06)
+		var tweet := sin(TAU * hz * t) * (0.6 + 0.4 * sin(TAU * 6.0 * t))
+		return tweet * sin(PI * p) * 0.3, 0.8)
+	# Mud: a wet, low splat.
+	_streams["splat"] = _render(0.2, func(t: float, d: float) -> float:
+		var p := t / d
+		var squelch := sin(TAU * (160.0 - 70.0 * p) * t) * exp(-t * 20.0) * 0.5
+		var wet := _noise() * exp(-t * 32.0) * 0.45
+		return squelch + wet, 0.18)
+	# Full wind-up: a bright ring so a held throw is readable by ear alone.
+	_streams["charged"] = _render(0.3, func(t: float, d: float) -> float:
+		var p := t / d
+		return (sin(TAU * 1318.0 * t) * 0.4 + sin(TAU * 1976.0 * t) * 0.18) * exp(-p * 4.5) * minf(1.0, t * 400.0), 1.0)
+	# A knocked-out body landing: a heavy, dull thump.
+	_streams["land"] = _render(0.28, func(t: float, _d: float) -> float:
+		return (sin(TAU * (85.0 * exp(-t * 6.0) + 45.0) * t) * 0.8 + _noise() * exp(-t * 60.0) * 0.3) * exp(-t * 14.0), 0.3)
+	# Through a portal: a rising, bubbling shimmer.
+	_streams["warp"] = _render(0.34, func(t: float, d: float) -> float:
+		var p := t / d
+		var hz := 300.0 + 900.0 * p * p
+		var bubble := 1.0 + sin(TAU * 30.0 * t) * 0.3
+		return (sin(TAU * hz * bubble * t) * 0.4 + sin(TAU * hz * 1.5 * t) * 0.15) * sin(PI * p), 0.7)
+	_streams["bounce_bone"] = _render(0.16, func(t: float, _d: float) -> float:
+		return (sin(TAU * 720.0 * t) * 0.4 + sin(TAU * 1193.0 * t) * 0.18 + _noise() * exp(-t * 80.0) * 0.55) * exp(-t * 28.0), 0.65)
+	_streams["bounce_disc"] = _render(0.18, func(t: float, _d: float) -> float:
+		return (sin(TAU * 460.0 * t) * 0.38 + sin(TAU * 893.0 * t) * 0.15 + _noise() * 0.24) * exp(-t * 32.0), 0.38)
+	_streams["shield"] = _render(0.32, func(t: float, d: float) -> float:
+		return (sin(TAU * 930.0 * t) * 0.4 + sin(TAU * 1470.0 * t) * 0.22 + _noise() * exp(-t * 24.0) * 0.35) * exp(-t * 12.0) * (1.0 - t / d), 0.6)
+	_streams["fuse"] = _render(0.42, func(t: float, d: float) -> float:
+		var p := t / d
+		var pulse := pow(maxf(0.0, sin(TAU * (8.0 * t + 6.0 * t * t))), 3.0)
+		return sin(TAU * (650.0 * t + 500.0 * t * t)) * pulse * 0.28 * (1.0 - p * 0.25), 0.7)
+	_streams["blast"] = _render(0.40, func(t: float, d: float) -> float:
+		var puff := _noise() * exp(-t * 14.0) * 0.5
+		var thump := sin(TAU * (95.0 * t + 30.0 * (1.0 - exp(-t * 12.0)))) * exp(-t * 16.0) * 0.55
+		var squeak := sin(TAU * (900.0 * t - 620.0 * t * t)) * sin(PI * t / d) * exp(-t * 8.0) * 0.22
+		return puff + thump + squeak, 0.22)
+	_streams["charge"] = _render(0.055, func(t: float, d: float) -> float:
+		return (sin(TAU * 320.0 * t) * 0.35 + _noise() * 0.15) * sin(PI * t / d) * exp(-t * 35.0), 0.4)
 	# A toy leaving the mouth: air first, then a short tonal "fwip".
 	_streams["throw"] = _render(0.26, func(t: float, d: float) -> float:
 		var p := t / d
@@ -167,7 +360,7 @@ func _build() -> void:
 
 
 func _noise() -> float:
-	return randf_range(-1.0, 1.0)
+	return _rng.randf_range(-1.0, 1.0)
 
 
 ## Renders a generator into a stream. [param brightness] is a one-pole lowpass coefficient:
@@ -190,7 +383,8 @@ func _render(duration: float, generator: Callable, brightness: float = 1.0) -> A
 		# Soft clip keeps layered peaks from crackling.
 		var value := samples[i]
 		value = value / (1.0 + absf(value) * 0.3)
-		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767.0 * 0.8))
+		var edge := minf(1.0, float(i) / 100.0) * minf(1.0, float(count - 1 - i) / 220.0)
+		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 32767.0 * 0.8 * edge))
 	var wav := AudioStreamWAV.new()
 	wav.format = AudioStreamWAV.FORMAT_16_BITS
 	wav.mix_rate = RATE

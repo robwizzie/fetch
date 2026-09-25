@@ -13,6 +13,8 @@ const SCENE_MATCH := "res://scenes/match/match.tscn"
 const SCENE_RESULTS := "res://scenes/ui/results.tscn"
 const SCENE_GALLERY := "res://scenes/ui/gallery.tscn"
 const SETTINGS_PATH := "user://settings.cfg"
+## The mixer the settings screen exposes. Levels are remembered like everything else there.
+const AUDIO_BUSES: Array[String] = ["Master", "Music", "SFX"]
 const TEAM_NAMES: Array[String] = ["RED PACK", "BLUE PACK"]
 const TEAM_COLORS: Array[Color] = [Color(0.95, 0.36, 0.32), Color(0.36, 0.56, 0.95)]
 
@@ -197,6 +199,10 @@ func _apply_audio_settings() -> void:
 	var music := get_node_or_null(^"/root/Music")
 	if music != null:
 		music.enabled = config.get_value("audio", "music", true)
+	for bus in AUDIO_BUSES:
+		var index := AudioServer.get_bus_index(bus)
+		if index != -1:
+			AudioServer.set_bus_volume_linear(index, config.get_value("audio", bus.to_lower() + "_volume", 1.0))
 
 
 func save_settings() -> void:
@@ -209,6 +215,10 @@ func save_settings() -> void:
 	var music := get_node_or_null(^"/root/Music")
 	if music != null:
 		config.set_value("audio", "music", music.enabled)
+	for bus in AUDIO_BUSES:
+		var index := AudioServer.get_bus_index(bus)
+		if index != -1:
+			config.set_value("audio", bus.to_lower() + "_volume", AudioServer.get_bus_volume_linear(index))
 	config.set_value("input", "arcade_hints", int(arcade_hints))
 	config.set_value("match", "treats_from_round", treats_from_round)
 	config.save(SETTINGS_PATH)
@@ -293,7 +303,7 @@ func get_slot_by_device(device: int) -> PlayerSlot:
 func reset_scores() -> void:
 	for s in slots:
 		s.score = 0
-		s.powerups.clear()
+		s.clear_powerups()
 	team_scores = [0, 0]
 	assign_teams()
 
@@ -359,12 +369,17 @@ func goto(scene_path: String) -> void:
 	get_tree().call_deferred("change_scene_to_file", SCENE_LOADING)
 
 
-## A complete match with one human and three opponents, using the normal setup screen.
+## A complete match with one human and three opponents, through the normal screens.
+##
+## Practice seats the CPUs for you but still goes to the dog select: which dog you play is
+## part of every route into a match, the way a fighting game never starts without one. It
+## used to skip straight to the setup screen, where choosing a dog meant finding a button.
 func start_practice(device: int = DeviceInput.KEYBOARD_WASD) -> void:
 	clear_players()
 	var player := add_player(device)
 	if player:
-		player.ready = true
+		# Left un-ready on purpose: the human picks their dog and confirms it like everyone else.
+		player.ready = false
 	for i in range(1, MAX_PLAYERS):
 		var bot := PlayerSlot.new()
 		bot.index = i
@@ -382,8 +397,8 @@ func start_practice(device: int = DeviceInput.KEYBOARD_WASD) -> void:
 		if toy.fully_implemented:
 			selected_toy = toy
 			break
-	points_to_win = 3
-	goto(SCENE_MATCH_SETUP)
+	points_to_win = 5
+	goto(SCENE_DOG_SELECT)
 
 
 ## A random arena, avoiding an immediate repeat when there is more than one to choose from.

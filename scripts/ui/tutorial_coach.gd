@@ -17,7 +17,7 @@ func _steps() -> Array[Dictionary]:
 	return [
 		{"key": "move", "title": "MOVE", "hint": move, "timeout": 7.0},
 		{"key": "pickup", "title": "FETCH A TOY", "hint": "Run over a toy to pick it up", "timeout": 14.0},
-		{"key": "throw", "title": "THROW IT", "hint": throw, "timeout": 12.0},
+		{"key": "throw", "title": "THROW IT", "hint": "%s  —  hold it to wind up a harder throw" % throw, "timeout": 12.0},
 		{"key": "catch", "title": "CATCH", "hint": "Press throw with empty paws as one flies at you", "timeout": 11.0},
 		{"key": "dash", "title": "DASH", "hint": "%s — you cannot be hit mid-dash" % dash, "timeout": 10.0},
 		{"key": "whack", "title": "WHACK", "hint": "Empty paws beside a rival: they drop it, or go dizzy", "timeout": 10.0},
@@ -140,7 +140,8 @@ var _whacked := false
 func watch_events() -> void:
 	Events.toy_thrown.connect(func(_toy: Node, _by: Node) -> void: _thrown = true)
 	Events.toy_caught.connect(func(_toy: Node, _by: Node) -> void: _caught = true)
-	Events.dog_whacked.connect(func(_dog: Node, _by: Node) -> void: _whacked = true)
+	# Only a dog's swipe counts: a mower clipping someone is not a player learning to whack.
+	Events.dog_whacked.connect(func(_dog: Node, by: Node) -> void: _whacked = _whacked or by != null)
 
 
 func _complete(earned: bool) -> void:

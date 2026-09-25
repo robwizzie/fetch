@@ -14,6 +14,40 @@ const PADDING := 0.09
 static var _cache: Dictionary = {}
 
 
+## Enamel reward medallion: a cream rim, dark keyline and one high-contrast symbol.
+## Used by the world reveal and guide, so an award looks the same everywhere.
+static func badge(kind: StringName, size: int = 128) -> Texture2D:
+	var key := "badge_%s_%d" % [kind, size]
+	if _cache.has(key):
+		return _cache[key]
+	var big := size * SUPERSAMPLE
+	var buf := PackedByteArray()
+	buf.resize(big * big * 4)
+	buf.fill(0)
+	_ellipse(buf, big, Vector2(0.5, 0.53), Vector2(0.48, 0.46), Color("453354"))
+	_ellipse(buf, big, Vector2(0.5, 0.49), Vector2(0.46, 0.46), Color("fff0cb"))
+	_ellipse(buf, big, Vector2(0.5, 0.49), Vector2(0.40, 0.40), PowerupKinds.color(kind))
+	var glyph_size := int(big * 0.64)
+	var glyph := PackedByteArray()
+	glyph.resize(glyph_size * glyph_size * 4)
+	glyph.fill(0)
+	_draw(glyph, kind, glyph_size, Color("352b45"))
+	var margin := (big - glyph_size) / 2
+	for y in glyph_size:
+		for x in glyph_size:
+			var source := (y * glyph_size + x) * 4
+			if glyph[source + 3] == 0:
+				continue
+			var target := ((y + margin) * big + x + margin) * 4
+			for channel in 4:
+				buf[target + channel] = glyph[source + channel]
+	var artwork := Image.create_from_data(big, big, false, Image.FORMAT_RGBA8, buf)
+	artwork.resize(size, size, Image.INTERPOLATE_LANCZOS)
+	var made := ImageTexture.create_from_image(artwork)
+	_cache[key] = made
+	return made
+
+
 ## A square icon for one kind. Cached: the HUD asks for these every time a belt changes.
 static func texture(kind: StringName, size: int = 64, tint: Color = Color.WHITE) -> Texture2D:
 	var key := "%s_%d_%s" % [kind, size, tint.to_html(false)]
@@ -36,42 +70,93 @@ static func texture(kind: StringName, size: int = 64, tint: Color = Color.WHITE)
 static func _draw(buf: PackedByteArray, kind: StringName, s: int, tint: Color) -> void:
 	match kind:
 		PowerupKinds.SHIELD:
-			_shield(buf, s, tint)
+			_bubbles(buf, s, tint)
 		PowerupKinds.ZOOMIES:
 			_bolt(buf, s, tint)
-		PowerupKinds.BIG_CATCH:
+		PowerupKinds.TELEPAWTHY:
+			_curve_arrow(buf, s, tint)
+		PowerupKinds.GHOST_PUP:
+			_ghost(buf, s, tint)
+		PowerupKinds.DIG:
+			_shovel(buf, s, tint)
+		&"paw":
 			_paw(buf, s, tint)
-		PowerupKinds.CANNON:
-			_chevrons(buf, s, tint)
-		PowerupKinds.SPRINGS:
-			_coil(buf, s, tint)
-		PowerupKinds.LITTLE_LEGS:
-			_shrink(buf, s, tint)
-		PowerupKinds.QUICK_PAWS:
-			_clock(buf, s, tint)
-		PowerupKinds.LONG_REACH:
-			_reach(buf, s, tint)
+		PowerupKinds.SQUEAKY_BLAST:
+			var points := PackedVector2Array()
+			for i in 16:
+				var angle := TAU * float(i) / 16.0
+				points.append(Vector2(0.5, 0.5) + Vector2(cos(angle), sin(angle)) * (0.44 if i % 2 == 0 else 0.24))
+			_polygon(buf, s, points, tint)
+		PowerupKinds.MUD_TRACK:
+			_ellipse(buf, s, Vector2(0.43, 0.7), Vector2(0.36, 0.17), tint)
+			_ellipse(buf, s, Vector2(0.72, 0.44), Vector2(0.17, 0.14), tint)
+			_ellipse(buf, s, Vector2(0.4, 0.2), Vector2(0.12, 0.10), tint)
+		PowerupKinds.SCATTER_FETCH:
+			# Three balls fanning out.
+			_ellipse(buf, s, Vector2(0.5, 0.28), Vector2(0.15, 0.15), tint)
+			_ellipse(buf, s, Vector2(0.24, 0.62), Vector2(0.15, 0.15), tint)
+			_ellipse(buf, s, Vector2(0.76, 0.62), Vector2(0.15, 0.15), tint)
+			_polygon(buf, s, PackedVector2Array([Vector2(0.44, 0.92), Vector2(0.56, 0.92), Vector2(0.53, 0.5), Vector2(0.47, 0.5)]), tint)
+		PowerupKinds.BANK_SHOT:
+			# A path striking a wall and coming off it faster: a V with a bar on the left.
+			_polygon(buf, s, PackedVector2Array([Vector2(0.1, 0.08), Vector2(0.24, 0.08), Vector2(0.24, 0.92), Vector2(0.1, 0.92)]), tint)
+			_polygon(buf, s, PackedVector2Array([Vector2(0.86, 0.1), Vector2(0.95, 0.2), Vector2(0.34, 0.54), Vector2(0.3, 0.44)]), tint)
+			_polygon(buf, s, PackedVector2Array([Vector2(0.3, 0.56), Vector2(0.34, 0.46), Vector2(0.95, 0.82), Vector2(0.86, 0.92)]), tint)
+		PowerupKinds.GOOD_DECOY:
+			# A dog head and its ghost: two overlapping heads with ears.
+			for offset in [Vector2(-0.12, 0.06), Vector2(0.12, -0.02)]:
+				_ellipse(buf, s, Vector2(0.5, 0.56) + offset, Vector2(0.24, 0.22), tint)
+				_ellipse(buf, s, Vector2(0.33, 0.36) + offset, Vector2(0.08, 0.14), tint)
+				_ellipse(buf, s, Vector2(0.67, 0.36) + offset, Vector2(0.08, 0.14), tint)
 		_:
 			_question(buf, s, tint)
 
 
 # ---------------------------------------------------------------- shapes
 
-## A rounded shield: a flat top that tapers to a point.
-static func _shield(buf: PackedByteArray, s: int, tint: Color) -> void:
-	var m := s * PADDING
-	var w := s - m * 2.0
-	for y in s:
-		for x in s:
-			var u := (x - m) / w
-			var v := (y - m) / w
-			if u < 0.0 or u > 1.0 or v < 0.0 or v > 1.0:
-				continue
-			var cx := (u - 0.5) * 2.0
-			# Shoulders are full width; below the waist the sides close toward a point.
-			var half := 1.0 if v < 0.45 else 1.0 - pow((v - 0.45) / 0.55, 1.7)
-			if absf(cx) <= half and v <= 1.0:
-				_put(buf, s, x, y, tint)
+## Bath time: one big soap bubble and two little ones rising off it.
+static func _bubbles(buf: PackedByteArray, s: int, tint: Color) -> void:
+	_ring(buf, s, Vector2(0.44, 0.58), 0.34, 0.09, tint)
+	_ellipse(buf, s, Vector2(0.33, 0.47), Vector2(0.07, 0.07), tint)
+	_ring(buf, s, Vector2(0.80, 0.22), 0.13, 0.06, tint)
+	_ellipse(buf, s, Vector2(0.62, 0.10), Vector2(0.06, 0.06), tint)
+
+
+## A throw bending round a corner: a thick arc ending in an arrowhead.
+static func _curve_arrow(buf: PackedByteArray, s: int, tint: Color) -> void:
+	var centre := Vector2(0.46, 0.58)
+	var points := PackedVector2Array()
+	var from := PI * 0.95
+	var to := PI * 2.05
+	for i in 17:
+		var angle := lerpf(from, to, i / 16.0)
+		points.append(centre + Vector2(cos(angle), sin(angle)) * 0.36)
+	for i in 17:
+		var angle := lerpf(to, from, i / 16.0)
+		points.append(centre + Vector2(cos(angle), sin(angle)) * 0.22)
+	_polygon(buf, s, points, tint)
+	var tip := centre + Vector2(cos(to), sin(to)) * 0.29
+	_polygon(buf, s, PackedVector2Array([tip + Vector2(-0.17, -0.02), tip + Vector2(0.17, -0.02), tip + Vector2(0.0, 0.24)]), tint)
+
+
+## A sheet-ghost with floppy dog ears and two empty eyes.
+static func _ghost(buf: PackedByteArray, s: int, tint: Color) -> void:
+	_ellipse(buf, s, Vector2(0.5, 0.44), Vector2(0.30, 0.30), tint)
+	_polygon(buf, s, PackedVector2Array([Vector2(0.2, 0.44), Vector2(0.8, 0.44), Vector2(0.8, 0.82), Vector2(0.2, 0.82)]), tint)
+	for x: float in [0.3, 0.5, 0.7]:
+		_ellipse(buf, s, Vector2(x, 0.83), Vector2(0.1, 0.09), tint)
+	_ellipse(buf, s, Vector2(0.2, 0.36), Vector2(0.09, 0.19), tint)
+	_ellipse(buf, s, Vector2(0.8, 0.36), Vector2(0.09, 0.19), tint)
+	_ellipse(buf, s, Vector2(0.4, 0.44), Vector2(0.06, 0.08), Color(0, 0, 0, 0), true)
+	_ellipse(buf, s, Vector2(0.6, 0.44), Vector2(0.06, 0.08), Color(0, 0, 0, 0), true)
+
+
+## A spade stuck in a molehill.
+static func _shovel(buf: PackedByteArray, s: int, tint: Color) -> void:
+	_polygon(buf, s, PackedVector2Array([Vector2(0.66, 0.08), Vector2(0.76, 0.12), Vector2(0.56, 0.56), Vector2(0.46, 0.52)]), tint)
+	_polygon(buf, s, PackedVector2Array([Vector2(0.58, 0.06), Vector2(0.86, 0.18), Vector2(0.82, 0.25), Vector2(0.55, 0.13)]), tint)
+	_polygon(buf, s, PackedVector2Array([Vector2(0.38, 0.46), Vector2(0.64, 0.58), Vector2(0.50, 0.80), Vector2(0.30, 0.72)]), tint)
+	_ellipse(buf, s, Vector2(0.5, 0.95), Vector2(0.42, 0.16), tint)
 
 
 static func _bolt(buf: PackedByteArray, s: int, tint: Color) -> void:
@@ -90,64 +175,22 @@ static func _paw(buf: PackedByteArray, s: int, tint: Color) -> void:
 		_ellipse(buf, s, at, Vector2(0.105, 0.135), tint)
 
 
-## Two stacked chevrons: speed lines pointing the way a throw goes.
-static func _chevrons(buf: PackedByteArray, s: int, tint: Color) -> void:
-	for i in 2:
-		var shift := 0.26 * float(i)
-		_polygon(buf, s, PackedVector2Array([
-			Vector2(0.18 + shift, 0.14), Vector2(0.52 + shift, 0.5),
-			Vector2(0.18 + shift, 0.86), Vector2(0.30 + shift, 0.86),
-			Vector2(0.64 + shift, 0.5), Vector2(0.30 + shift, 0.14),
-		]), tint)
-
-
-## A side-on spring: stacked bars that step across as they rise.
-static func _coil(buf: PackedByteArray, s: int, tint: Color) -> void:
-	for i in 4:
-		var v := 0.20 + 0.175 * float(i)
-		var lean := 0.10 * (1.0 if i % 2 == 0 else -1.0)
-		_polygon(buf, s, PackedVector2Array([
-			Vector2(0.22 + lean, v), Vector2(0.78 + lean, v),
-			Vector2(0.78 + lean, v + 0.085), Vector2(0.22 + lean, v + 0.085),
-		]), tint)
-
-
-## Four arrows pointing inward: the dog gets smaller.
-static func _shrink(buf: PackedByteArray, s: int, tint: Color) -> void:
-	_ellipse(buf, s, Vector2(0.5, 0.5), Vector2(0.14, 0.14), tint)
-	# Typed, because an untyped array literal yields Variant and := cannot infer from it.
-	var corners: Array[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(0, 1), Vector2(1, 1)]
-	for corner in corners:
-		var dir := (Vector2(0.5, 0.5) - corner).normalized()
-		var tip := corner + dir * 0.30
-		var tail := corner + dir * 0.07
-		var side := Vector2(-dir.y, dir.x) * 0.09
-		_polygon(buf, s, PackedVector2Array([tip, tail + side, tail - side]), tint)
-
-
-static func _clock(buf: PackedByteArray, s: int, tint: Color) -> void:
-	_ring(buf, s, Vector2(0.5, 0.54), 0.36, 0.10, tint)
-	# Hands at roughly ten-to-two, which reads as a clock at any size.
-	_polygon(buf, s, PackedVector2Array([
-		Vector2(0.46, 0.54), Vector2(0.54, 0.54), Vector2(0.54, 0.28), Vector2(0.46, 0.28)]), tint)
-	_polygon(buf, s, PackedVector2Array([
-		Vector2(0.48, 0.58), Vector2(0.48, 0.50), Vector2(0.72, 0.50), Vector2(0.72, 0.58)]), tint)
-
-
-## An arrow with a paw at the far end: hitting things further away.
-static func _reach(buf: PackedByteArray, s: int, tint: Color) -> void:
-	_polygon(buf, s, PackedVector2Array([
-		Vector2(0.12, 0.44), Vector2(0.58, 0.44), Vector2(0.58, 0.56), Vector2(0.12, 0.56)]), tint)
-	_polygon(buf, s, PackedVector2Array([
-		Vector2(0.54, 0.28), Vector2(0.90, 0.50), Vector2(0.54, 0.72)]), tint)
-	_ellipse(buf, s, Vector2(0.20, 0.50), Vector2(0.13, 0.17), tint)
-
-
 static func _question(buf: PackedByteArray, s: int, tint: Color) -> void:
-	_ring(buf, s, Vector2(0.5, 0.40), 0.26, 0.11, tint)
+	# An open hook, not a ring on a stick (which reads as a key).
+	var hook := PackedVector2Array()
+	for i in 25:
+		var angle := lerpf(PI, -PI * 0.5, i / 24.0)
+		hook.append(Vector2(0.5 + cos(angle) * 0.28, 0.34 + sin(angle) * 0.25))
+	for i in 25:
+		var angle := lerpf(-PI * 0.5, PI, i / 24.0)
+		hook.append(Vector2(0.5 + cos(angle) * 0.12, 0.34 + sin(angle) * 0.10))
+	# The hook goes clockwise over the top, round the right and into the stem.
+	for i in hook.size():
+		hook[i].y = 0.68 - hook[i].y
+	_polygon(buf, s, hook, tint)
 	_polygon(buf, s, PackedVector2Array([
-		Vector2(0.44, 0.52), Vector2(0.56, 0.52), Vector2(0.56, 0.70), Vector2(0.44, 0.70)]), tint)
-	_ellipse(buf, s, Vector2(0.5, 0.84), Vector2(0.08, 0.08), tint)
+		Vector2(0.43, 0.51), Vector2(0.58, 0.46), Vector2(0.58, 0.70), Vector2(0.43, 0.70)]), tint)
+	_ellipse(buf, s, Vector2(0.505, 0.86), Vector2(0.087, 0.087), tint)
 
 
 # ---------------------------------------------------------------- primitives
@@ -162,7 +205,8 @@ static func _put(buf: PackedByteArray, s: int, x: int, y: int, tint: Color) -> v
 	buf[i + 3] = 255
 
 
-static func _ellipse(buf: PackedByteArray, s: int, centre: Vector2, radii: Vector2, tint: Color) -> void:
+## [param erase] punches a hole instead of painting (a ghost's eyes).
+static func _ellipse(buf: PackedByteArray, s: int, centre: Vector2, radii: Vector2, tint: Color, erase: bool = false) -> void:
 	var c := centre * float(s)
 	var r := radii * float(s)
 	for y in range(maxi(0, int(c.y - r.y) - 1), mini(s, int(c.y + r.y) + 2)):
@@ -170,7 +214,10 @@ static func _ellipse(buf: PackedByteArray, s: int, centre: Vector2, radii: Vecto
 			var dx := (float(x) + 0.5 - c.x) / maxf(r.x, 0.0001)
 			var dy := (float(y) + 0.5 - c.y) / maxf(r.y, 0.0001)
 			if dx * dx + dy * dy <= 1.0:
-				_put(buf, s, x, y, tint)
+				if erase:
+					buf[(y * s + x) * 4 + 3] = 0
+				else:
+					_put(buf, s, x, y, tint)
 
 
 static func _ring(buf: PackedByteArray, s: int, centre: Vector2, radius: float, thickness: float, tint: Color) -> void:

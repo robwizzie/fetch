@@ -107,14 +107,27 @@ func _ready() -> void:
 	await get_tree().process_frame
 	_check(get_viewport().gui_get_focus_owner() is Button, "modal close restores menu focus")
 
+	# Practice seats the CPUs but still goes through the dog select: no route into a match
+	# skips choosing a dog, and nothing hides that choice behind a button of its own.
 	Game.start_practice()
-	var setup := await _scene(Game.SCENE_MATCH_SETUP)
-	if setup == null:
+	var practice_select := await _scene(Game.SCENE_DOG_SELECT)
+	if practice_select == null:
 		return
 	_check(Game.slots.size() == 4, "practice fills four slots")
 	_check(Game.slots.filter(func(slot: PlayerSlot) -> bool: return slot.is_bot).size() == 3, "practice has three bots")
 	_check(Game.slots[0].device == DeviceInput.KEYBOARD_WASD, "practice keeps the requested human device")
 	_check(Game.selected_mode.fully_implemented and Game.selected_toy.fully_implemented, "practice picks playable content")
+	_check(not Game.slots[0].ready, "practice still asks the human to choose a dog")
+	_check(not practice_select.call("_all_ready"), "and will not go on until they do")
+	var practice_continue: Button = practice_select.get("_continue")
+	_check(practice_continue.disabled, "the way on is closed while a dog is unchosen")
+	Game.slots[0].ready = true
+	practice_select.call("_refresh_all")
+	_check(not practice_continue.disabled, "choosing a dog opens it")
+	practice_continue.pressed.emit()
+	var setup := await _scene(Game.SCENE_MATCH_SETUP)
+	if setup == null:
+		return
 	setup.call("_on_start")
 	var match_scene := await _scene(Game.SCENE_MATCH)
 	if match_scene == null:

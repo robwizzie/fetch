@@ -1,75 +1,50 @@
 class_name Powerup
 extends Node3D
-## A mystery treat. What is inside is hidden until a dog reaches it, so the run for one is a
-## gamble rather than a shopping trip — you commit before you know what you are getting.
-## The reveal is the payoff: the wrapper bursts, the icon flies up, and the belt updates.
-##
-## It is deliberately the most appetising thing on the field: a fat wrapped bonbon that bobs,
-## turns and throws light around, because the whole mechanic depends on people wanting to run
-## at it while somebody is aiming at them.
+## A sealed mystery treat with a readable arrival, opening and dog-following award.
+## Every possible reward shares the same wrapper; only collection reveals the kind.
 
 ## Rolled on spawn but never shown until collection.
 var kind: StringName = PowerupKinds.SHIELD
 var lifetime := 18.0
 var age := 0.0
 
-var _crate: Node3D
-var _lid: Node3D
+var _crate: PowerupModel
+var _sparkles: Node3D
+var _arrival: Node3D
 var _halo: MeshInstance3D
 var _taken := false
 
 
 func _ready() -> void:
 	add_to_group("powerups")
-	_crate = Node3D.new()
-	add_child(_crate)
-	Mats.contact_shadow(self, 0.44)
+	_arrival = Node3D.new()
+	add_child(_arrival)
+	_crate = PowerupModel.new()
+	_crate.setup()
+	_arrival.add_child(_crate)
+	_crate.rotation.y = -0.3
+	Mats.contact_shadow(self, 0.48)
 
-	# A wrapped sweet: a fat body with twisted ends, in cream and cherry with a gold band.
-	_lid = Node3D.new()
-	_crate.add_child(_lid)
-	var cream := Color("fff0d2")
-	var cherry := Color("e8556d")
-	var gold := Palette.GOLD
-	var body := Mats.mesh(_lid, Mats.sphere(0.3), cream, Vector3(0, 0.42, 0))
-	body.scale = Vector3(1.0, 0.86, 1.0)
-	# Two stripes around the middle, so it reads as wrapped rather than as a ball.
-	for lift in [-0.085, 0.085]:
-		var band := Mats.mesh(_lid, Mats.torus(0.24, 0.305), cherry, Vector3(0, 0.42 + lift, 0))
-		band.rotation_degrees = Vector3(90, 0, 0)
-	var ribbon := Mats.mesh(_lid, Mats.torus(0.285, 0.325), gold, Vector3(0, 0.42, 0))
-	ribbon.rotation_degrees = Vector3(90, 0, 0)
-	# The twisted ends of the wrapper.
-	for side in [-1.0, 1.0]:
-		var twist := Mats.mesh(_lid, Mats.cone(0.16, 0.24), cream.darkened(0.06),
-			Vector3(side * 0.34, 0.42, 0))
-		twist.rotation_degrees = Vector3(0, 0, 90.0 * side)
-
-	# A question mark on the wrapper: the contents stay secret until it opens.
-	var mark := Sprite3D.new()
-	mark.texture = PowerupIcon.texture(&"mystery", 128, gold)
-	mark.pixel_size = 0.0042
-	mark.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	mark.no_depth_test = true
-	mark.render_priority = 5
-	mark.position = Vector3(0, 0.42, 0)
-	_lid.add_child(mark)
-
-	# A pool of warm light under it and a ring on the floor: visible across the arena, which is
-	# the point - people have to see it in time to decide to go for it.
-	_halo = Mats.mesh(self, Mats.torus(0.5, 0.66), Color(1.0, 0.86, 0.42, 0.6), Vector3(0, 0.04, 0))
-	_halo.material_override = Mats.unlit(Color(1.0, 0.86, 0.42, 0.6))
+	# Quiet concentric markers keep the sealed pickup distinct from loose toys.
+	_halo = Mats.mesh(self, Mats.torus(0.57, 0.605), PowerupModel.GOLD, Vector3(0, 0.035, 0))
+	_halo.material_override = Mats.unlit(Color(PowerupModel.GOLD, 0.80))
 	_halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var glow := OmniLight3D.new()
-	glow.light_color = Color(1.0, 0.85, 0.5)
-	glow.light_energy = 1.4
-	glow.omni_range = 3.2
-	glow.position = Vector3(0, 0.6, 0)
-	add_child(glow)
-
-	_crate.scale = Vector3.ONE * 0.1
-	var drop := create_tween()
-	drop.tween_property(_crate, "scale", Vector3.ONE, 0.42).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var inner := Mats.mesh(self, Mats.torus(0.43, 0.45), PowerupModel.CREAM, Vector3(0, 0.04, 0))
+	inner.material_override = Mats.unlit(Color(PowerupModel.CREAM, 0.48))
+	inner.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_sparkles = Node3D.new()
+	_arrival.add_child(_sparkles)
+	for i in 3:
+		var angle := float(i) * TAU / 3.0
+		var spark := Mats.mesh(_sparkles, Mats.box(Vector3(0.055, 0.055, 0.055)), PowerupModel.GOLD,
+			Vector3(cos(angle) * 0.58, 0.65 + float(i) * 0.16, sin(angle) * 0.58), Vector3(0, 0, 45))
+		spark.material_override = Mats.unlit(PowerupModel.GOLD)
+		spark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_arrival.position.y = 1.8
+	_arrival.scale = Vector3.ONE * 0.35
+	var drop := create_tween().set_parallel(true)
+	drop.tween_property(_arrival, "position:y", 0.0, 0.46).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	drop.tween_property(_arrival, "scale", Vector3.ONE, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	Sfx.play("pickup", 0.7, -8.0)
 
 
@@ -78,7 +53,8 @@ func _physics_process(delta: float) -> void:
 		return
 	age += delta
 	_crate.position.y = 0.16 + sin(age * 2.6) * 0.09
-	_crate.rotation.y += delta * 0.9
+	_crate.rotation.y += delta * 0.65
+	_sparkles.rotation.y -= delta * 0.45
 	var scale := 1.0 + sin(age * 3.0) * 0.06
 	_halo.scale = Vector3(scale, 1.0, scale)
 	# Blink out the last couple of seconds so nobody is surprised by it vanishing.
@@ -102,48 +78,77 @@ func _physics_process(delta: float) -> void:
 		return
 
 
-## The reveal. The lid flies, the glyph and name pop, and only then does the dog learn what
-## it grabbed.
+## Apply the effect immediately; the visual follows the recipient so ownership is clear.
 func _open(dog: Dog) -> void:
+	if _taken or not dog.alive or dog.round_locked or dog.slot == null:
+		return
 	_taken = true
-	# Out of the group immediately: the reveal animation still has to play, but nothing
-	# should be able to collect or target it again.
+	visible = true
 	remove_from_group("powerups")
-	# Decided on opening, not on spawning: the crate is a mystery until then, and this way it
-	# can never hand over something the dog is already carrying.
-	if dog.slot != null and dog.slot.has_powerup(kind):
+	if dog.slot.has_powerup(kind):
 		kind = PowerupKinds.random_new_kind(dog.slot.powerups)
 	var dropped := dog.collect_powerup(kind)
 	var tint := PowerupKinds.color(kind)
 	var here := global_position
-
-	_halo.visible = false
-	var lid_tween := create_tween()
-	lid_tween.set_parallel(true)
-	lid_tween.tween_property(_lid, "position:y", 1.5, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	lid_tween.tween_property(_lid, "rotation:z", 2.6, 0.45)
-	lid_tween.tween_property(_crate, "scale", Vector3(1.25, 0.6, 1.25), 0.18)
-	lid_tween.chain().tween_property(_crate, "scale", Vector3.ZERO, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-	lid_tween.chain().tween_callback(queue_free)
+	_halo.hide()
+	_sparkles.hide()
+	var opening := create_tween().set_parallel(true)
+	opening.tween_property(_crate.lid, "position:y", 1.65, 0.34).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	opening.tween_property(_crate.lid, "rotation:z", -0.6, 0.34)
+	opening.tween_property(_crate, "scale", Vector3(1.12, 0.88, 1.12), 0.12)
+	opening.chain().tween_property(_arrival, "scale", Vector3.ONE * 0.01, 0.24).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	opening.chain().tween_callback(queue_free)
 
 	Sfx.play("treat")
-	Sfx.play("bark", randf_range(1.05, 1.18), -9.0)
-	Juice.burst(get_parent(), here + Vector3.UP * 0.6, tint, 26, 5.0)
-	Juice.float_text(get_parent(), here + Vector3.UP * 1.25, PowerupKinds.display_name(kind), tint, 1.0)
-	# The icon flies up with the name, so the shape gets learned alongside the words.
+	Juice.burst(get_parent(), here + Vector3.UP * 0.65, tint, 14, 3.2)
+	_award(dog, kind, dropped)
+	Events.powerup_collected.emit(dog, kind)
+
+
+func _award(dog: Dog, reward: StringName, dropped: StringName) -> void:
+	var root := Node3D.new()
+	root.name = "PowerupAward"
+	dog.add_child(root)
+	var top := 1.55 * dog.data.model_scale + 0.95
+	root.position = Vector3(0, top, 0)
 	var badge := Sprite3D.new()
-	badge.texture = PowerupIcon.texture(kind, 128, tint)
+	badge.texture = PowerupIcon.badge(reward, 128)
 	badge.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	badge.pixel_size = 0.006
 	badge.no_depth_test = true
 	badge.render_priority = 8
-	badge.position = here + Vector3.UP * 0.85
-	get_parent().add_child(badge)
-	var lift := badge.create_tween()
-	lift.tween_property(badge, "scale", Vector3.ONE * 1.35, 0.22).from(Vector3.ZERO).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	lift.tween_property(badge, "position:y", here.y + 1.9, 0.75)
-	lift.parallel().tween_property(badge, "modulate:a", 0.0, 0.75)
-	lift.tween_callback(badge.queue_free)
+	root.add_child(badge)
+	# The medallion already says which treat this is - it is the same icon as the belt and the
+	# field guide - so the line beside it says what it DOES instead of repeating the name.
+	# Nobody reads the scoreboard mid-scrap, and the name alone never told anyone anything.
+	var effect := _plaque(root, PowerupKinds.tag(reward), UiKit.FONT_DISPLAY, 34, 0.0088, 0.68)
+	effect.modulate = PowerupKinds.color(reward)
+	# Everything stacks upwards. Below the medallion is where the dog's own name tag lives,
+	# and two labels fighting over that space read as neither.
 	if dropped != &"":
-		Juice.float_text(get_parent(), here + Vector3.UP * 0.75, "swapped " + PowerupKinds.display_name(dropped), Color(1, 1, 1, 0.75), 0.9)
-	Events.powerup_collected.emit(dog, kind)
+		var note := _plaque(root, "SWAPPED " + PowerupKinds.display_name(dropped), UiKit.FONT_UI, 24, 0.005, 0.95)
+		note.modulate = Color(1, 1, 1, 0.8)
+	var reveal := root.create_tween()
+	reveal.tween_property(root, "scale", Vector3.ONE, 0.26).from(Vector3.ONE * 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	# Long enough to read a short line of it without holding up the round.
+	reveal.tween_interval(1.5)
+	reveal.tween_property(root, "position:y", top + 0.35, 0.25)
+	reveal.parallel().tween_property(root, "scale", Vector3.ONE * 0.01, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	reveal.tween_callback(root.queue_free)
+
+
+## One line of the award, outlined so it survives any arena underneath it.
+func _plaque(parent: Node3D, text: String, font: Font, size: int, pixels: float, height: float) -> Label3D:
+	var label := Label3D.new()
+	label.text = text
+	label.font = font
+	label.font_size = size
+	label.pixel_size = pixels
+	label.outline_size = 10
+	label.outline_modulate = PowerupModel.INK
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.render_priority = 8
+	label.position.y = height
+	parent.add_child(label)
+	return label

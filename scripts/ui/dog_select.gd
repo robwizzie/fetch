@@ -153,7 +153,15 @@ func _refresh_all() -> void:
 func _join_wording() -> String:
 	if DeviceInput.any_arcade(Game.slots) or DeviceInput.any_arcade_connected():
 		return "any button on your panel"
-	return "A / Start  ·  Space (WASD)  ·  Enter (Arrows)"
+	# Only what is actually plugged in, each named as printed on it.
+	var ways: Array[String] = []
+	for device in Input.get_connected_joypads():
+		var way := "%s (%s)" % [DeviceInput.short_glyph(&"confirm", device), DeviceInput.family_name(device)]
+		if not ways.has(way):
+			ways.append(way)
+	ways.append("Space (WASD)")
+	ways.append("Enter (Arrows)")
+	return "  ·  ".join(ways)
 
 
 func _slot_for_index(i: int) -> PlayerSlot:

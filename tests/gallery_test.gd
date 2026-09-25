@@ -56,13 +56,14 @@ func _previews_accept_every_kind() -> void:
 		preview.show_dog(dog)
 		await get_tree().process_frame
 		_check(_subject_count(preview) > 0, "%s has something to show" % dog.display_name)
-		# Standing on the bottom of the card, not hovering above it. The ground the dog stands
-		# on is y = 0, so the bottom of the frame has to sit just below it - a little under is
-		# a strip of floor, well under is a dog floating in mid-air.
-		var height: float = maxf(0.4, dog.model_height * dog.model_scale)
-		var floor_at := preview.frame_floor()
-		_check(floor_at <= 0.0, "%s stands on the frame floor, not above it (%.3f)" % [dog.display_name, floor_at])
-		_check(floor_at > -height * 0.18, "%s is not left floating over a gap (%.3f)" % [dog.display_name, floor_at])
+		# Where the dog actually lands in its card. It has to fill the card, stand on the
+		# bottom of it and keep its ears and tail inside the edges - a dog framed by the
+		# height in its data file rather than by its own measurements fails one of the three.
+		var fit := preview.frame_fit()
+		_check(fit.size.y > 0.62, "%s fills the card it is given (%.2f of the height)" % [dog.display_name, fit.size.y])
+		_check(fit.end.y > 0.93 and fit.end.y <= 1.001, "%s stands on the bottom of the frame (%.3f)" % [dog.display_name, fit.end.y])
+		_check(fit.position.x > -0.001 and fit.end.x < 1.001, "%s is not cropped at the sides (%.2f..%.2f)" % [dog.display_name, fit.position.x, fit.end.x])
+		_check(fit.position.y > -0.001, "%s keeps its ears inside the frame (%.3f)" % [dog.display_name, fit.position.y])
 	for toy in Game.toys:
 		preview.show_toy(toy)
 		await get_tree().process_frame
