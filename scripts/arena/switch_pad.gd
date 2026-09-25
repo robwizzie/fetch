@@ -73,6 +73,11 @@ func _rebuild() -> void:
 	add_child(_visual)
 	Mats.mesh(_visual, Mats.cylinder(radius + 0.16, 0.08), color.darkened(0.55), Vector3(0, 0.04, 0))
 	_cap = Mats.mesh(_visual, Mats.cylinder(radius, 0.1), color, Vector3(0, 0.09, 0))
+	Mats.mesh(_cap, Mats.torus(radius * 0.87, radius * 0.92), color.lightened(0.30), Vector3(0, 0.053, 0))
+	for i in 4:
+		var angle := float(i) * TAU / 4.0 + PI * 0.25
+		Mats.mesh(_visual, Mats.cylinder(0.04, 0.018), Color("dfd7bf"),
+			Vector3(cos(angle) * (radius + 0.09), 0.086, sin(angle) * (radius + 0.09)))
 	# The paw rides on the cap so it sinks with it when the pad is stood on.
 	var paw := Mats.mesh(_cap, Mats.cylinder(radius * 0.34, 0.03), color.lightened(0.45), Vector3(0, 0.06, 0.08))
 	paw.material_override = Mats.unlit(color.lightened(0.5))

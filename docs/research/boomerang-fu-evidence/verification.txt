@@ -1,0 +1,181 @@
+FETCH gameplay audit — September 23, 2026
+Base commit d1b14e6 plus pre-existing working-tree changes.
+Gameplay source was not modified by this audit.
+Godot 4.7.2.stable.official.ed1daf0bf
+
+Project import
+==============
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1035)
+[   0% ] first_scan_filesystem | Started Project initialization (5 steps)
+[   0% ] first_scan_filesystem | Scanning file structure...
+[  16% ] first_scan_filesystem | Loading global class names...
+[  33% ] first_scan_filesystem | Verifying GDExtensions...
+[  50% ] first_scan_filesystem | Creating autoload scripts...
+[  66% ] first_scan_filesystem | Initializing plugins...
+[  83% ] first_scan_filesystem | Starting file scan...
+[ DONE ] first_scan_filesystem
+
+[   0% ] loading_editor_layout | Started Loading editor (5 steps)
+[   0% ] loading_editor_layout | Loading editor layout...
+[  16% ] loading_editor_layout | Loading docks...
+[  33% ] loading_editor_layout | Reopening scenes...
+[  50% ] loading_editor_layout | Loading central editor layout...
+[  66% ] loading_editor_layout | Loading plugin window layout...
+[  83% ] loading_editor_layout | Editor layout ready.
+[ DONE ] loading_editor_layout
+
+ERROR: Cannot save file '/Users/robwiscount/Library/Application Support/Godot/editor_settings-4.7.tres'.
+   at: save (scene/resources/resource_format_text.cpp:1768)
+ERROR: Error saving editor settings to /Users/robwiscount/Library/Application Support/Godot/editor_settings-4.7.tres
+   at: save (editor/settings/editor_settings.cpp:1525)
+
+Weapon suite: exit 0
+====================
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1035)
+FETCH content: 5 dogs, 4 toys, 5 arenas, 7 modes
+[weapons] PASSED: safe walking/holding, blocked throws, sweeps, four lethal toys, catching, charged throws, toy caroms, whacking and power-up belts
+
+Smoke suite: exit 0
+===================
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1035)
+FETCH content: 5 dogs, 4 toys, 5 arenas, 7 modes
+[smoke] content: dogs=5 toys=4 arenas=5 modes=7
+[smoke] ok: res://scenes/ui/main_menu.tscn
+[smoke] ok: res://scenes/ui/dog_select.tscn
+[smoke] ok: res://scenes/ui/match_setup.tscn
+[smoke] ok: res://scenes/ui/results.tscn
+[smoke] ok: res://scenes/ui/gallery.tscn
+[smoke] round over, winner: Luna
+[smoke] round over, winner: Shadow
+[smoke] round over, winner: Shadow
+[smoke] MATCH OVER, winner Shadow with 2 points
+[smoke] PASSED in 64.3s (eliminations=6, catches=1)
+
+Asset pipeline suite: exit 0
+============================
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1035)
+FETCH content: 5 dogs, 4 toys, 5 arenas, 7 modes
+[asset-pipeline] OK: Shadow has an actionable readiness result
+[asset-pipeline] OK: Goose has an actionable readiness result
+[asset-pipeline] OK: Luna has an actionable readiness result
+[asset-pipeline] OK: Barkley has an actionable readiness result
+[asset-pipeline] OK: Posey has an actionable readiness result
+[asset-pipeline] OK: missing assets render safe gameplay placeholder
+[asset-pipeline] OK: placeholder mouth moves and rotates with the animated head
+[asset-pipeline] OK: actual imported skinned GLB meets contract: []
+[asset-pipeline] OK: a valid GLB does not imply approved likeness
+[asset-pipeline] OK: valid rig uses authored renderer
+[asset-pipeline] OK: mouth uses actual rig socket, not dog origin
+[asset-pipeline] OK: mouth follows animated bone in world space
+[asset-pipeline] OK: locomotion selects run
+[asset-pipeline] OK: throw plays one-shot
+[asset-pipeline] OK: throw returns to queued locomotion
+[asset-pipeline] OK: dash selects authored dash clip
+[asset-pipeline] OK: KO interrupts locomotion
+[asset-pipeline] OK: KO holds terminal state
+[asset-pipeline] OK: missing mouth bone is rejected
+[asset-pipeline] OK: missing animation is rejected
+[asset-pipeline] OK: invalid imported model safely falls back
+[asset-pipeline] OK: model studio loads with visible runtime model
+[asset-pipeline] PASSED (0 failures)
+
+Gameplay suite first run: exit 1
+================================
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1035)
+FETCH content: 5 dogs, 4 toys, 5 arenas, 7 modes
+[gameplay] bots: Backyard, 10.4s, 3 eliminations
+ERROR: [gameplay] FAILED: bots finish a scored round in Living Room
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/gameplay_test.gd:136)
+       [1] _ready (res://tests/gameplay_test.gd:92)
+ERROR: [gameplay] FAILED: bots throw, fetch and eliminate rivals in Living Room
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/gameplay_test.gd:136)
+       [1] _ready (res://tests/gameplay_test.gd:93)
+[gameplay] bots: Living Room, 56.2s, 0 eliminations
+[gameplay] bots: Agility Park, 8.2s, 3 eliminations
+[gameplay] bots: Pup Beach, 8.6s, 3 eliminations
+[gameplay] bots: Warp Yard, 8.0s, 3 eliminations
+
+Gameplay suite repeat: exit 1
+=============================
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1035)
+FETCH content: 5 dogs, 4 toys, 5 arenas, 7 modes
+[gameplay] bots: Backyard, 12.0s, 3 eliminations
+[gameplay] bots: Living Room, 6.2s, 3 eliminations
+[gameplay] bots: Agility Park, 9.4s, 3 eliminations
+[gameplay] bots: Pup Beach, 10.2s, 3 eliminations
+ERROR: [gameplay] FAILED: bots finish a scored round in Warp Yard
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/gameplay_test.gd:136)
+       [1] _ready (res://tests/gameplay_test.gd:92)
+ERROR: [gameplay] FAILED: bots throw, fetch and eliminate rivals in Warp Yard
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] _check (res://tests/gameplay_test.gd:136)
+       [1] _ready (res://tests/gameplay_test.gd:93)
+[gameplay] bots: Warp Yard, 56.2s, 0 eliminations
+
+Targeted observational probe: exit 0
+====================================
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1035)
+FETCH content: 5 dogs, 4 toys, 5 arenas, 7 modes
+AUDIT model Shadow valid=true errors=[]
+AUDIT model Goose valid=true errors=[]
+AUDIT model Luna valid=true errors=[]
+AUDIT model Barkley valid=true errors=[]
+AUDIT model Posey valid=true errors=[]
+AUDIT base model scale=(1.1, 1.1, 1.1)
+AUDIT collected Little Legs radius=0.64943999052048 model scale=(0.82, 0.82, 0.82)
+AUDIT grazing shot offset=1.04 scaled contact radius=0.96943999052048 victim eliminated=true
+AUDIT respawn Little Legs radius=0.79199999570847 expected=0.64944 model scale=(1.088902, 1.088902, 1.088902)
+AUDIT whack selects rival through wall=true
+AUDIT whack through wall dizzy=1.5
+AUDIT remaining in zone A after exiting B speed_scale=1.0 expected=0.55
+AUDIT complete
+
+Rendered screenshot suite: exit 0
+=================================
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+OpenGL API 4.1 Metal - 91.7 - Compatibility - Using Device: Apple - Apple M5 Pro
+
+FETCH content: 5 dogs, 4 toys, 5 arenas, 7 modes
+[shots] 00_loading -> /tmp/fetch-audit-shots/00_loading.png (OK)
+[shots] 01_main_menu -> /tmp/fetch-audit-shots/01_main_menu.png (OK)
+[shots] 02_dog_select -> /tmp/fetch-audit-shots/02_dog_select.png (OK)
+[shots] 03_match_setup -> /tmp/fetch-audit-shots/03_match_setup.png (OK)
+[shots] 04_gallery_dogs -> /tmp/fetch-audit-shots/04_gallery_dogs.png (OK)
+[shots] 06_model_studio -> /tmp/fetch-audit-shots/06_model_studio.png (OK)
+[shots] 05_results -> /tmp/fetch-audit-shots/05_results.png (OK)
+[shots] 18_winding_up -> /tmp/fetch-audit-shots/18_winding_up.png (OK)
+[shots] 10_match_backyard -> /tmp/fetch-audit-shots/10_match_backyard.png (OK)
+[shots] 12_pause -> /tmp/fetch-audit-shots/12_pause.png (OK)
+[shots] 11_match_living_room -> /tmp/fetch-audit-shots/11_match_living_room.png (OK)
+[shots] 12_match_agility_park -> /tmp/fetch-audit-shots/12_match_agility_park.png (OK)
+[shots] 13_match_beach -> /tmp/fetch-audit-shots/13_match_beach.png (OK)
+[shots] 14_match_warp_yard -> /tmp/fetch-audit-shots/14_match_warp_yard.png (OK)
+[shots] done -> /tmp/fetch-audit-shots

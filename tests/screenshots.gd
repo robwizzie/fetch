@@ -54,7 +54,12 @@ func _ready() -> void:
 		m.toys[0].pick_up(d)
 		d.input.virtual_move = Vector2(1, 0.4).normalized()
 		await get_tree().create_timer(0.3).timeout
+		# Hold first: the wind-up is a state of its own now, so one shot has to show the meter.
 		d.input.virtual_buttons[&"throw"] = true
+		await get_tree().create_timer(Dog.CHARGE_TIME * 0.75).timeout
+		if i == 0:
+			await _capture("18_winding_up")
+		d.input.virtual_buttons[&"throw"] = false
 		await get_tree().create_timer(0.25).timeout
 		await _capture("1%d_match_%s" % [i, Game.arenas[i].id])
 		if i == 0:

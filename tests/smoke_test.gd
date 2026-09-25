@@ -24,6 +24,8 @@ var _eliminations := 0
 var _caught := 0
 var _phase := "ui"
 var _target_throw_timer := 0.0
+## How long the scripted shooter has held the throw button on this attempt.
+var _wind_up := 0.0
 var _failed := false
 ## Stuck detection for the scripted shooter (it has no pathfinding; props can pin it).
 var _last_shooter_pos := Vector3.ZERO
@@ -48,10 +50,10 @@ func _ready() -> void:
 	Game.powerups_enabled = false
 	print("[smoke] content: dogs=%d toys=%d arenas=%d modes=%d" % [Game.dogs.size(), Game.toys.size(), Game.arenas.size(), Game.modes.size()])
 	_check(Game.dogs.size() == 5, "expected 5 dogs")
-	_check(Game.toys.size() == 6, "expected 6 toys")
+	_check(Game.toys.size() == 4, "expected 4 toys")
 	# Arenas are content: adding a .tres should not fail the suite, so assert the floor.
 	_check(Game.arenas.size() >= 5, "expected at least 5 arenas")
-	_check(Game.modes.size() == 7, "expected 7 modes")
+	_check(Game.modes.size() == 9, "expected 9 modes")
 	_check(Game.selected_mode != null and Game.selected_mode.fully_implemented, "a playable default mode")
 
 	Game.debug_fill_players(2)
@@ -125,12 +127,19 @@ func _physics_process(delta: float) -> void:
 		if nearest:
 			shooter.input.virtual_move = dir_to(shooter, nearest)
 		_throw_timer = 0.0
+		_wind_up = 0.0
 	else:
 		shooter.input.virtual_move = dir_to(shooter, target)
 		_throw_timer += delta
 		if _throw_timer > 1.2:
-			_throw_timer = 0.0
-			shooter.input.virtual_buttons[&"throw"] = true
+			# Hold, then let go. A tap is a short lob and this shooter is trying to hit
+			# someone across the arena, so it winds up the way a player would.
+			_wind_up += delta
+			if _wind_up < Dog.CHARGE_TIME:
+				shooter.input.virtual_buttons[&"throw"] = true
+			else:
+				_throw_timer = 0.0
+				_wind_up = 0.0
 	# If the shooter is pushing against a prop, sidestep for a moment (props block the straight line).
 	var moved := shooter.global_position.distance_to(_last_shooter_pos)
 	_last_shooter_pos = shooter.global_position

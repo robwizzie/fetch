@@ -51,6 +51,30 @@ func _ready() -> void:
 	var again: Array[Node3D] = stage.get("_rows")
 	_check(again.size() == sides.size(), "a second round rebuilds rather than accumulates")
 
+	# Everything has to sit on the plaque. Points used to start at a fixed offset and step by a
+	# fixed amount, which bunched them left of centre at first-to-3 and ran them clean off the
+	# end of the plaque at first-to-10.
+	var half := ScoreStage.PLAQUE_WIDTH * 0.5
+	for slots: int in [3, 5, 7, 10]:
+		var radius := stage.pip_radius(slots)
+		for i in slots:
+			var x := stage.pip_x(i, slots)
+			_check(x - radius > -half, "first-to-%d: point %d clears the left edge" % [slots, i])
+			_check(x + radius < half, "first-to-%d: point %d stays on the plaque" % [slots, i])
+		if slots > 1:
+			var gap: float = stage.pip_x(1, slots) - stage.pip_x(0, slots)
+			_check(gap > radius * 2.0, "first-to-%d: points do not overlap" % slots)
+		# However many there are, they cover the same span, so the plaque never looks lopsided.
+		var span: float = stage.pip_x(slots - 1, slots) - stage.pip_x(0, slots)
+		_check(span > ScoreStage.PLAQUE_WIDTH * 0.2, "first-to-%d: points spread across the plaque" % slots)
+
+	# The board has to fill its own picture. A fixed frame left four rows covering less than
+	# half the width, which is what made the standings look small and lost in empty space.
+	for count: int in [2, 3, 4]:
+		var content := stage.content_size(count)
+		var covered := ScoreStage.PLAQUE_WIDTH / content.x
+		_check(covered > 0.85, "%d rows: plaques fill %.0f%% of the frame width" % [count, covered * 100.0])
+
 	# Two packs and four dogs both have to fit in frame.
 	var camera := view.get_camera_3d()
 	_check(camera != null, "the stage has a camera")
@@ -58,6 +82,13 @@ func _ready() -> void:
 	var two := camera.size
 	stage.frame_camera(camera, 4)
 	_check(camera.size > two, "four rows frame wider than two")
+	# The viewport is reshaped to the content, so the camera's own aspect matches what it is
+	# being asked to show rather than cropping or padding it.
+	board._fit_stage(4)
+	var view_aspect := float(view.size.x) / float(view.size.y)
+	var want_aspect := stage.content_size(4).x / stage.content_size(4).y
+	_check(absf(view_aspect - want_aspect) < 0.08,
+		"the stage viewport matches the shape of four rows (%.2f vs %.2f)" % [view_aspect, want_aspect])
 	_check(camera.projection == Camera3D.PROJECTION_ORTHOGONAL, "the stage is framed flat-on")
 
 	# A press dismisses it, which is what hands the match back its banner_finished.
@@ -73,12 +104,12 @@ func _ready() -> void:
 	get_tree().quit(1 if failed else 0)
 
 
-## Points are bones; sockets are plain cylinders. Counting the bones counts the score.
+## Every slot on a plaque is a bone, won or not; the won ones carry the "point" flag. Counting
+## those counts the score, without depending on how either state happens to be built.
 func _count_bones(row: Node3D) -> int:
 	var total := 0
 	for child in row.get_children():
-		# A bone is the only bare Node3D holding meshes; plaque parts and sockets are meshes.
-		if child.get_class() == "Node3D" and (child as Node3D).get_child_count() >= 5:
+		if child.get_meta("point", false):
 			total += 1
 	return total
 

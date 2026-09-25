@@ -6,7 +6,9 @@ cover screen and uses `ResourceLoader` threaded loading with actual progress. Af
 ready prompt, subsequent transitions proceed automatically. The main menu uses `CoverStage` to
 preserve the original cover image's aspect ratio beside the controls.
 
-`Game.start_practice(device)` creates one human and three CPU slots. `PlayerSlot.is_bot` explicitly
+`Game.start_practice(device)` creates one human and three CPU slots and then goes to the dog
+select, the same as party play: every route into a match passes through choosing a dog, and none
+of them hides that choice behind a button of its own. `PlayerSlot.is_bot` explicitly
 opts a dog into `BotBrain`, which drives `DeviceInput.VIRTUAL`; scripted-test virtual devices are
 left alone. The lobby can add/remove CPUs, change their dogs, and retains their ready state.
 Match setup offers only fully implemented modes/toys; galleries can still show prototypes.
@@ -37,7 +39,10 @@ three looping tracks on a worker thread, mixed on separate `SFX` and `Music` bus
 for a track by name and repeating the current one is a no-op, so the front end keeps one piece
 playing across scene changes. A knockout ducks the music briefly.
 
-A throw is one-way: once released, a toy belongs to whoever picks it up next. Opening toy placement is
+A throw is one-way: once released, a toy belongs to whoever picks it up next. Holding the throw button
+winds a shot up instead of firing it. A tap is a soft close-quarters lob (`Dog.TAP_POWER`) that drops under
+`danger_speed` within a few metres; a full wind-up reaches `Dog.FULL_POWER`, and a gauge around the dog's
+paws lets every rival see it coming. Opening toy placement is
 mirror-symmetric about both arena axes and kept clear of every spawn, so each dog has the same run to the
 nearest toy, and it is redrawn each round. With `Game.random_arena_each_round` (the setup screen's default)
 the match swaps the whole arena between rounds. The HUD shows score, toy/dash status, round time, input hints, and pause controls.
@@ -60,12 +65,14 @@ scripts/
   data/*.gd                  Resource classes: DogData, ToyData, ArenaData, GameModeData
   actors/dog.gd              CharacterBody3D on the XZ plane: move, dash, throw, catch, hit_by(), eliminate()
   actors/toy.gd              CharacterBody3D: IDLE / HELD / FLYING at fixed height, bounce, hit detection, pickup
+  visuals/charge_meter.gd    The wind-up tell: a thin ground arc that sweeps round the dog's paws as it fills
   visuals/mats.gd            Toon StandardMaterial3D + primitive-mesh helpers (one place to restyle everything)
   visuals/dog_model.gd       Placeholder low-poly dog built from primitives; replace with a rigged model later
   visuals/toy_model.gd       Placeholder toy meshes by id
   arena/arena.gd             Base arena: ground, outer walls (fence/baseboard visuals), spawn points
   arena/arena_camera.gd      Fixed tilted perspective camera (pitch/height/fov per arena)
   arena/obstacle.gd          Solid prop by kind (crate, doghouse, table, couch, TV, ...) (@tool)
+  arena/terrain.gd           Walkable elevation: props in the "ramps" group report the deck under a point
   arena/slow_zone.gd         Round area that slows dogs (pool, rug, mud)
   ui/dog_portrait.gd         SubViewport turntable showing a 3D dog inside 2D menus
   modes/game_mode.gd         Base rules class; last_dog_standing.gd implements the MVP mode
@@ -74,6 +81,8 @@ scripts/
 scenes/
   actors/dog.tscn, toy.tscn  Collision shapes + child nodes; scripts above
   arenas/backyard.tscn, living_room.tscn   Each has its own Camera, DirectionalLight and WorldEnvironment
+  arenas/training_yard.tscn  Bare ground for the practice round. Scene only, so it stays out of the arena picker
+data/arenas/shelved/         Arenas kept in the repo but out of the picker: _load_dir lists files, not folders
   match/match.tscn           ArenaHolder + Actors + HUD
   ui/*.tscn                  One Control root per screen
 data/
@@ -101,15 +110,40 @@ Scene changes go through `Game.goto(path)`. Scenes never reference each other di
 the camera (screen-down). Input `Vector2(x, y)` maps to `Vector3(x, 0, y)`. Dogs and toys use
 `CharacterBody3D` in floating mode with `y` pinned, so the game plays like a 2D game with 3D visuals.
 
-**Physics layers.** 1 walls · 2 dogs · 3 toys · 4 zones. Dogs collide with walls and dogs. Toys collide with
-walls only and detect dogs through their `HitArea`. Dogs detect catchable toys through `CatchArea`.
-Toy releases are ray-checked so a dog pressed against a wall can't push the toy through it.
+**Button prompts.** Never hard-code a button name. `DeviceInput.glyph(action, device)` returns what is
+printed on that device (pads are mapped by position, so throw is X on Xbox, Square on PlayStation, Y on
+Switch; `pad_family()` tells them apart by vendor id and name). `button_label(action, slots)` lists only
+the joined humans' buttons, without repeats; `controls_line(device)` is the full one-line summary the HUD
+shows per player. `tests/controls_test.tscn` covers it.
 
-**Toy lifecycle.** `pick_up(dog)` → HELD (follows `dog.get_hold_position()`), `throw(dog, dir, power)` →
-FLYING at `FLY_HEIGHT`, speed decays by `friction`; below `danger_speed` it's IDLE, settles to the ground and
-is harmless; walking over it picks it up.
+**Physics layers.** 1 walls · 2 dogs · 3 toys · 4 zones · 5 sight lines only. Dogs collide with walls and
+dogs. Toys collide with walls and with each other, and detect dogs through their `HitArea`. Dogs detect
+catchable toys through `CatchArea`. Toy releases are ray-checked so a dog pressed against a wall can't push
+the toy through it. Layer 5 carries nothing but the occlusion bodies of props you can walk into, so the
+sight-line test that fades a prop still works when its real collision is only two walls.
+
+**Charged throws.** A press with something in the mouth starts a wind-up (`Dog._begin_charge`) and the
+release throws it (`Dog._release_throw`); `DeviceInput.just_released` supplies the edge. The charge fills
+over `CHARGE_TIME`, scales throw power from `TAP_POWER` to `FULL_POWER`, and slows the dog to
+`CHARGE_MOVE_SCALE` at full, so range and punch are paid for in seconds spent planted. Being disarmed, going dizzy or going out all
+cancel it. Bots wind up too, so the tell means the same thing whoever is holding the button.
+
+**Crossable props.** `Obstacle` normally collides as one footprint box. `Kind.TUNNEL` keeps only its two
+side walls, so the tube is a route end to end; `Kind.RAMP` keeps only its stepped side rails and joins the
+`"ramps"` group, so `Terrain.ground_height()` reports a deck and dogs and toys ride over it. Play is still
+strictly on the XZ plane — nothing jumps and nothing falls; the deck only moves `y`.
+
+**Toy lifecycle.** `pick_up(dog)` → HELD (follows `dog.get_hold_position()`), `throw(dog, dir, power, charge)`
+→ FLYING at `FLY_HEIGHT`, speed decays by `friction`; below `danger_speed` it's IDLE, settles to the ground
+and is harmless; walking over it picks it up.
 The thrower is immune until the first bounce (`_owner_immune`), so you can't hit yourself at point-blank but
 ricochets can come back at you.
+
+**Toy caroms.** Toys are solid to each other. A contact hands most of the incoming speed along the normal to
+the toy that was struck (`_strike_toy` / `_receive_strike`); a loose toy shunted past its `danger_speed`
+leaves as a live throw still credited to whoever started the chain, so a shot into a pile is a real play.
+A graze keeps its line, a heavy toy ploughs on through, and a short contact lock keeps one contact from
+resolving twice.
 
 **Catch.** Pressing throw with empty paws either catches a dangerous toy already inside `catch_radius`, or
 arms a `catch_window` timer; a toy that would hit the dog while armed is caught instead (`Dog.hit_by`).
@@ -119,8 +153,76 @@ A miss triggers `catch_cooldown`. These three numbers per `DogData` define each 
 freezes actors during the HUD countdown, then listens to `Events.dog_eliminated` and asks the `GameMode`
 `is_round_over()` / `round_winner()`. Points live on the `PlayerSlot`, so they survive scene changes.
 
+**Combat rules.** `CombatRules` holds the rules every kind of hit shares: `clear_between()` for cover
+(throws, swipes and blasts all use it) and `can_hurt()` for self/team fire. Hit tests use
+`Dog.effective_radius()`. Slows are owned by
+their source (`Dog.set_slow(source, factor)` / `clear_slow(source)`); the strongest active one wins, so
+leaving one zone never cancels another.
+
+**Power-ups.** Every kind changes how a dog plays (Boomerang Fu's rule), never just a stat. A belt holds
+each kind once, capped at `PowerupKinds.MAX_SLOTS`. Every grant goes through `PlayerSlot.take_powerup()`,
+which refuses duplicates; crates reroll to a kind the dog lacks, and `normalize_powerups()` repairs any belt on
+spawn. A full belt replaces its longest-held kind *in place* (slot one first, then two, then three), so the
+other sockets never shuffle. A round gets a fixed budget of crates (`match.treats_per_round()`: two, or three
+with three or more dogs) however long it runs, and `_treat_position()` scores random open spots by distance
+from every dog and every crate already dropped that round. Dog-side powers are read by
+`Dog.apply_powerups()`: **Zoomies** (speed and dash recharge), **Ghost Pup** (the grass concealment, applied
+everywhere, with paw prints on each step) and **Dig!** (a longer dash that goes underground, invincible for
+its whole length, surfacing with a reveal). Behaviour powers live on the throw: `ToyPowerEffects` snapshots the belt at launch, so
+a later swap never rewrites a toy in flight, and a pickup or catch resets it. **Squeaky Blast** arms a fuse on
+the toy's first impact and stops it dead, then bursts in `BLAST_RADIUS`; cover blocks it, shields absorb it,
+and grabbing the squeaking toy defuses it. **Mud Track** drops a `MudPatch` every `MUD_SPACING` metres of
+flight; patches slow whoever stands in them, dry up after `LIFETIME` and are capped at `LIMIT`.
+**Telepawthy** bends a flying toy toward the thrower's stick (`steer_toward`) at `STEER_RATE`, with a total
+`STEER_BUDGET` short of a U-turn: it can curl round cover but can never come back to the thrower.
+
+**Portals.** A `Portal` is a doggy door set into an arena wall: its origin sits on the wall's inner face
+with local +Z pointing into the arena. A dog pushing into the doorway (`Dog.push_velocity`) or a thrown toy
+that would bounce off that stretch of wall (`Portal.catch_toy`, called from `Toy._slide`) comes out of the
+partner door. The exit is relative, so doors on opposite walls play like the yard wraps round. Bots follow
+portal links in `BotNavigation` and walk straight into the door. Pairs share a colour; `monitoring` switches
+a door off for the practice round.
+
+**More power-ups.** Scatter Fetch fires two `Toy.ephemeral` side toys that vanish rather than become
+pickups; every toy of one press shares `ToyPowerEffects.volley`, and `Dog` lets one volley land once.
+Bank Shot speeds a throw up on its first wall bounce (`bank_bounce`); with Squeaky Blast the fuse arms on
+the impact after the bank. Good Decoy leaves a `Decoy` on each dash that pops when a toy passes through it;
+bots believe a given decoy `BotBrain.DECOY_BELIEF` of the time. A throw's trail takes the colours of the
+powers it carries (`ToyPowerEffects.trail_colors`).
+
+**Knockouts.** `DogModel._tumble` launches every dog the same way, then finishes with a breed joke: the Lab
+flops flat, the pit bull spins like a top, the corgi rolls like a loaf, the spaniel's ears fly up
+(`DogPoseMotion.ears_up`), the golden lands legs-up. A knocked-out dog is napping, not gone: sleepy z's drift up in its colour (`_snooze`).
+
+**Behind walls.** Each dog checks the camera's line of sight to its body every 0.1 s (outer boundary
+colliders are ignored because the visible fence is lower). When hidden, `DogModel.set_silhouette` fades
+in a player-coloured pass (`assets/shaders/silhouette.gdshader`) that draws only where something is in
+front, nudged toward the camera so a dog never shows through itself.
+
+**Arena gimmicks.** One per arena, each a script in `scripts/arena/` placed under a `Gimmicks` node:
+`Sprinkler` (Backyard, a sweeping jet that shoves via `Dog.shove`), `RobotMower` (Agility Park, crosses a
+lane on a timer and knocks dogs dizzy with a null-attacker whack), `TallGrass` (Pup Beach, conceals dogs
+via `Dog.set_cover`; moving rustles, throwing or dashing reveals), `DogBed` (Living Room, an
+`AnimatableBody3D` that slides when a toy hits it). Warp Yard's gimmick is its doggy doors.
+
+**Modes.** `GameMode` has `tick`, `timeout_winner`, `bot_goal` and `bot_should_throw_now` hooks; the match
+calls `tick` every frame and asks `is_round_over` after it. `HotPotato` marks one toy as the hot bone and
+knocks out its holder (or last holder) when the fuse pops. `KingOfTheBed` banks time for a side alone on a
+bed placed clear of other gimmicks; first to `CLAIM_TIME` wins, or most time at the whistle.
+
+**Lighting.** `Arena._style_lighting()` sets one warm key with soft orthogonal shadows, a cool shadowless
+fill, and linear tonemapping for every map. `ArenaCamera` keeps `far` at 80 m: the default 4 km far plane
+stretched the directional shadow's depth range until nothing cast a shadow at all.
+
+**Audio.** Recorded takes live in `assets/audio/sfx/<sound>/` (Kenney CC0 packs, see
+`assets/audio/KENNEY_LICENSE.txt`); `Sfx` picks one at random per play and falls back to its synthesised
+kit for anything without a folder (barks, squeaks, boings). `Sfx.play_at(name, world_position)` pans by where the event sits on screen (capped at
+`MAX_PAN`), using a small panner bus per voice. The arena calls `Sfx.set_room(indoor, hard_floor)` as it
+loads, choosing padded or clicky footsteps and a touch of room reverb.
+
 **Juice.** All feedback goes through `Juice` and `Sfx` so gameplay scripts stay readable and feedback can be
-tuned or replaced centrally.
+tuned or replaced centrally. Dogs never change size for feedback: `DogModel.pop_feedback()` is a
+volume-preserving squash and stretch, and every pulse returns to `_base_scale()`.
 
 ## Adding content
 

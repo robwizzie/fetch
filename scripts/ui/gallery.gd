@@ -4,11 +4,19 @@ extends Control
 
 func _ready() -> void:
 	UiKit.backdrop(self)
+	# One column with air around it: heading at the top, the way out at the bottom, and the
+	# cards centred in everything between. The heading used to sit against the top edge and the
+	# cards hung from it, which on a five-dog page left half a screen of empty green underneath.
+	var page := MarginContainer.new()
+	page.set_anchors_preset(Control.PRESET_FULL_RECT)
+	page.add_theme_constant_override("margin_left", 56)
+	page.add_theme_constant_override("margin_right", 56)
+	page.add_theme_constant_override("margin_top", 28)
+	page.add_theme_constant_override("margin_bottom", 28)
+	add_child(page)
 	var root := VBoxContainer.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.alignment = BoxContainer.ALIGNMENT_CENTER
-	root.add_theme_constant_override("separation", 20)
-	add_child(root)
+	root.add_theme_constant_override("separation", 18)
+	page.add_child(root)
 	root.add_child(UiKit.title(Game.gallery_kind.to_upper(), 72, UiKit.ACCENT))
 
 	var scroll := ScrollContainer.new()
@@ -16,12 +24,19 @@ func _ready() -> void:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.follow_focus = true
 	root.add_child(scroll)
+	# The middle box fills the room the heading and the buttons leave and centres the cards in
+	# it. Without it the ScrollContainer stretches and the cards stay pinned to its top edge.
+	var middle := VBoxContainer.new()
+	middle.alignment = BoxContainer.ALIGNMENT_CENTER
+	middle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	middle.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.add_child(middle)
 	var flow := HFlowContainer.new()
 	flow.alignment = FlowContainer.ALIGNMENT_CENTER
 	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	flow.add_theme_constant_override("h_separation", 20)
 	flow.add_theme_constant_override("v_separation", 20)
-	scroll.add_child(flow)
+	middle.add_child(flow)
 
 	match Game.gallery_kind:
 		"dogs":
@@ -29,7 +44,10 @@ func _ready() -> void:
 			for d in Game.dogs:
 				var color: Color = PlayerSlot.COLORS[i % PlayerSlot.COLORS.size()]
 				var card := _card(d.card_color, d.display_name, d.description)
-				var dog_shot := _stage(ModelPreview.new(Vector2i(360, 300)), Vector2(260, 210), color)
+				# This page exists to show the dogs off, and the row has a screen to itself: give
+				# them the room rather than five small cards adrift in the middle of it.
+				card.custom_minimum_size = Vector2(330, 0)
+				var dog_shot := _stage(ModelPreview.new(Vector2i(400, 340)), Vector2(294, 262), color)
 				(dog_shot.get_child(0) as ModelPreview).show_dog(d)
 				card.get_node("VBox").add_child(dog_shot)
 				card.get_node("VBox").move_child(dog_shot, 1)
@@ -39,10 +57,11 @@ func _ready() -> void:
 			for t in Game.toys:
 				var card := _card(t.color, t.display_name + ("" if t.fully_implemented else " (prototype)"), t.description)
 				# Even cards make an even grid; ragged heights were most of why this page
-				# looked thrown together.
-				card.custom_minimum_size = Vector2(320, 486)
+				# looked thrown together. Two rows of these have to fit the screen without a
+				# scrollbar, because nothing on this page takes focus for a pad to scroll it with.
+				card.custom_minimum_size = Vector2(320, 400)
 				var box := card.get_node("VBox")
-				var shot := _stage(ModelPreview.new(Vector2i(360, 300)), Vector2(272, 210), t.color)
+				var shot := _stage(ModelPreview.new(Vector2i(360, 300)), Vector2(272, 150), t.color)
 				(shot.get_child(0) as ModelPreview).show_toy(t)
 				box.add_child(shot)
 				box.move_child(shot, 1)
@@ -116,10 +135,6 @@ func _stage(preview: ModelPreview, size: Vector2, tint: Color) -> PanelContainer
 ## What makes this toy different from the rest, in two words.
 func _toy_trait(data: ToyData) -> String:
 	match data.special:
-		ToyData.Special.KNOCKBACK:
-			return "SHOVES RIVALS"
-		ToyData.Special.SQUEAK:
-			return "SQUEAK DISARMS"
 		ToyData.Special.RICOCHET:
 			return "WILD RICOCHETS"
 		ToyData.Special.HEAVY:
@@ -141,6 +156,9 @@ func _chip_row(text: String, tint: Color) -> CenterContainer:
 	chip.add_theme_stylebox_override("panel", style)
 	var label := UiKit.label(text, 18, UiKit.INK)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# A wrapping label asks for no width at all, and a CenterContainer takes it at its word:
+	# the chip came out one letter wide with the trait running down the card.
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	chip.add_child(label)
 	holder.add_child(chip)
 	return holder
@@ -154,9 +172,16 @@ func _facts(rows: Array, tint: Color) -> VBoxContainer:
 		var line := HBoxContainer.new()
 		line.add_theme_constant_override("separation", 8)
 		var key := UiKit.label(str(row[0]), 18, tint.lightened(0.45))
+		key.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		key.autowrap_mode = TextServer.AUTOWRAP_OFF
 		key.custom_minimum_size = Vector2(88, 0)
 		line.add_child(key)
-		line.add_child(UiKit.label(str(row[1]), 18, Color(1, 1, 1, 0.9)))
+		# Same trap as the chip: these are short values, so they never wrap - they just have to
+		# be allowed to ask for the width they need.
+		var value := UiKit.label(str(row[1]), 18, Color(1, 1, 1, 0.9))
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		value.autowrap_mode = TextServer.AUTOWRAP_OFF
+		line.add_child(value)
 		box.add_child(line)
 	return box
 

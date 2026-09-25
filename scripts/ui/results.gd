@@ -14,13 +14,14 @@ func _ready() -> void:
 	root.add_theme_constant_override("separation", 16)
 	add_child(root)
 
-	root.add_child(UiKit.title("MATCH RESULTS", 34, Color(1, 1, 1, 0.6)))
+	root.add_child(UiKit.title("BEST IN SHOW", 34, Color(1, 1, 1, 0.6)))
 	if winner:
 		# In teams the pack won, not the dog that happened to be left standing.
 		if Game.team_mode and winner.team >= 0:
 			root.add_child(UiKit.title("%s WINS!" % Game.team_name(winner.team), 108, Game.team_color(winner.team)))
 		else:
 			root.add_child(UiKit.title("%s WINS!" % winner.dog.display_name.to_upper(), 120, winner.dog.card_color))
+		root.add_child(UiKit.label(DogTalk.match_brag(), 26, UiKit.CREAM))
 		var trophy := PanelContainer.new()
 		var trophy_style := StyleBoxFlat.new()
 		trophy_style.bg_color = Color(0, 0, 0, 0.2)
@@ -34,7 +35,7 @@ func _ready() -> void:
 		trophy.add_child(preview)
 		root.add_child(trophy)
 	else:
-		root.add_child(UiKit.title("GAME OVER", 110, UiKit.ACCENT))
+		root.add_child(UiKit.title("ALL TUCKERED OUT", 96, UiKit.ACCENT))
 
 	var standings := Game.slots.duplicate()
 	# score_for reads the pack's board in teams and the player's own otherwise; sorting on
@@ -51,6 +52,9 @@ func _ready() -> void:
 		row.add_theme_constant_override("separation", 14)
 		row.add_child(UiKit.title("%d" % place, 34, UiKit.YELLOW if place == 1 else Color(1, 1, 1, 0.6)))
 		row.add_child(UiKit.chip(s.label, s.color, 20))
+		var placing := UiKit.title(DogTalk.placing(place, standings.size()), 22, UiKit.YELLOW if place == 1 else Color(1, 1, 1, 0.55))
+		placing.custom_minimum_size.x = 190
+		row.add_child(placing)
 		var points: int = Game.score_for(s)
 		var side := "  ·  %s" % Game.team_name(s.team) if Game.team_mode and s.team >= 0 else ""
 		var l := UiKit.label("%s   ·   %d %s%s" % [s.dog.display_name, points, "point" if points == 1 else "points", side], 28, UiKit.CREAM)

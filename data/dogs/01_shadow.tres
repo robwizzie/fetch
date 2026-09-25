@@ -17,10 +17,11 @@ portrait_region = Rect2(42, 142, 300, 366)
 card_color = Color(0.24, 0.5, 1.0, 1)
 card_color_dark = Color(0.09, 0.18, 0.46, 1)
 model_scene_path = "res://assets/models/dogs/shadow/shadow.tscn"
-model_scale = 1.0
+model_scale = 1.1
 model_height = 1.2
 model_rotation_degrees = Vector3(0, 180, 0)
 mouth_socket_bone = &"headend"
+mouth_grip = Vector3(0, 0.74, -0.6)
 model_animations = {
 "catch": &"catch",
 "dash": &"dash",
@@ -39,4 +40,4 @@ throw_power = 1.0
 catch_radius = 2.0
 catch_window = 0.18
 dash_distance = 3.0
-body_radius = 0.72
+body_radius = 0.792

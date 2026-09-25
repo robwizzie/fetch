@@ -57,12 +57,14 @@ func _rebuild() -> void:
 	for i in slats:
 		var y := size.y * (float(i) + 0.5) / float(slats)
 		var shade := color.lerp(color.darkened(0.3), float(i % 2) * 0.55)
-		Mats.mesh(_visual, Mats.box(Vector3(size.x, size.y / float(slats) - 0.05, size.z)), shade, Vector3(0, y, 0))
-	Mats.mesh(_visual, Mats.box(Vector3(size.x + 0.12, 0.12, size.z + 0.12)), color.lightened(0.32), Vector3(0, size.y, 0))
+		ArenaArt.block(_visual, Vector3(size.x, size.y / float(slats) - 0.05, size.z), shade, Vector3(0, y, 0), Vector3.ZERO, 0.035)
+	ArenaArt.block(_visual, Vector3(size.x + 0.12, 0.12, size.z + 0.12), color.lightened(0.22), Vector3(0, size.y, 0), Vector3.ZERO, 0.035)
 	# Posts at each end so the panel looks held up by something.
 	for side in [-1.0, 1.0]:
-		Mats.mesh(_visual, Mats.box(Vector3(0.26, size.y + 0.2, size.z + 0.16)), color.darkened(0.42),
-			Vector3(side * (size.x * 0.5 + 0.13), (size.y + 0.2) * 0.5, 0))
+		ArenaArt.block(_visual, Vector3(0.26, size.y + 0.2, size.z + 0.16), color.darkened(0.42),
+			Vector3(side * (size.x * 0.5 + 0.13), (size.y + 0.2) * 0.5, 0), Vector3.ZERO, 0.04)
+		ArenaArt.block(_visual, Vector3(0.30, 0.12, size.z + 0.20), Color("c5ad7f"),
+			Vector3(side * (size.x * 0.5 + 0.13), size.y + 0.21, 0), Vector3.ZERO, 0.025)
 
 
 func set_open(open: bool) -> void:

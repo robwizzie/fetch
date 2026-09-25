@@ -2,11 +2,15 @@
 class_name Obstacle
 extends StaticBody3D
 ## A solid prop. Pick a [member kind] and a footprint [member size]; the visual is built from
-## primitives and the collider is the footprint box. Replace visuals with real models later
-## by adding a child mesh and setting kind = CUSTOM.
+## crafted beveled forms; the collider stays the authored footprint box.
+## CUSTOM leaves the visual root available for map-specific scenery.
+##
+## Two kinds are routes rather than walls. A TUNNEL keeps only its two side walls, so the tube
+## is open end to end. A RAMP keeps only its side rails and reports a deck height through
+## [Terrain], so dogs and toys run up and over it. Both are still solid from the side.
 
 enum Kind { BOX, CRATE, DOGHOUSE, TABLE, BUSH, COUCH, ARMCHAIR, TV, PLANT, TIRE, CUSTOM,
-	RAMP, TUNNEL, WEAVE, COUNTER, FRIDGE, UMBRELLA, ROCK }
+	RAMP, TUNNEL, WEAVE, COUNTER, FRIDGE, UMBRELLA, ROCK, COOLER }
 
 @export var kind := Kind.BOX:
 	set(v):
@@ -25,11 +29,18 @@ enum Kind { BOX, CRATE, DOGHOUSE, TABLE, BUSH, COUCH, ARMCHAIR, TV, PLANT, TIRE,
 		accent = v
 		_rebuild()
 
-var _shape: CollisionShape3D
-var _visual: Node3D
-
 const OCCLUDED_OPACITY := 0.22
 const OCCLUSION_CHECK_INTERVAL := 0.075
+## Side walls and rails on the props you can cross.
+const WALL_THICKNESS := 0.17
+## How far a rail stands above the deck it guards.
+const RAIL_HEIGHT := 0.46
+## Sight-line-only bodies live here, where nothing else looks.
+const OCCLUSION_LAYER := 16
+
+var _shapes: Array[CollisionShape3D] = []
+var _occluder: StaticBody3D
+var _visual: Node3D
 var _opacity := 1.0
 var _target_opacity := 1.0
 var _occlusion_timer := 0.0
@@ -52,128 +63,412 @@ func _ready() -> void:
 func _rebuild() -> void:
 	if not is_inside_tree():
 		return
-	if _shape == null:
-		_shape = CollisionShape3D.new()
-		_shape.shape = BoxShape3D.new()
-		add_child(_shape)
-	(_shape.shape as BoxShape3D).size = size
-	_shape.position = Vector3(0, size.y / 2.0, 0)
+	_build_colliders()
 	if _ground_shade != null and is_instance_valid(_ground_shade):
 		_ground_shade.queue_free()
 	# Seats the prop on the ground. Without it a primitive reads as hovering over the grass.
-	_ground_shade = Mats.contact_shadow(self, maxf(size.x, size.z) * 0.58)
+	var longest_side := maxf(size.x, size.z)
+	_ground_shade = Mats.contact_shadow(self, longest_side * 0.53, Vector3(0, 0.024, 0))
+	_ground_shade.scale = Vector3(size.x / longest_side, 1, size.z / longest_side)
+	# Contact shading follows a bench/counter footprint instead of making every prop
+	# sit on a large circular spot; the directional light supplies the cast shadow.
+	(_ground_shade.material_override as StandardMaterial3D).albedo_color.a = 0.18
 	if _visual:
 		_visual.queue_free()
 	_visual = Node3D.new()
 	add_child(_visual)
-	var v := _visual
-	var s := size
 	match kind:
 		Kind.CRATE:
-			Mats.mesh(v, Mats.box(s), color, Vector3(0, s.y / 2.0, 0))
-			Mats.mesh(v, Mats.box(Vector3(s.x + 0.04, 0.12, s.z + 0.04)), accent, Vector3(0, s.y * 0.2, 0))
-			Mats.mesh(v, Mats.box(Vector3(s.x + 0.04, 0.12, s.z + 0.04)), accent, Vector3(0, s.y * 0.8, 0))
-			Mats.mesh(v, Mats.box(Vector3(0.12, s.y + 0.04, s.z + 0.04)), accent, Vector3(0, s.y / 2.0, 0))
+			_crate()
 		Kind.DOGHOUSE:
-			var body_h := s.y * 0.62
-			var roof_h := s.y - body_h
-			Mats.mesh(v, Mats.box(Vector3(s.x, body_h, s.z)), color, Vector3(0, body_h / 2.0, 0))
-			# Plank seams break up the walls, which are otherwise one flat face from above.
-			for seam in 3:
-				var sy: float = body_h * (0.28 + seam * 0.22)
-				Mats.mesh(v, Mats.box(Vector3(s.x + 0.02, 0.035, s.z + 0.02)), color.darkened(0.16), Vector3(0, sy, 0))
-			Mats.mesh(v, Mats.prism(Vector3(s.x * 1.22, roof_h, s.z * 1.16)), accent, Vector3(0, body_h + roof_h / 2.0, 0))
-			# Shingle courses down each slope, and a ridge beam along the top: the roof is most
-			# of what the overhead camera sees, so it carries the read.
-			for course in 3:
-				var t: float = 0.22 + course * 0.24
-				var width: float = s.x * 1.22 * (1.0 - t * 0.92)
-				Mats.mesh(v, Mats.box(Vector3(width, 0.03, s.z * 1.18)), accent.darkened(0.18),
-					Vector3(0, body_h + roof_h * t, 0))
-			Mats.mesh(v, Mats.box(Vector3(0.09, 0.09, s.z * 1.2)), accent.darkened(0.3), Vector3(0, s.y, 0))
-			# Doorway with a frame, so the entrance is not a flat black rectangle.
-			var door := Vector3(s.x * 0.44, body_h * 0.74, 0.12)
-			Mats.mesh(v, Mats.box(door + Vector3(0.1, 0.08, 0.0)), accent.lightened(0.12), Vector3(0, body_h * 0.37, s.z / 2.0 - 0.01))
-			Mats.mesh(v, Mats.box(door), Color(0.1, 0.07, 0.06), Vector3(0, body_h * 0.36, s.z / 2.0))
+			_doghouse()
 		Kind.TABLE:
-			Mats.mesh(v, Mats.box(Vector3(s.x, 0.16, s.z)), color, Vector3(0, s.y - 0.08, 0))
-			for p in [Vector3(-1, 0, -1), Vector3(1, 0, -1), Vector3(-1, 0, 1), Vector3(1, 0, 1)]:
-				Mats.mesh(v, Mats.cylinder(0.09, s.y - 0.16), accent, Vector3(p.x * (s.x / 2.0 - 0.25), (s.y - 0.16) / 2.0, p.z * (s.z / 2.0 - 0.25)))
+			_table()
 		Kind.BUSH:
-			var r := minf(s.x, s.z) * 0.42
-			Mats.mesh(v, Mats.sphere(r), color, Vector3(0, r * 0.9, 0))
-			Mats.mesh(v, Mats.sphere(r * 0.8), color, Vector3(-s.x * 0.28, r * 0.75, s.z * 0.1))
-			Mats.mesh(v, Mats.sphere(r * 0.8), color.lightened(0.1), Vector3(s.x * 0.28, r * 0.8, -s.z * 0.1))
-			Mats.mesh(v, Mats.sphere(r * 0.7), color.darkened(0.1), Vector3(0, r * 0.7, s.z * 0.3))
+			_bush()
 		Kind.COUCH, Kind.ARMCHAIR:
-			var seat_h := s.y * 0.45
-			Mats.mesh(v, Mats.box(Vector3(s.x, seat_h, s.z)), color, Vector3(0, seat_h / 2.0, 0))
-			Mats.mesh(v, Mats.box(Vector3(s.x, s.y, s.z * 0.3)), color.darkened(0.12), Vector3(0, s.y / 2.0, -s.z * 0.35))
-			Mats.mesh(v, Mats.box(Vector3(s.x * 0.12, s.y * 0.75, s.z)), color.darkened(0.12), Vector3(-s.x * 0.44, s.y * 0.375, 0))
-			Mats.mesh(v, Mats.box(Vector3(s.x * 0.12, s.y * 0.75, s.z)), color.darkened(0.12), Vector3(s.x * 0.44, s.y * 0.375, 0))
-			Mats.mesh(v, Mats.box(Vector3(s.x * 0.7, 0.14, s.z * 0.6)), accent, Vector3(0, seat_h + 0.07, s.z * 0.1))
+			_seat()
 		Kind.TV:
-			Mats.mesh(v, Mats.box(Vector3(s.x, s.y * 0.35, s.z)), accent, Vector3(0, s.y * 0.175, 0))
-			Mats.mesh(v, Mats.box(Vector3(s.x * 0.9, s.y * 0.62, 0.12)), color, Vector3(0, s.y * 0.35 + s.y * 0.31, 0))
-			var screen := Mats.mesh(v, Mats.box(Vector3(s.x * 0.82, s.y * 0.52, 0.04)), Color(0.35, 0.6, 0.9), Vector3(0, s.y * 0.35 + s.y * 0.31, 0.06))
-			screen.material_override = Mats.unlit(Color(0.4, 0.65, 0.95))
+			_tv()
 		Kind.PLANT:
-			var pr := minf(s.x, s.z) * 0.4
-			Mats.mesh(v, Mats.cylinder(pr, s.y * 0.4, pr * 0.8), accent, Vector3(0, s.y * 0.2, 0))
-			Mats.mesh(v, Mats.sphere(pr * 1.25), color, Vector3(0, s.y * 0.72, 0))
-			Mats.mesh(v, Mats.sphere(pr * 0.9), color.lightened(0.12), Vector3(pr * 0.5, s.y * 0.85, pr * 0.3))
+			_plant()
 		Kind.TIRE:
-			var mi := Mats.mesh(v, Mats.torus(s.x * 0.22, s.x * 0.5), color, Vector3(0, s.y / 2.0, 0))
-			mi.scale = Vector3(1, s.y / (s.x * 0.56), 1)
+			_tire()
 		Kind.RAMP:
-			# Agility A-frame: two boards leaning into each other, striped at the apex.
-			var lean := Vector3(s.x * 0.5, s.y, s.z)
-			Mats.mesh(v, Mats.prism(lean), color, Vector3(-s.x * 0.25, s.y / 2.0, 0), Vector3(0, 0, -90))
-			Mats.mesh(v, Mats.prism(lean), accent, Vector3(s.x * 0.25, s.y / 2.0, 0), Vector3(0, 0, 90))
-			Mats.mesh(v, Mats.box(Vector3(s.x * 0.16, 0.1, s.z + 0.05)), Color(0.98, 0.98, 0.95), Vector3(0, s.y, 0))
+			_ramp()
 		Kind.TUNNEL:
-			# A ribbed play tunnel lying on its side across the lane.
-			var ribs := maxi(3, int(s.x / 0.42))
-			for i in ribs:
-				var t := float(i) / float(maxi(1, ribs - 1))
-				var tint := color if i % 2 == 0 else accent
-				var ring := Mats.mesh(v, Mats.torus(s.y * 0.30, s.y * 0.5), tint, Vector3(-s.x / 2.0 + t * s.x, s.y / 2.0, 0), Vector3(0, 0, 90))
-				ring.scale = Vector3(1, 1, s.z / maxf(s.y, 0.01))
+			_tunnel()
 		Kind.WEAVE:
-			var poles := maxi(3, int(s.x / 0.55))
-			for i in poles:
-				var t := float(i) / float(maxi(1, poles - 1))
-				var x := -s.x / 2.0 + t * s.x
-				Mats.mesh(v, Mats.cylinder(0.07, s.y), color, Vector3(x, s.y / 2.0, sin(t * PI * 2.0) * s.z * 0.18))
-				Mats.mesh(v, Mats.sphere(0.1), accent, Vector3(x, s.y, sin(t * PI * 2.0) * s.z * 0.18))
+			_weave()
 		Kind.COUNTER:
-			Mats.mesh(v, Mats.box(Vector3(s.x, s.y - 0.1, s.z)), color, Vector3(0, (s.y - 0.1) / 2.0, 0))
-			Mats.mesh(v, Mats.box(Vector3(s.x + 0.12, 0.12, s.z + 0.12)), accent, Vector3(0, s.y - 0.05, 0))
-			for i in maxi(1, int(s.x / 1.1)):
-				var dx := -s.x / 2.0 + (i + 0.5) * s.x / float(maxi(1, int(s.x / 1.1)))
-				Mats.mesh(v, Mats.box(Vector3(0.06, s.y * 0.5, 0.04)), accent.darkened(0.2), Vector3(dx, s.y * 0.42, s.z / 2.0 + 0.02))
+			_counter()
 		Kind.FRIDGE:
-			Mats.mesh(v, Mats.box(s), color, Vector3(0, s.y / 2.0, 0))
-			Mats.mesh(v, Mats.box(Vector3(s.x + 0.02, 0.05, s.z + 0.02)), accent, Vector3(0, s.y * 0.63, 0))
-			Mats.mesh(v, Mats.box(Vector3(0.07, s.y * 0.22, 0.07)), accent, Vector3(s.x * 0.32, s.y * 0.78, s.z / 2.0 + 0.04))
-			Mats.mesh(v, Mats.box(Vector3(0.07, s.y * 0.3, 0.07)), accent, Vector3(s.x * 0.32, s.y * 0.35, s.z / 2.0 + 0.04))
+			_fridge()
 		Kind.UMBRELLA:
-			var pole_h := s.y * 0.72
-			Mats.mesh(v, Mats.cylinder(0.07, pole_h), accent, Vector3(0, pole_h / 2.0, 0))
-			Mats.mesh(v, Mats.cone(minf(s.x, s.z) * 0.62, s.y - pole_h), color, Vector3(0, pole_h + (s.y - pole_h) / 2.0, 0))
-			Mats.mesh(v, Mats.sphere(0.09), accent, Vector3(0, s.y + 0.04, 0))
+			_umbrella()
 		Kind.ROCK:
-			var rr := minf(s.x, s.z) * 0.46
-			Mats.mesh(v, Mats.sphere(rr), color, Vector3(0, rr * 0.72, 0), Vector3.ZERO, Vector3(1.0, 0.72, 0.9))
-			Mats.mesh(v, Mats.sphere(rr * 0.66), color.lightened(0.08), Vector3(rr * 0.5, rr * 0.55, -rr * 0.35), Vector3.ZERO, Vector3(1.0, 0.7, 1.0))
-			Mats.mesh(v, Mats.sphere(rr * 0.5), color.darkened(0.1), Vector3(-rr * 0.55, rr * 0.45, rr * 0.3))
+			_rock()
+		Kind.COOLER:
+			_cooler()
 		Kind.CUSTOM:
 			pass
 		_:
-			Mats.mesh(v, Mats.box(s), color, Vector3(0, s.y / 2.0, 0))
+			_block(size, color, Vector3(0, size.y * 0.5, 0), 0.12)
 
 	if not Engine.is_editor_hint():
 		_prepare_occlusion_materials()
+
+
+## Solid props are one footprint box. A tunnel is two walls with open ends, an A-frame is two
+## rails with an open deck; both keep a sight-line-only body over the whole footprint so a dog
+## inside or behind them still fades the prop out.
+func _build_colliders() -> void:
+	for shape in _shapes:
+		shape.queue_free()
+	_shapes.clear()
+	if is_instance_valid(_occluder):
+		_occluder.queue_free()
+	_occluder = null
+	if is_in_group(Terrain.GROUP):
+		remove_from_group(Terrain.GROUP)
+	match kind:
+		Kind.TUNNEL:
+			for side: float in [-1.0, 1.0]:
+				_collider(Vector3(size.x, size.y, WALL_THICKNESS),
+					Vector3(0, size.y * 0.5, side * (size.z - WALL_THICKNESS) * 0.5))
+			_build_occluder()
+		Kind.RAMP:
+			add_to_group(Terrain.GROUP)
+			for spec: Array in _rail_segments():
+				_collider(spec[1], spec[0])
+			_build_occluder()
+		_:
+			_collider(size, Vector3(0, size.y * 0.5, 0))
+
+
+func _collider(dimensions: Vector3, at: Vector3) -> void:
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = dimensions
+	shape.shape = box
+	shape.position = at
+	add_child(shape)
+	_shapes.append(shape)
+
+
+## Nothing collides with this body; it is only there for the sight-line test that fades props,
+## which would otherwise see straight through an open tunnel and leave a dog hidden inside it.
+func _build_occluder() -> void:
+	_occluder = StaticBody3D.new()
+	_occluder.name = "Occluder"
+	_occluder.collision_layer = OCCLUSION_LAYER
+	_occluder.collision_mask = 0
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = size
+	shape.shape = box
+	shape.position = Vector3(0, size.y * 0.5, 0)
+	_occluder.add_child(shape)
+	add_child(_occluder)
+
+
+## The A-frame deck: ground level at both ends, rising to the ridge in the middle.
+func deck_height(local_x: float) -> float:
+	var half := size.x * 0.5
+	if half <= 0.0:
+		return 0.0
+	return size.y * clampf(1.0 - absf(local_x) / half, 0.0, 1.0)
+
+
+## Walkable height at a world point, or 0 off the deck. Queried through [Terrain].
+func surface_height(at: Vector3) -> float:
+	if kind != Kind.RAMP:
+		return 0.0
+	var local := to_local(at)
+	if absf(local.x) > size.x * 0.5 or absf(local.z) > size.z * 0.5:
+		return 0.0
+	return deck_height(local.x)
+
+
+## Stepped rails following the deck profile, as [position, size] pairs. They are the ramp's
+## only collision: you get on at either end and cannot walk off the side, so the climb is real.
+func _rail_segments() -> Array:
+	var steps := maxi(4, int(size.x / 0.75))
+	var specs: Array = []
+	for side: float in [-1.0, 1.0]:
+		for i in steps:
+			var x0 := -size.x * 0.5 + size.x * float(i) / float(steps)
+			var x1 := -size.x * 0.5 + size.x * float(i + 1) / float(steps)
+			var top := maxf(deck_height(x0), deck_height(x1)) + RAIL_HEIGHT
+			specs.append([Vector3((x0 + x1) * 0.5, top * 0.5, side * (size.z - WALL_THICKNESS) * 0.5),
+				Vector3(x1 - x0, top, WALL_THICKNESS)])
+	return specs
+
+
+func _block(dimensions: Vector3, tint: Color, at: Vector3, bevel: float = 0.055, rotation_deg: Vector3 = Vector3.ZERO) -> MeshInstance3D:
+	return ArenaArt.block(_visual, dimensions, tint, at, rotation_deg, bevel)
+
+
+func _crate() -> void:
+	var s := size
+	_block(s * Vector3(0.94, 0.96, 0.94), color.darkened(0.12), Vector3(0, s.y * 0.5, 0))
+	for i in 4:
+		var y := (i + 0.5) * s.y / 4.0
+		_block(Vector3(s.x, s.y / 4.0 - 0.028, s.z), color.lightened(i % 2 * 0.035), Vector3(0, y, 0), 0.035)
+	for side in [-1.0, 1.0]:
+		for x in [-s.x * 0.38, s.x * 0.38]:
+			_block(Vector3(0.14, s.y, 0.075), accent, Vector3(x, s.y * 0.5, side * s.z * 0.5), 0.025)
+		# A clean diagonal brace makes this silhouette a wooden crate even from above.
+		var brace_length := Vector2(s.x * 0.65, s.y * 0.68).length()
+		_block(Vector3(brace_length, 0.115, 0.06), accent.lightened(0.06), Vector3(0, s.y * 0.5, side * (s.z * 0.5 + 0.04)), 0.025,
+			Vector3(0, 0, rad_to_deg(atan2(s.y * 0.68, s.x * 0.65))))
+	for i in 4:
+		_block(Vector3(s.x / 4.0 - 0.025, 0.075, s.z), color.lightened(0.09), Vector3(-s.x * 0.5 + (i + 0.5) * s.x / 4.0, s.y, 0), 0.02)
+
+
+func _cooler() -> void:
+	var s := size
+	_block(Vector3(s.x * 0.95, s.y * 0.81, s.z * 0.95), color, Vector3(0, s.y * 0.44, 0), 0.11)
+	_block(Vector3(s.x, s.y * 0.18, s.z), accent, Vector3(0, s.y * 0.91, 0), 0.07)
+	_block(Vector3(s.x * 0.75, 0.024, s.z * 0.74), accent.darkened(0.07), Vector3(0, s.y + 0.01, 0), 0.012)
+	for side in [-1.0, 1.0]:
+		_block(Vector3(0.075, s.y * 0.30, s.z * 0.45), accent.darkened(0.18), Vector3(side * s.x * 0.48, s.y * 0.58, 0), 0.032)
+		_block(Vector3(0.085, s.y * 0.12, s.z * 0.30), color.darkened(0.22), Vector3(side * s.x * 0.51, s.y * 0.61, 0), 0.025)
+	_block(Vector3(s.x * 0.25, s.y * 0.16, 0.025), accent, Vector3(0, s.y * 0.48, s.z * 0.487), 0.025)
+	_block(Vector3(s.x * 0.06, s.y * 0.22, 0.045), accent.darkened(0.22), Vector3(0, s.y * 0.79, s.z * 0.51), 0.015)
+
+
+func _doghouse() -> void:
+	var s := size
+	var body_h := s.y * 0.65
+	var roof_h := s.y - body_h
+	_block(Vector3(s.x, body_h, s.z), color, Vector3(0, body_h * 0.5, 0), 0.065)
+	for i in 4:
+		_block(Vector3(s.x + 0.015, 0.025, s.z + 0.015), color.darkened(0.12), Vector3(0, body_h * (i + 1) / 5.0, 0), 0.005)
+	for side in [-1.0, 1.0]:
+		for z in [-s.z * 0.47, s.z * 0.47]:
+			_block(Vector3(0.13, body_h, 0.14), Color("efd5ac"), Vector3(side * s.x * 0.47, body_h * 0.5, z), 0.025)
+	Mats.mesh(_visual, Mats.prism(Vector3(s.x * 1.12, roof_h, s.z * 1.10)), accent, Vector3(0, body_h + roof_h * 0.5, 0))
+	# Sloped roof boards and a cream eave are fitted to the actual triangular roof.
+	var slope := rad_to_deg(atan2(roof_h, s.x * 0.56))
+	var roof_length := Vector2(s.x * 0.56, roof_h).length()
+	for side in [-1.0, 1.0]:
+		for i in 5:
+			_block(Vector3(roof_length, 0.065, s.z * 1.11 / 5.0 - 0.022), accent.lightened(0.04 if i % 2 == 0 else 0.0),
+				Vector3(side * s.x * 0.28, body_h + roof_h * 0.5 + 0.035, -s.z * 0.55 + (i + 0.5) * s.z * 1.1 / 5.0),
+				0.018, Vector3(0, 0, -side * slope))
+	_block(Vector3(0.13, 0.11, s.z * 1.13), accent.lightened(0.18), Vector3(0, s.y + 0.04, 0), 0.04)
+	var doorway_y := body_h * 0.37
+	_block(Vector3(s.x * 0.47, body_h * 0.78, 0.07), Color("efd5ac"), Vector3(0, doorway_y, s.z * 0.5 + 0.02), 0.12)
+	_block(Vector3(s.x * 0.36, body_h * 0.65, 0.075), Color("42372f"), Vector3(0, doorway_y - 0.04, s.z * 0.5 + 0.065), 0.10)
+	_block(Vector3(s.x * 0.43, 0.10, 0.3), accent, Vector3(0, 0.05, s.z * 0.5 + 0.06), 0.03)
+
+
+func _table() -> void:
+	var s := size
+	_block(Vector3(s.x * 0.92, 0.13, s.z * 0.88), accent, Vector3(0, s.y - 0.23, 0))
+	for i in 5:
+		_block(Vector3(s.x, 0.18, s.z / 5.0 - 0.024), color.lightened(0.035 * (i % 2)), Vector3(0, s.y - 0.09, -s.z * 0.5 + (i + 0.5) * s.z / 5.0), 0.055)
+	for x in [-1.0, 1.0]:
+		for z in [-1.0, 1.0]:
+			_block(Vector3(0.16, s.y - 0.18, 0.16), accent, Vector3(x * (s.x * 0.5 - 0.23), (s.y - 0.18) * 0.5, z * (s.z * 0.5 - 0.22)), 0.035)
+		_block(Vector3(0.12, 0.12, s.z * 0.8), accent.lightened(0.08), Vector3(x * (s.x * 0.5 - 0.23), s.y * 0.26, 0), 0.025)
+
+
+func _bush() -> void:
+	var s := size
+	_block(Vector3(s.x * 0.93, 0.15, s.z * 0.94), accent.darkened(0.14), Vector3(0, 0.075, 0), 0.05)
+	for i in 5:
+		var x := ((i % 3) - 1) * s.x * 0.25
+		var z := (-0.17 if i < 3 else 0.22) * s.z
+		var foliage := Mats.mesh(_visual, Mats.sphere(0.5), color.lightened(i % 3 * 0.045), Vector3(x, s.y * (0.47 if i == 1 else 0.40), z))
+		foliage.scale = Vector3(s.x * 0.48, s.y * (1.02 if i == 1 else 0.85), s.z * 0.68)
+	for i in 3:
+		ArenaArt.flower(_visual, Vector3((i - 1) * s.x * 0.26, s.y * 0.78, s.z * 0.18), Color("f0cea8"), 0.07)
+
+
+func _seat() -> void:
+	var s := size
+	var seat_h := s.y * 0.45
+	for x in [-s.x * 0.4, s.x * 0.4]:
+		for z in [-s.z * 0.36, s.z * 0.36]:
+			_block(Vector3(0.14, 0.22, 0.14), Color("725941"), Vector3(x, 0.11, z), 0.025)
+	_block(Vector3(s.x, seat_h - 0.10, s.z), color.darkened(0.16), Vector3(0, seat_h * 0.5 + 0.05, 0), 0.12)
+	_block(Vector3(s.x * 0.98, s.y * 0.77, s.z * 0.26), color.darkened(0.08), Vector3(0, s.y * 0.59, -s.z * 0.35), 0.12)
+	for side in [-1.0, 1.0]:
+		_block(Vector3(maxf(0.22, s.x * 0.105), s.y * 0.62, s.z * 0.97), color, Vector3(side * s.x * 0.445, s.y * 0.43, 0), 0.11)
+	var cushions := 3 if kind == Kind.COUCH else 1
+	var span := s.x * 0.74 / cushions
+	for i in cushions:
+		var x := (i - (cushions - 1) * 0.5) * span
+		_block(Vector3(span - 0.045, 0.20, s.z * 0.65), color.lightened(0.12), Vector3(x, seat_h + 0.07, s.z * 0.08), 0.08)
+		_block(Vector3(span - 0.06, s.y * 0.44, s.z * 0.19), color.lightened(0.035), Vector3(x, s.y * 0.73, -s.z * 0.22), 0.09, Vector3(-8, 0, 0))
+		_block(Vector3(span - 0.12, 0.022, s.z * 0.025), color.lightened(0.27), Vector3(x, seat_h + 0.06, s.z * 0.408), 0.008)
+	# One accent pillow, proportioned to a seat instead of a single long cushion slab.
+	var pillow := minf(0.62, s.x * 0.28)
+	_block(Vector3(pillow, pillow * 0.8, 0.19), accent, Vector3(-s.x * 0.22, seat_h + pillow * 0.5, -s.z * 0.07), 0.10, Vector3(-15, 0, -12))
+
+
+func _tv() -> void:
+	var s := size
+	_block(Vector3(s.x, s.y * 0.3, s.z), accent, Vector3(0, s.y * 0.2, 0), 0.075)
+	_block(Vector3(s.x + 0.06, 0.08, s.z + 0.04), accent.lightened(0.12), Vector3(0, s.y * 0.36, 0), 0.035)
+	for side in [-1.0, 1.0]:
+		_block(Vector3(s.x * 0.43, s.y * 0.19, 0.025), accent.darkened(0.13), Vector3(side * s.x * 0.25, s.y * 0.20, s.z * 0.505), 0.025)
+		_block(Vector3(0.28, 0.035, 0.03), Color("caa76e"), Vector3(side * s.x * 0.25, s.y * 0.25, s.z * 0.53), 0.012)
+		_block(Vector3(0.16, s.y * 0.1, 0.28), color, Vector3(side * s.x * 0.25, s.y * 0.4, 0), 0.025)
+	_block(Vector3(s.x * 0.9, s.y * 0.55, 0.16), color, Vector3(0, s.y * 0.71, 0), 0.075)
+	_block(Vector3(s.x * 0.82, s.y * 0.47, 0.035), Color("527a82"), Vector3(0, s.y * 0.71, 0.095), 0.045)
+	# Quiet graphic on the screen avoids the old solid luminous blue rectangle.
+	_block(Vector3(s.x * 0.55, 0.045, 0.012), Color("9ec5bc"), Vector3(-s.x * 0.07, s.y * 0.73, 0.12), 0.015)
+	_block(Vector3(s.x * 0.31, 0.028, 0.012), Color("82a9a6"), Vector3(-s.x * 0.19, s.y * 0.66, 0.12), 0.01)
+	Mats.mesh(_visual, Mats.sphere(0.03), Color("cce7ad"), Vector3(s.x * 0.37, s.y * 0.445, 0.095))
+
+
+func _plant() -> void:
+	var s := size
+	var radius := minf(s.x, s.z) * 0.36
+	Mats.mesh(_visual, Mats.cylinder(radius * 0.76, s.y * 0.34, radius), accent, Vector3(0, s.y * 0.17, 0))
+	Mats.mesh(_visual, Mats.torus(radius * 0.85, radius * 1.05), accent.lightened(0.13), Vector3(0, s.y * 0.34, 0), Vector3.ZERO, Vector3(1, 0.48, 1))
+	Mats.mesh(_visual, Mats.cylinder(radius * 0.85, 0.035), Color("5d4837"), Vector3(0, s.y * 0.34, 0))
+	for i in 7:
+		var angle := TAU * i / 7.0
+		var top := Vector3(cos(angle) * radius * 0.68, s.y * (0.66 + (i % 3) * 0.11), sin(angle) * radius * 0.68)
+		ArenaArt.rod(_visual, Vector3(0, s.y * 0.32, 0), top, 0.026, color.darkened(0.17))
+		var leaf := Mats.mesh(_visual, Mats.sphere(radius * 0.64), color.lightened((i % 3) * 0.05), top)
+		leaf.scale = Vector3(0.6, 1.3, 0.33)
+		leaf.rotation_degrees = Vector3(25, rad_to_deg(-angle), 28)
+
+
+func _tire() -> void:
+	var s := size
+	var radius := minf(s.x, s.z) * 0.48
+	var ring := Mats.mesh(_visual, Mats.torus(radius * 0.49, radius), color, Vector3(0, s.y * 0.5, 0))
+	ring.scale.y = s.y / maxf(radius * 0.51, 0.01)
+	for i in 18:
+		var angle := TAU * float(i) / 18.0
+		_block(Vector3(0.12, s.y * 0.57, radius * 0.13), color.lightened(0.12), Vector3(sin(angle) * radius * 0.93, s.y * 0.5, cos(angle) * radius * 0.93), 0.025, Vector3(0, rad_to_deg(angle) + 10, 0))
+	var rim := Mats.mesh(_visual, Mats.torus(radius * 0.55, radius * 0.61), color.lightened(0.18), Vector3(0, s.y * 0.89, 0))
+	rim.scale.y = 0.5
+
+
+func _ramp() -> void:
+	var s := size
+	var half := s.x * 0.5
+	var slope := atan2(s.y, half)
+	var deck_length := Vector2(half, s.y).length()
+	var deck_width := s.z - WALL_THICKNESS * 2.0
+	var thickness := 0.16
+	for side: float in [-1.0, 1.0]:
+		# The plank's top face is laid on the deck line, so what is drawn is what is walked on.
+		var up := Vector2(sin(side * slope), cos(slope))
+		var centre := Vector2(side * half * 0.5, s.y * 0.5) - up * (thickness * 0.5)
+		var tilt := Vector3(0, 0, rad_to_deg(-side * slope))
+		_block(Vector3(deck_length, thickness, deck_width), color if side < 0.0 else color.lightened(0.05),
+			Vector3(centre.x, centre.y, 0), 0.03, tilt)
+		for i in 6:
+			var t := 0.1 + float(i) * 0.155
+			var batten := Vector2(side * half * (1.0 - t), s.y * t) + up * 0.028
+			_block(Vector3(0.07, 0.05, deck_width * 0.94), Color("f0debb"), Vector3(batten.x, batten.y, 0), 0.012, tilt)
+	# The rails are drawn exactly where they collide, so the edge you can see is the edge you hit.
+	for spec: Array in _rail_segments():
+		var at: Vector3 = spec[0]
+		var dimensions: Vector3 = spec[1]
+		_block(dimensions, accent, at, 0.03)
+		_block(Vector3(dimensions.x - 0.03, 0.09, WALL_THICKNESS + 0.06), accent.lightened(0.18),
+			Vector3(at.x, dimensions.y, at.z), 0.03)
+	_block(Vector3(0.22, 0.12, s.z + 0.06), Color("f4e4c5"), Vector3(0, s.y + 0.02, 0), 0.045)
+
+
+func _tunnel() -> void:
+	var s := size
+	# A continuous fabric body and evenly spaced ribs replace separated floating rings.
+	var body := Mats.mesh(_visual, Mats.cylinder(s.y * 0.47, s.x), color, Vector3(0, s.y * 0.49, 0), Vector3(0, 0, 90))
+	body.scale.z = s.z / s.y
+	var ribs := maxi(5, int(s.x / 0.48))
+	for i in ribs:
+		var x := lerpf(-s.x * 0.5, s.x * 0.5, float(i) / (ribs - 1))
+		var ring := Mats.mesh(_visual, Mats.torus(s.y * 0.435, s.y * 0.50), accent if i == 0 or i == ribs - 1 else color.lightened(0.15), Vector3(x, s.y * 0.5, 0), Vector3(0, 0, 90))
+		ring.scale.z = s.z / s.y
+	for side in [-1.0, 1.0]:
+		var end := Mats.mesh(_visual, Mats.cylinder(s.y * 0.4, 0.018), color.darkened(0.52), Vector3(side * (s.x * 0.5 + 0.008), s.y * 0.5, 0), Vector3(0, 0, 90))
+		end.scale.z = s.z / s.y
+
+
+func _weave() -> void:
+	var s := size
+	_block(Vector3(s.x, 0.1, s.z), accent.darkened(0.13), Vector3(0, 0.05, 0), 0.045)
+	var poles := maxi(3, int(s.x / 0.7))
+	for i in poles:
+		var x := lerpf(-s.x * 0.44, s.x * 0.44, float(i) / (poles - 1))
+		var z := sin(float(i) / (poles - 1) * TAU) * s.z * 0.18
+		Mats.mesh(_visual, Mats.cylinder(0.085, s.y - 0.1), color, Vector3(x, (s.y + 0.1) * 0.5, z))
+		for stripe in 2:
+			Mats.mesh(_visual, Mats.cylinder(0.088, s.y * 0.17), accent, Vector3(x, s.y * (0.38 + stripe * 0.33), z))
+		Mats.mesh(_visual, Mats.sphere(0.088), Color("f3e4c9"), Vector3(x, s.y, z))
+
+
+func _counter() -> void:
+	var s := size
+	_block(Vector3(s.x * 0.96, s.y - 0.1, s.z * 0.96), color.darkened(0.08), Vector3(0, s.y * 0.5, 0), 0.065)
+	_block(Vector3(s.x + 0.10, 0.16, s.z + 0.1), accent, Vector3(0, s.y - 0.035, 0), 0.06)
+	_block(Vector3(s.x * 0.91, 0.10, s.z * 0.9), accent.darkened(0.24), Vector3(0, 0.07, 0), 0.035)
+	var doors := maxi(1, int(s.x / 1.0))
+	for i in doors:
+		var width := s.x * 0.94 / doors
+		var x := (i - (doors - 1) * 0.5) * width
+		_block(Vector3(width - 0.045, s.y * 0.69, 0.055), color, Vector3(x, s.y * 0.48, s.z * 0.49), 0.035)
+		_block(Vector3(width * 0.72, s.y * 0.46, 0.012), color.lightened(0.045), Vector3(x, s.y * 0.46, s.z * 0.525), 0.015)
+		_block(Vector3(minf(0.25, width * 0.35), 0.042, 0.075), accent.darkened(0.3), Vector3(x, s.y * 0.7, s.z * 0.54), 0.016)
+	# A small butcher-block inset makes the island readable from the gameplay camera.
+	_block(Vector3(s.x * 0.28, 0.035, s.z * 0.6), accent.lightened(0.16), Vector3(-s.x * 0.24, s.y + 0.065, 0), 0.02)
+
+
+func _fridge() -> void:
+	var s := size
+	_block(s, color.darkened(0.06), Vector3(0, s.y * 0.5, 0), 0.15)
+	for section in 2:
+		var h := s.y * (0.33 if section == 0 else 0.61)
+		var y := s.y * (0.81 if section == 0 else 0.32)
+		_block(Vector3(s.x * 0.95, h, 0.12), color.lightened(0.045), Vector3(0, y, s.z * 0.5), 0.07)
+		_block(Vector3(0.09, h * 0.43, 0.09), accent, Vector3(s.x * 0.31, y, s.z * 0.5 + 0.12), 0.04)
+	_block(Vector3(s.x * 0.85, 0.11, 0.04), color.darkened(0.3), Vector3(0, 0.09, s.z * 0.51), 0.025)
+	_block(Vector3(s.x * 0.21, s.y * 0.15, 0.016), Color("f4dfad"), Vector3(-s.x * 0.17, s.y * 0.48, s.z * 0.57), 0.015, Vector3(0, 0, -8))
+	Mats.mesh(_visual, Mats.sphere(0.055), Color("83b8ac"), Vector3(-s.x * 0.13, s.y * 0.57, s.z * 0.58))
+
+
+func _umbrella() -> void:
+	var s := size
+	var radius := minf(s.x, s.z) * 0.49
+	Mats.mesh(_visual, Mats.cylinder(0.3, 0.12, 0.23), accent, Vector3(0, 0.06, 0))
+	Mats.mesh(_visual, Mats.cylinder(0.055, s.y * 0.94), Color("e8d6b3"), Vector3(0, s.y * 0.47, 0))
+	for i in 10:
+		var angle_a := TAU * float(i) / 10.0
+		var angle_b := TAU * float(i + 1) / 10.0
+		var top := Vector3(0, s.y, 0)
+		var a := Vector3(cos(angle_a) * radius, s.y * 0.78, sin(angle_a) * radius)
+		var b := Vector3(cos(angle_b) * radius, s.y * 0.78, sin(angle_b) * radius)
+		var middle := (a + b) * 0.5 - Vector3(0, s.y * 0.06, 0)
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for point in [top, a, middle, top, middle, b]:
+			st.add_vertex(point)
+		st.generate_normals()
+		var panel := Mats.mesh(_visual, st.commit(), color if i % 2 == 0 else Color("f4e7c8"))
+		(panel.material_override as StandardMaterial3D).cull_mode = BaseMaterial3D.CULL_DISABLED
+		ArenaArt.rod(_visual, top, a, 0.018, accent)
+		ArenaArt.rod(_visual, a, middle, 0.025, color.darkened(0.12))
+		ArenaArt.rod(_visual, middle, b, 0.025, color.darkened(0.12))
+	Mats.mesh(_visual, Mats.sphere(0.095), accent, Vector3(0, s.y + 0.035, 0))
+
+
+func _rock() -> void:
+	var s := size
+	for i in 3:
+		var rock := Mats.mesh(_visual, Mats.sphere(0.5), color.lightened(0.04 * i),
+			Vector3((i - 1) * s.x * 0.22, s.y * (0.45 if i == 1 else 0.30), (0.08 if i == 1 else -0.08) * s.z))
+		rock.scale = Vector3(s.x * (0.61 if i == 1 else 0.49), s.y * (1.05 if i == 1 else 0.68), s.z * 0.89)
+		rock.rotation_degrees.y = i * 31.0
 
 
 ## Alpha is applied to instance-owned materials: GeometryInstance transparency
@@ -220,7 +515,7 @@ func _physics_process(delta: float) -> void:
 	_occlusion_timer -= delta
 	if _occlusion_timer <= 0.0:
 		_occlusion_timer = OCCLUSION_CHECK_INTERVAL
-		_target_opacity = OCCLUDED_OPACITY if _blocks_live_dog() else 1.0
+		_target_opacity = OCCLUDED_OPACITY if _hides_the_action() else 1.0
 	var next_opacity := lerpf(_opacity, _target_opacity, 1.0 - exp(-14.0 * delta))
 	if absf(next_opacity - _target_opacity) < 0.003:
 		next_opacity = _target_opacity
@@ -238,12 +533,21 @@ func _physics_process(delta: float) -> void:
 			_shadow_proxies[i].visible = fading
 
 
-func _blocks_live_dog() -> bool:
+func _hides_the_action() -> bool:
+	# A tube is only a route if the table can watch the chase go through it, whatever the
+	# camera can make of the fabric.
+	if kind == Kind.TUNNEL and _holds_someone():
+		return true
 	var camera := get_viewport().get_camera_3d()
 	if camera == null:
 		return false
 	for node in get_tree().get_nodes_in_group("dogs"):
 		if not node is Dog or not node.alive or node.is_queued_for_deletion():
+			continue
+		# A dog up on our own deck is on top of us, not behind us. The occlusion body is the
+		# whole footprint, so without this an A-frame would ghost out the moment anyone
+		# climbed it - exactly when the shape being run over most needs to be readable.
+		if surface_height(node.global_position) > 0.05:
 			continue
 		var target: Vector3 = node.global_position + Vector3(0, 0.65, 0)
 		if camera.is_position_behind(target):
@@ -252,8 +556,27 @@ func _blocks_live_dog() -> bool:
 		# rather than converging on the camera position as perspective rays do.
 		var screen_point := camera.unproject_position(target)
 		var origin := camera.project_ray_origin(screen_point)
-		var query := PhysicsRayQueryParameters3D.create(origin, target, 1)
+		var query := PhysicsRayQueryParameters3D.create(origin, target, 1 | OCCLUSION_LAYER)
 		var hit := get_world_3d().direct_space_state.intersect_ray(query)
-		if hit.get("collider") == self:
+		var blocker: Variant = hit.get("collider")
+		if blocker == self or (blocker != null and blocker == _occluder):
 			return true
 	return false
+
+
+## True when a live dog or a toy in flight is inside this prop's footprint.
+func _holds_someone() -> bool:
+	for node in get_tree().get_nodes_in_group("dogs"):
+		var dog := node as Dog
+		if dog != null and dog.alive and not dog.is_queued_for_deletion() and _contains(dog.global_position):
+			return true
+	for node in get_tree().get_nodes_in_group("toys"):
+		var toy := node as Toy
+		if toy != null and toy.state == Toy.State.FLYING and _contains(toy.global_position):
+			return true
+	return false
+
+
+func _contains(at: Vector3) -> bool:
+	var local := to_local(at)
+	return absf(local.x) <= size.x * 0.5 and absf(local.z) <= size.z * 0.5

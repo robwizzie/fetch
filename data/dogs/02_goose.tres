@@ -20,6 +20,7 @@ model_scene_path = "res://assets/models/dogs/goose/goose.tscn"
 model_height = 1.2
 model_rotation_degrees = Vector3(0, 180, 0)
 mouth_socket_bone = &"headend"
+mouth_grip = Vector3(0, 0.69, -0.56)
 model_animations = {
 "catch": &"catch",
 "dash": &"dash",
@@ -29,7 +30,7 @@ model_animations = {
 "throw": &"throw",
 "win": &"win"
 }
-model_scale = 1.02
+model_scale = 1.122
 speed_rating = 2
 throw_rating = 5
 catch_rating = 3
@@ -39,4 +40,4 @@ throw_power = 1.35
 catch_radius = 2.0
 catch_window = 0.18
 dash_distance = 2.6
-body_radius = 0.78
+body_radius = 0.858

@@ -13,6 +13,7 @@ var _owns_time_scale := false
 var _last_tick := 0
 var _scene_id := 0
 var _shake_camera: Camera3D
+var _visual_rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
@@ -39,8 +40,8 @@ func _process(_delta: float) -> void:
 		_shake_amount = 0.0
 		return
 	if _shake_amount > 0.002:
-		cam.h_offset = randf_range(-1.0, 1.0) * _shake_amount
-		cam.v_offset = randf_range(-1.0, 1.0) * _shake_amount
+		cam.h_offset = _visual_rng.randf_range(-1.0, 1.0) * _shake_amount
+		cam.v_offset = _visual_rng.randf_range(-1.0, 1.0) * _shake_amount
 		_shake_amount *= exp(-_shake_decay * delta)
 	elif cam.h_offset != 0.0 or cam.v_offset != 0.0:
 		cam.h_offset = 0.0
@@ -106,6 +107,9 @@ func _exit_tree() -> void:
 ## Scales a node up then eases it back to its base scale. Works for Node3D and Control.
 func pop(node: Node, amount: float = 1.3, time: float = 0.18) -> void:
 	if not is_instance_valid(node):
+		return
+	if node.has_method("pop_feedback"):
+		node.pop_feedback(amount, time)
 		return
 	var base: Variant = node.scale
 	node.scale = base * amount

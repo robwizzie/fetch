@@ -4,6 +4,7 @@
 [ext_resource type="Script" path="res://scripts/arena/obstacle.gd" id="2_obstacle"]
 [ext_resource type="Script" path="res://scripts/arena/slow_zone.gd" id="3_slow"]
 [ext_resource type="Script" path="res://scripts/arena/arena_camera.gd" id="4_camera"]
+[ext_resource type="Script" path="res://scripts/arena/dog_bed.gd" id="g_bed"]
 
 [sub_resource type="Environment" id="Environment_room"]
 background_mode = 1
@@ -15,14 +16,15 @@ tonemap_mode = 0
 
 [node name="LivingRoom" type="Node3D"]
 script = ExtResource("1_arena")
+decor_theme = "Living Room"
 size = Vector2(26, 18.5)
 wall_style = 1
 wall_height = 1.6
-ground_color = Color(0.78, 0.6, 0.4, 1)
-ground_accent = Color(0.72, 0.54, 0.35, 1)
-wall_color = Color(0.85, 0.8, 0.68, 1)
-wall_accent = Color(0.45, 0.3, 0.2, 1)
-surround_color = Color(0.32, 0.25, 0.3, 1)
+ground_color = Color(0.62, 0.44, 0.29, 1)
+ground_accent = Color(0.54, 0.37, 0.24, 1)
+wall_color = Color(0.7, 0.66, 0.54, 1)
+wall_accent = Color(0.34, 0.26, 0.2, 1)
+surround_color = Color(0.19, 0.17, 0.22, 1)
 flowers = false
 pattern_seed = 3
 
@@ -34,7 +36,7 @@ script = ExtResource("4_camera")
 [node name="Lamp" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866, -0.3214, 0.383, 0, 0.766, 0.6428, -0.5, -0.5567, 0.6634, 0, 12, 0)
 light_color = Color(1, 0.957, 0.878, 1)
-light_energy = 0.95
+light_energy = 0.90
 shadow_enabled = true
 directional_shadow_max_distance = 60.0
 
@@ -78,55 +80,76 @@ position = Vector3(0, 0, 3.0411)
 [node name="Obstacles" type="Node3D" parent="."]
 
 [node name="Rug" type="Area3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
 script = ExtResource("3_slow")
-radius = 2.8
+radius = 3.2
 look = 1
 color = Color(0.72, 0.28, 0.32, 1)
 slow_factor = 0.8
 
 [node name="CoffeeTable" type="StaticBody3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
 script = ExtResource("2_obstacle")
 kind = 3
-size = Vector3(3.2, 0.8, 1.5)
-color = Color(0.45, 0.3, 0.2, 1)
-accent = Color(0.3, 0.2, 0.12, 1)
+size = Vector3(4.0, 0.8, 1.8)
+color = Color(0.66, 0.44, 0.28, 1)
+accent = Color(0.45, 0.29, 0.17, 1)
 
 [node name="Couch" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 5.7654)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 5.6)
 script = ExtResource("2_obstacle")
 kind = 5
-size = Vector3(7, 1.5, 2.0)
-color = Color(0.32, 0.48, 0.7, 1)
-accent = Color(0.85, 0.75, 0.5, 1)
+size = Vector3(8.0, 1.5, 2.2)
+color = Color(0.35, 0.47, 0.5, 1)
+accent = Color(0.75, 0.55, 0.35, 1)
 
 [node name="TV" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -6.1836)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -7.2)
 script = ExtResource("2_obstacle")
 kind = 7
-size = Vector3(5, 2.2, 1.0)
-color = Color(0.15, 0.15, 0.18, 1)
-accent = Color(0.4, 0.28, 0.18, 1)
+size = Vector3(6.0, 2.2, 2.0)
+color = Color(0.26, 0.27, 0.32, 1)
+accent = Color(0.45, 0.33, 0.24, 1)
 
-[node name="Armchair1" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.34, 0, 0)
+[node name="ArmchairWest" type="StaticBody3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.6, 0, -1.6)
 script = ExtResource("2_obstacle")
 kind = 6
-size = Vector3(2.0, 1.4, 2.2)
-color = Color(0.62, 0.35, 0.5, 1)
-accent = Color(0.9, 0.8, 0.6, 1)
+size = Vector3(2.2, 1.4, 2.4)
+color = Color(0.62, 0.35, 0.36, 1)
+accent = Color(0.8, 0.62, 0.4, 1)
 
-[node name="Armchair2" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.34, 0, 0)
+[node name="ArmchairEast" type="StaticBody3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.6, 0, 1.6)
 script = ExtResource("2_obstacle")
 kind = 6
-size = Vector3(2.0, 1.4, 2.2)
-color = Color(0.62, 0.35, 0.5, 1)
-accent = Color(0.9, 0.8, 0.6, 1)
+size = Vector3(2.2, 1.4, 2.4)
+color = Color(0.62, 0.35, 0.36, 1)
+accent = Color(0.8, 0.62, 0.4, 1)
 
-[node name="Plant" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.59, 0, -0.5195)
+[node name="PlantWest" type="StaticBody3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.7, 0, 2.6)
 script = ExtResource("2_obstacle")
 kind = 8
 size = Vector3(1.4, 2.2, 1.4)
-color = Color(0.3, 0.6, 0.32, 1)
-accent = Color(0.75, 0.45, 0.3, 1)
+color = Color(0.33, 0.5, 0.3, 1)
+accent = Color(0.6, 0.38, 0.26, 1)
+
+[node name="PlantEast" type="StaticBody3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.7, 0, -2.6)
+script = ExtResource("2_obstacle")
+kind = 8
+size = Vector3(1.4, 2.2, 1.4)
+color = Color(0.33, 0.5, 0.3, 1)
+accent = Color(0.6, 0.38, 0.26, 1)
+
+[node name="Gimmicks" type="Node3D" parent="."]
+
+[node name="BedWest" type="AnimatableBody3D" parent="Gimmicks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 0, -3.6)
+script = ExtResource("g_bed")
+
+[node name="BedEast" type="AnimatableBody3D" parent="Gimmicks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.2, 0, 3.6)
+script = ExtResource("g_bed")
+fabric = Color(0.36, 0.52, 0.72, 1)

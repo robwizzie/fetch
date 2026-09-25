@@ -16,6 +16,8 @@ func _ready() -> void:
 	Game.tutorial_shown = true
 	Game.mixed_toys = false
 	Game.powerups_enabled = false
+	# Each pass below names an arena; with shuffling on, the round would be played somewhere else.
+	Game.random_arena_each_round = false
 	Events.round_over.connect(func(winner: PlayerSlot) -> void:
 		_rounds += 1
 		_last_winner = winner)
@@ -86,7 +88,9 @@ func _ready() -> void:
 		# Wall-clock, so it is sensitive to whatever else the machine is doing. Measured across
 		# three clean runs every arena finishes in 5-18s; 60 gives room for a loaded machine
 		# without hiding a real regression.
-		while _rounds == 0 and elapsed < 60.0:
+		# A double knockout is a fair draw, not a stall, so keep going until a round is decided.
+		_last_winner = null
+		while (_rounds == 0 or _last_winner == null) and elapsed < 60.0:
 			await get_tree().create_timer(0.2).timeout
 			elapsed += 0.2
 		_check(_rounds > 0 and _last_winner != null, "bots finish a scored round in " + arena.display_name)

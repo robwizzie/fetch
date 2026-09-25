@@ -14,10 +14,20 @@ const PLAQUE_WIDTH := 7.6
 const PLAQUE_HEIGHT := 1.12
 const PLAQUE_DEPTH := 0.42
 const ROW_GAP := 1.52
-## Where the pips start, measured from the plaque's left edge, leaving room for the name.
-const PIP_START := 3.15
-const PIP_STEP := 0.62
-const PIP_RADIUS := 0.2
+## The plaque divided into zones, as fractions of its width. Points used to start at a fixed
+## offset and step by a fixed amount, which bunched them left of centre at first-to-3 and ran
+## them 1.33m off the end of the plaque at first-to-10. Spreading them across a zone means any
+## target fills the same space.
+const NAME_ZONE := Vector2(0.04, 0.42)
+const PIP_ZONE := Vector2(0.46, 0.86)
+const TROPHY_AT := 0.92
+## Points never draw larger than this, however few there are.
+const PIP_RADIUS := 0.17
+## A bone is this much wider than its radius, end to end. Slot spacing is worked out from it,
+## so a row of bones is evenly spaced whatever the target is.
+const BONE_SPAN := 2.76
+## Breathing room around the plaques when the camera frames them.
+const FRAME_MARGIN := 1.1
 
 var _rows: Array[Node3D] = []
 
@@ -73,29 +83,37 @@ func _plaque(side: Dictionary, target: int, best: int, y: float, index: int) -> 
 	Mats.mesh(row, Mats.box(Vector3(PLAQUE_WIDTH + 0.14, 0.13, PLAQUE_DEPTH + 0.14)),
 		color.darkened(0.34), Vector3(0, -PLAQUE_HEIGHT * 0.5, 0))
 
+	# Label3D centres its text on its own origin, so placing it at the left edge put half of a
+	# wide name out past the plaque. It sits in the middle of its zone instead, and wraps
+	# rather than spilling if a name is longer than the zone.
+	var name_pixel := 0.0072
+	var name_zone := _zone_span(NAME_ZONE)
 	var name_tag := Label3D.new()
 	name_tag.text = str(side.get("label", ""))
 	name_tag.font = UiKit.FONT_DISPLAY
-	name_tag.font_size = 68
-	name_tag.pixel_size = 0.0072
-	name_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	name_tag.font_size = 50
+	name_tag.pixel_size = name_pixel
+	name_tag.width = name_zone.y / name_pixel
+	name_tag.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_tag.modulate = Color(1, 1, 1, 0.98)
 	name_tag.outline_size = 12
 	name_tag.outline_modulate = color.darkened(0.6)
-	name_tag.position = Vector3(-PLAQUE_WIDTH * 0.5 + 0.4, 0.02, PLAQUE_DEPTH * 0.5 + 0.02)
+	name_tag.position = Vector3(name_zone.x, 0.02, PLAQUE_DEPTH * 0.5 + 0.02)
 	row.add_child(name_tag)
 
-	# Points as bones on the plaque: filled ones are bright, the rest are sockets waiting.
-	for p in maxi(1, target):
-		var at := Vector3(-PLAQUE_WIDTH * 0.5 + PIP_START + float(p) * PIP_STEP, 0.02, PLAQUE_DEPTH * 0.5 + 0.12)
-		if p < score:
-			var bone := _bone(row, color, at)
+	# Every slot is a bone, won or not, so the row reads as one evenly spaced set either way.
+	# Sockets used to be small discs, which left the one bone on a plaque looking out of step.
+	var slots := maxi(1, target)
+	var radius := pip_radius(slots)
+	for p in slots:
+		var at := Vector3(pip_x(p, slots), 0.02, PLAQUE_DEPTH * 0.5 + 0.12)
+		var won := p < score
+		var bone := _bone(row, color, at, radius, won)
+		if won:
 			# The point just won arrives last, after the others have settled.
 			var late := winner and p == score - 1
-			_drop_in(bone, at, 0.34 + float(index) * 0.07 + float(p) * 0.09 + (0.55 if late else 0.0), late)
-		else:
-			var socket := Mats.mesh(row, Mats.cylinder(PIP_RADIUS * 0.82, 0.07), color.darkened(0.45), at)
-			socket.rotation_degrees = Vector3(90, 0, 0)
+			_stamp_in(bone, 0.34 + float(index) * 0.07 + float(p) * 0.09 + (0.55 if late else 0.0), late)
 
 	if score >= best and best > 0:
 		_trophy(row, color)
@@ -114,30 +132,78 @@ func _plaque(side: Dictionary, target: int, best: int, y: float, index: int) -> 
 	return row
 
 
-## A dog biscuit: two knuckles and a shaft, which reads as a point at this size.
-func _bone(parent: Node3D, color: Color, at: Vector3) -> Node3D:
+## The middle of a zone and its width, in plaque-local metres.
+func _zone_span(zone: Vector2) -> Vector2:
+	var from := -PLAQUE_WIDTH * 0.5 + PLAQUE_WIDTH * zone.x
+	var to := -PLAQUE_WIDTH * 0.5 + PLAQUE_WIDTH * zone.y
+	return Vector2((from + to) * 0.5, to - from)
+
+
+## Where the nth of `slots` points sits, spread evenly across the pip zone.
+func pip_x(index: int, slots: int) -> float:
+	var span := _zone_span(PIP_ZONE)
+	var step := span.y / float(maxi(1, slots))
+	return span.x - span.y * 0.5 + (float(index) + 0.5) * step
+
+
+## Points shrink to fit once there are enough of them to crowd, so first-to-10 reads as well
+## as first-to-3 without running off the end. A bone is BONE_SPAN radii wide, and a fifth of
+## the step is left as the gap between neighbours.
+func pip_radius(slots: int) -> float:
+	var step := _zone_span(PIP_ZONE).y / float(maxi(1, slots))
+	return minf(PIP_RADIUS, step * 0.8 / BONE_SPAN)
+
+
+## A dog biscuit: two knuckles and a shaft. Both states are the same shape - a point already
+## won is a pale biscuit standing proud of the plaque and rimmed, an empty slot is the same
+## biscuit sunk dark and flat into it - so the slots line up however the score reads.
+##
+## A won point is outlined in a dark shade of its own plaque colour. The bone is nearly white,
+## so without it the point vanishes against a pale plaque; P4 is yellow.
+func _bone(parent: Node3D, color: Color, at: Vector3, radius: float, won: bool) -> Node3D:
 	var bone := Node3D.new()
+	bone.name = "Point" if won else "Socket"
+	# What the board is actually saying, kept off the geometry so counting points never turns
+	# into counting meshes.
+	bone.set_meta("point", won)
 	bone.position = at
 	parent.add_child(bone)
-	var pale := Color(0.99, 0.97, 0.90)
-	Mats.mesh(bone, Mats.box(Vector3(PIP_RADIUS * 1.9, PIP_RADIUS * 0.78, PIP_RADIUS * 0.78)), pale)
+	if not won:
+		# Same silhouette, pressed flat into the plaque instead of sitting on it.
+		bone.scale.z = 0.3
+		bone.position.z -= radius * 0.26
+	var tint := Color(0.99, 0.97, 0.90) if won else color.darkened(0.44)
+	var edge := color.darkened(0.66)
+	# Thin. At a third of a knuckle's radius the rim swallowed the shape and the bone read as
+	# a fat blob rather than a biscuit.
+	var ink := radius * 0.07
+	var parts: Array[MeshInstance3D] = [
+		Mats.mesh(bone, Mats.box(Vector3(radius * 1.9, radius * 0.78, radius * 0.78)), tint),
+	]
 	for side in [-1.0, 1.0]:
 		for lift in [-1.0, 1.0]:
-			Mats.mesh(bone, Mats.sphere(PIP_RADIUS * 0.46), pale,
-				Vector3(side * PIP_RADIUS * 0.92, lift * PIP_RADIUS * 0.34, 0))
+			parts.append(Mats.mesh(bone, Mats.sphere(radius * 0.46), tint,
+				Vector3(side * radius * 0.92, lift * radius * 0.34, 0)))
+	if won:
+		for part in parts:
+			Mats.outline(part, ink, edge)
 	return bone
 
 
-## Drops a bone onto the plaque with a bounce. A won point lands harder and flashes.
-func _drop_in(bone: Node3D, at: Vector3, delay: float, emphasise: bool) -> void:
-	bone.position = at + Vector3(0, 3.4, 0)
-	bone.scale = Vector3.ONE * (1.5 if emphasise else 1.0)
-	var drop := bone.create_tween()
-	drop.tween_interval(delay)
-	drop.tween_property(bone, "position", at, 0.30).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+## A point lands in its own socket and is stamped into place. Points used to fall in from above
+## the plaque, which meant a new one spent its whole animation over the rows above before
+## arriving - it read as being taken off another player rather than earned by this one - and on
+## a board of stacked rows there is nowhere to fall from that does not cross somebody.
+func _stamp_in(bone: Node3D, delay: float, emphasise: bool) -> void:
+	bone.scale = Vector3.ZERO
+	var stamp := bone.create_tween()
+	stamp.tween_interval(delay)
+	stamp.tween_property(bone, "scale", Vector3.ONE, 0.30 if emphasise else 0.2) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	if emphasise:
-		drop.parallel().tween_property(bone, "scale", Vector3.ONE, 0.30).set_trans(Tween.TRANS_BACK)
-		drop.tween_property(bone, "rotation_degrees", Vector3(0, 0, 360), 0.5).set_trans(Tween.TRANS_QUAD)
+		# The point just won turns in as it lands, so it is the one everybody watches.
+		stamp.parallel().tween_property(bone, "rotation_degrees", Vector3.ZERO, 0.42) \
+			.from(Vector3(0, 0, -200.0)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 ## A spinning paw over whoever is ahead.
@@ -148,16 +214,24 @@ func _trophy(parent: Node3D, color: Color) -> void:
 	trophy.pixel_size = 0.0075
 	trophy.no_depth_test = true
 	trophy.render_priority = 6
-	trophy.position = Vector3(PLAQUE_WIDTH * 0.5 - 0.55, 0.06, PLAQUE_DEPTH * 0.5 + 0.3)
+	trophy.position = Vector3(-PLAQUE_WIDTH * 0.5 + PLAQUE_WIDTH * TROPHY_AT, 0.06, PLAQUE_DEPTH * 0.5 + 0.3)
 	parent.add_child(trophy)
 	var spin := trophy.create_tween().set_loops()
 	spin.tween_property(trophy, "scale", Vector3(1.16, 1.16, 1.16), 0.7).set_trans(Tween.TRANS_SINE)
 	spin.tween_property(trophy, "scale", Vector3.ONE, 0.7).set_trans(Tween.TRANS_SINE)
 
 
-## Frames however many rows there are, so two packs and four dogs both sit correctly.
+## How much world the plaques occupy, including a margin. The viewport is shaped to match
+## this, so the board fills its frame instead of sitting in the middle of empty space - at four
+## rows the plaques were covering less than half the width of the picture.
+func content_size(rows: int) -> Vector2:
+	return Vector2(PLAQUE_WIDTH * FRAME_MARGIN, maxf(2.4, float(rows) * ROW_GAP + 0.5))
+
+
+## Frames however many rows there are, so two packs and four dogs both sit correctly. Assumes
+## the viewport already has the aspect content_size asks for.
 func frame_camera(camera: Camera3D, rows: int) -> void:
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = maxf(3.6, float(rows) * ROW_GAP + 1.5)
-	camera.position = Vector3(0.35, 0, 11.0)
+	camera.size = content_size(rows).y
+	camera.position = Vector3(0, 0, 11.0)
 	camera.rotation_degrees = Vector3(0, -2.5, 0)

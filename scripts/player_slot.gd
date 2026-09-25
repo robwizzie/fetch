@@ -18,22 +18,74 @@ var score: int = 0
 var ready: bool = false
 ## AI is opt-in: virtual devices are also used by scripted tests and menu dogs.
 var is_bot: bool = false
-## Power-ups held for the rest of the match, oldest first. Capped at PowerupKinds.MAX_SLOTS.
+## Power-ups held for the rest of the match, one per belt slot. Capped at PowerupKinds.MAX_SLOTS.
+## Slots do not shuffle: a kind stays in the socket it landed in until it is replaced.
 var powerups: Array[StringName] = []
+## When each held kind arrived, so a full belt knows which one has been there longest.
+var _powerup_arrivals: Dictionary = {}
+var _arrival_clock := 0
 
 
-## Adds a power-up, pushing out the oldest once the belt is full. Returns what was displaced,
-## or an empty name — the HUD uses it to show the swap.
+## Adds a power-up. A full belt swaps out whichever one it has held longest, in the same slot -
+## the first pickup after a full belt replaces slot one, the next replaces slot two, and so on,
+## so the other two sockets never move. Returns what was displaced, or an empty name.
 func take_powerup(kind: StringName) -> StringName:
+	normalize_powerups()
 	# Doubling up on one treat is a dud pickup dressed as a reward, so a belt holds each kind
 	# at most once. Powerup rerolls before offering one you already have; this is the backstop.
-	if powerups.has(kind):
+	if not PowerupKinds.ALL.has(kind) or powerups.has(kind):
 		return &""
-	var dropped := &""
-	if powerups.size() >= PowerupKinds.MAX_SLOTS:
-		dropped = powerups.pop_front()
-	powerups.append(kind)
+	_arrival_clock += 1
+	if powerups.size() < PowerupKinds.MAX_SLOTS:
+		powerups.append(kind)
+		_powerup_arrivals[kind] = _arrival_clock
+		return &""
+	var oldest := oldest_slot()
+	var dropped := powerups[oldest]
+	_powerup_arrivals.erase(dropped)
+	powerups[oldest] = kind
+	_powerup_arrivals[kind] = _arrival_clock
 	return dropped
+
+
+## The belt index a new pickup would replace once the belt is full.
+func oldest_slot() -> int:
+	var best := 0
+	for i in powerups.size():
+		if _arrival(powerups[i]) < _arrival(powerups[best]):
+			best = i
+	return best
+
+
+## Anything placed on the belt directly (tests, legacy belts) counts as older than any pickup,
+## in belt order, so the fallback still replaces slot one first.
+func _arrival(kind: StringName) -> int:
+	return _powerup_arrivals.get(kind, -PowerupKinds.MAX_SLOTS + powerups.find(kind))
+
+
+## Spends a power-up (a popped shield). Its socket empties and the later ones close the gap.
+func use_powerup(kind: StringName) -> void:
+	powerups.erase(kind)
+	_powerup_arrivals.erase(kind)
+
+
+func clear_powerups() -> void:
+	powerups.clear()
+	_powerup_arrivals.clear()
+
+
+## Also repairs legacy belts before spawn. Every grant uses take_powerup, including mercy.
+func normalize_powerups() -> void:
+	var unique: Array[StringName] = []
+	for kind in powerups:
+		if PowerupKinds.ALL.has(kind) and not unique.has(kind):
+			unique.append(kind)
+	while unique.size() > PowerupKinds.MAX_SLOTS:
+		unique.pop_front()
+	powerups = unique
+	for kind in _powerup_arrivals.keys():
+		if not powerups.has(kind):
+			_powerup_arrivals.erase(kind)
 
 
 func has_powerup(kind: StringName) -> bool:

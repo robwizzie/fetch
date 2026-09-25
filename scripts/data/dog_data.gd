@@ -44,6 +44,12 @@ enum Breed { LABRADOR, PITBULL, CORGI, DACHSHUND, GOLDEN, SPANIEL }
 @export var mouth_socket_path: NodePath
 ## A dedicated exported rig bone also works; the renderer creates its BoneAttachment3D.
 @export var mouth_socket_bone: StringName = &"MouthSocket"
+## Where a held toy sits, in the model's rest pose: metres before model_scale, dog facing -Z.
+## The socket bone only says which part of the rig the toy rides on; on a rig with no jaw bone
+## (a head bone ending under the chin) it is nowhere near the teeth. The renderer re-anchors the
+## grip here relative to that bone, so the toy still follows every head animation. Zero keeps
+## the socket exactly as authored.
+@export var mouth_grip := Vector3.ZERO
 ## Map gameplay states to full AnimationPlayer clip names (including a library prefix).
 @export var model_animations: Dictionary = {
 	"idle": &"idle", "run": &"run", "throw": &"throw", "catch": &"catch",

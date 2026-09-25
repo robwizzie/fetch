@@ -14,7 +14,7 @@ bounciness = 0.08
 max_bounces = 0
 friction = 3.13
 danger_speed = 3.39
-special = 4
+special = 2
 fully_implemented = true
 
 held_scale = 1.0

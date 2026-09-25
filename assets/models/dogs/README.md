@@ -65,6 +65,12 @@ be **rig-bound**, not a loose node. Either is accepted:
 The bone name is configurable per dog via `DogData.mouth_socket_bone`, and an explicit path via
 `DogData.mouth_socket_path`, if your rig names things differently.
 
+A rig with no jaw bone (the current dogs ride on `headend`, which ends under the chin, well behind
+the teeth) sets `DogData.mouth_grip`: the point between the front teeth in the rest pose, in metres
+before `model_scale`, dog facing −Z. The renderer re-anchors the socket there relative to the bone,
+so the toy still follows every head animation, and gives every dog the same level grip orientation.
+Check it with the model studio's *Mouth grip* marker from the side and from the gameplay camera.
+
 ## Animation clips
 
 Seven clips, all looping except `throw`, `catch` and `ko`:
@@ -84,6 +90,14 @@ real clip name (including any library prefix Godot adds on import, e.g. `Library
 
 Each clip must contain at least one track. A clip that exists but was never baked fails
 validation — bake the action before exporting.
+
+### Eyes
+
+Nothing in the pack has eyelids, eye bones or blend shapes, so the dogs cannot blink anywhere
+— squashing the head is not a blink, and the menus deliberately do not pretend otherwise. A
+delivery that carries a `blink` blend shape on the head mesh (or lid geometry on a bone) is
+what it would take; `scripts/visuals/menu_dog_motion.gd`, which already drives the menu tail
+wag, is where it would be played from.
 
 ## Hooking it up
 

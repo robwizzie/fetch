@@ -31,6 +31,10 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	projection = Camera3D.PROJECTION_ORTHOGONAL
 	keep_aspect = Camera3D.KEEP_HEIGHT
+	# The default 4 km far plane stretched the directional shadow's depth range until no prop
+	# or dog cast a shadow at all. The whole diorama sits within ~35 m of the lens.
+	near = 1.0
+	far = 80.0
 	if get_parent() is Arena:
 		_arena_size = get_parent().size
 	_home = look_target

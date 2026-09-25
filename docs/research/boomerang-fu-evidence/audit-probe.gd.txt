@@ -1,0 +1,73 @@
+extends Node
+const DOG_SCENE = preload("res://scenes/actors/dog.tscn")
+const TOY_SCENE = preload("res://scenes/actors/toy.tscn")
+var arena: Node3D
+
+func make_dog(at: Vector3, powers: Array[StringName] = []) -> Dog:
+	var slot := PlayerSlot.new()
+	slot.dog = Game.dogs[0]
+	slot.device = DeviceInput.VIRTUAL
+	slot.powerups = powers
+	var dog := DOG_SCENE.instantiate() as Dog
+	dog.setup(slot)
+	dog.position = at
+	arena.add_child(dog)
+	dog.set_physics_process(false)
+	dog._spawn_grace = 0.0
+	return dog
+
+func _ready() -> void:
+	Sfx.enabled = false
+	arena = Node3D.new()
+	add_child(arena)
+	for data in Game.dogs:
+		var report := DogAssetValidator.inspect(data)
+		print("AUDIT model ", data.display_name, " valid=", report.valid, " errors=", report.errors)
+	var dog := make_dog(Vector3.ZERO)
+	await get_tree().create_timer(0.4).timeout
+	print("AUDIT base model scale=", dog.model.scale)
+	dog.collect_powerup(PowerupKinds.LITTLE_LEGS)
+	await get_tree().create_timer(0.3).timeout
+	var radius: float = dog.body_shape.shape.radius
+	print("AUDIT collected Little Legs radius=", radius, " model scale=", dog.model.scale)
+	var toy := TOY_SCENE.instantiate() as Toy
+	toy.setup(Game.toys[0])
+	toy.position = Vector3(-3, Toy.FLY_HEIGHT, 1.04)
+	arena.add_child(toy)
+	toy.set_physics_process(false)
+	toy.state = Toy.State.FLYING
+	toy.velocity = Vector3.RIGHT * 18.0
+	await get_tree().physics_frame
+	toy._trace_dogs(toy.global_position, Vector3(3, Toy.FLY_HEIGHT, 1.04))
+	print("AUDIT grazing shot offset=1.04 scaled contact radius=", radius + toy.data.radius, " victim eliminated=", not dog.alive)
+	var respawn := make_dog(Vector3(8,0,0), [PowerupKinds.LITTLE_LEGS])
+	await get_tree().create_timer(0.4, true, false, true).timeout
+	print("AUDIT respawn Little Legs radius=", respawn.body_shape.shape.radius, " expected=", respawn.data.body_radius * 0.82, " model scale=", respawn.model.scale)
+	var bully := make_dog(Vector3(-0.96,0,6), [PowerupKinds.LONG_REACH])
+	var victim := make_dog(Vector3(0.96,0,6))
+	bully.facing = Vector3.RIGHT
+	var wall := StaticBody3D.new()
+	wall.collision_layer = 1
+	wall.position = Vector3(0,1,6)
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.2,3,4)
+	shape.shape = box
+	wall.add_child(shape)
+	arena.add_child(wall)
+	await get_tree().physics_frame
+	print("AUDIT whack selects rival through wall=", bully._whack_target() == victim)
+	bully._throw_or_catch()
+	print("AUDIT whack through wall dizzy=", victim.dizzy_time)
+	var zone_a := SlowZone.new()
+	var zone_b := SlowZone.new()
+	zone_a.slow_factor = 0.55
+	zone_b.slow_factor = 0.7
+	zone_a._on_body_entered(respawn)
+	zone_b._on_body_entered(respawn)
+	zone_b._on_body_exited(respawn)
+	print("AUDIT remaining in zone A after exiting B speed_scale=", respawn.speed_scale, " expected=0.55")
+	zone_a.free()
+	zone_b.free()
+	print("AUDIT complete")
+	get_tree().quit()

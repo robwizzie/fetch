@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="GameModeData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/game_mode_data.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/modes/king_of_the_bed.gd" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = &"king_of_the_bed"
+display_name = "King of the Bed"
+description = "Hold the big dog bed alone to win the round. Everyone else wants it too."
+mode_script = ExtResource("2")
+default_points_to_win = 5
+team_based = false
+fully_implemented = true
+swatch = Color(0.85, 0.6, 0.35, 1)

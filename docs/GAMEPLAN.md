@@ -62,6 +62,8 @@ Everything listed in the design board's MVP:
 
 - Top-down movement with acceleration, dash with invincibility frames and cooldown
 - Tennis ball throw with wall bounces, friction, "dangerous" speed threshold, thrower immunity until first bounce
+- Hold-to-charge throws: a tap is a soft short lob, a full wind-up is three times as fast and plants your feet while it fills
+- Toys are solid to each other: a throw into a loose toy shunts it, and a hard shunt sends it off as a live carom
 - Catch: press with a toy nearby, or press slightly early (buffered `catch_window`), with a miss cooldown
 - One-hit elimination, drop your toy on death
 - 2–4 players on any mix of gamepads and two keyboard layouts; press-to-join dog select

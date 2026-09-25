@@ -34,6 +34,7 @@ func _shoot(data: ArenaData) -> void:
 	# The arena scene carries its own camera; frame the whole floor rather than the action.
 	var camera := arena.get_node_or_null("Camera") as Camera3D
 	if camera != null:
+		camera.set_process(false)
 		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 		camera.size = arena.size.y * 1.34
 		camera.position = Vector3(0, arena.size.y * 1.15, arena.size.y * 0.92)
