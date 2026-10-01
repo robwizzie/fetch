@@ -53,7 +53,7 @@ func _ready() -> void:
 	_check(Game.toys.size() == 4, "expected 4 toys")
 	# Arenas are content: adding a .tres should not fail the suite, so assert the floor.
 	_check(Game.arenas.size() >= 5, "expected at least 5 arenas")
-	_check(Game.modes.size() == 9, "expected 9 modes")
+	_check(Game.modes.size() == 4, "expected 4 playable modes (the rest are shelved)")
 	_check(Game.selected_mode != null and Game.selected_mode.fully_implemented, "a playable default mode")
 
 	Game.debug_fill_players(2)
@@ -78,7 +78,7 @@ func _ready() -> void:
 	Events.round_started.connect(func(_n: int) -> void: _round_started = true)
 	Events.round_over.connect(func(w: PlayerSlot) -> void:
 		_rounds_won += 1
-		print("[smoke] round over, winner: %s" % (w.dog.display_name if w else "draw")))
+		print("[smoke] round over on %s, winner: %s" % [_match.arena_data.display_name if _match else "?", w.dog.display_name if w else "draw"]))
 	Events.dog_eliminated.connect(func(_d: Node, _t: Node) -> void: _eliminations += 1)
 	Events.toy_caught.connect(func(_t: Node, _d: Node) -> void: _caught += 1)
 	Events.match_over.connect(func(w: PlayerSlot) -> void:
@@ -197,6 +197,14 @@ func _finish() -> void:
 		return
 	_check(_eliminations >= 2, "at least two eliminations happened (got %d)" % _eliminations)
 	_check(_rounds_won >= 2, "at least two rounds were won (got %d)" % _rounds_won)
+	# The podium tells each dog's story; the numbers it reads have to add up to what happened.
+	var bonked := 0
+	var knockouts := 0
+	for slot in Game.slots:
+		bonked += slot.bonked
+		knockouts += slot.knockouts
+	_check(bonked > 0 and bonked <= _eliminations, "the podium counts each dog's bonks (%d of %d)" % [bonked, _eliminations])
+	_check(knockouts > 0 and knockouts <= bonked, "the podium credits the throwers (%d)" % knockouts)
 	# Catching is asserted outright in weapon_test. Here it is only reported: this scenario
 	# plays out over a live match, and how often the target gets a catchable ball varies with
 	# frame timing, so failing on it makes the suite flaky rather than protective.

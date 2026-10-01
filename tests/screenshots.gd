@@ -38,7 +38,10 @@ func _ready() -> void:
 	Game.slots[1].score = 5
 	Game.slots[0].score = 3
 	Game.slots[2].score = 1
-	await _shoot("res://scenes/ui/results.tscn", "05_results")
+	Game.slots[1].knockouts = 6
+	Game.slots[0].catches = 3
+	Game.slots[2].bonked = 5
+	await _shoot("res://scenes/ui/results.tscn", "05_results", 1.2)
 
 	Game.reset_scores()
 	Game.slots[0].score = 2

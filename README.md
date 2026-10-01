@@ -3,7 +3,7 @@
 **Throw. Dodge. Catch.** A top-down local-multiplayer party game where 2–4 dogs throw toys
 at each other in small, chaotic arenas. Inspired by *Boomerang Fu*.
 
-Built with **Godot 4.7.2 (GDScript)** in **3D** with a shared, dynamically framed orthographic camera. Play solo against
+Built with **Godot 4.7.2 (GDScript)** in **3D** with a shared, fixed-angle perspective camera that shows the whole arena as a diorama. Play solo against
 three CPU dogs, or join with any mix of gamepads and two keyboard layouts. Pick a dog, arena, and toy,
 then play *Last Dog Standing*. Startup and menus use the supplied Fetch cover; selection portraits use
 the reference artwork. Gameplay dogs remain temporary procedural placeholders. The fully 3D import pipeline, animated mouth sockets,
@@ -116,4 +116,6 @@ CI imports the project and runs the regression suites on every push (`.github/wo
 - ✅ Hit-stop followed by KO slow motion, particles, floating text
 - ✅ Procedural soundtrack (menu / match / victory) and a synthesised effects kit, on separate mixable buses
 - ✅ Fully 3D asset import/animation contract, validator and reference comparison studio
-- ⏳ Authored furred dog meshes/rigs, real audio, advanced power-ups, other modes, online play: see `docs/ART_DIRECTION.md`
+- ✅ Four modes (Last Dog Standing, Hot Potato Bone, King of the Bed, Golden Ball); holes to knock rivals into, crates that break, switch-driven swing boards
+- ✅ Controller rumble and comfort settings: slow motion, screen shake, colour-blind palette, button prompts
+- ⏳ Authored furred dog meshes/rigs, real audio, online play: see `docs/ART_DIRECTION.md`

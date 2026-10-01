@@ -6,6 +6,9 @@ var _failed := false
 
 
 func _ready() -> void:
+	# Machine settings must not decide what these assertions see.
+	Game.knockout_slowmo = true
+	Game.screen_shake = true
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	Sfx.enabled = false
 	await get_tree().process_frame
@@ -27,27 +30,27 @@ func _ready() -> void:
 		var aspect := float(viewport_size.x) / float(viewport_size.y)
 		var frame: Dictionary = camera._fit_points(corners, aspect)
 		camera._target = frame.target
-		camera.size = frame.size
+		camera.distance = frame.distance
 		camera._place()
-		_check(is_finite(camera.size) and camera.size > 0.0, "finite zoom at " + str(viewport_size))
+		_check(is_finite(camera.distance) and camera.distance > 0.0, "finite zoom at " + str(viewport_size))
 		_check(camera._target.is_finite(), "finite target at " + str(viewport_size))
 		for point in corners:
 			_check(_visible(viewport, camera, point), "arena edge remains visible at " + str(viewport_size))
 		var empty: Array[Vector3] = []
 		var overview: Dictionary = camera._fit_points(empty, aspect)
-		_check(is_finite(overview.size), "empty arena has a finite overview")
+		_check(is_finite(overview.distance), "empty arena has a finite overview")
 	viewport.size = Vector2i(1280, 720)
 	await get_tree().process_frame
 	var first := _dog(viewport, 0, Vector3(-12, 0, -6.5))
 	var second := _dog(viewport, 1, Vector3(12, 0, 6.5))
 	camera._update_framing(1.0 / 60.0)
-	var wide := camera.size
+	var wide := camera.distance
 	first.position = Vector3(3.0, 0, 0)
 	second.position = Vector3(4.0, 0, 1)
 	for step in 180:
 		camera._update_framing(1.0 / 60.0)
-	print("[camera] group zoom: %.2f -> %.2f, target=%s" % [wide, camera.size, camera._target])
-	_check(camera.size < wide - 1.0, "camera closes in when dogs converge")
+	print("[camera] group zoom: %.2f -> %.2f, target=%s" % [wide, camera.distance, camera._target])
+	_check(camera.distance < wide - 1.0, "camera closes in when dogs converge")
 	_check(camera._target.x > 1.0, "camera follows group horizontally")
 	_check(absf(camera.rotation.y) < 0.001, "camera keeps the movement heading fixed")
 	first.position = Vector3(-12.0, 0, -6.5)

@@ -21,6 +21,17 @@ func _ready() -> void:
 		for action in [&"move", &"throw", &"dash", &"confirm", &"back", &"pause"]:
 			_check(not DeviceInput.pad_glyph(action, family).is_empty(), "every pad family names %s" % action)
 
+	# Pad face buttons are drawn as they look on the pad: a coloured letter, or the PlayStation shape.
+	var xbox_a := PadButton.for_label("A", DeviceInput.PadFamily.XBOX, 30)
+	_check(xbox_a != null and xbox_a.letter == "A", "Xbox A is drawn as a lettered button")
+	var square := PadButton.for_label("Square", DeviceInput.PadFamily.PLAYSTATION, 30)
+	_check(square != null and square.glyph == PadButton.Glyph.SQUARE, "PlayStation Square is drawn as a square")
+	_check(PadButton.for_label("Button 1", DeviceInput.PadFamily.ARCADE, 30) == null, "a cabinet keeps its printed label")
+	_check(PadButton.for_label("Left stick", DeviceInput.PadFamily.XBOX, 30) == null, "a stick stays a text cap")
+	for node in [xbox_a, square]:
+		if node != null:
+			node.free()
+
 	# Keyboards name their real keys, including every alternative the input code accepts.
 	_check(DeviceInput.glyph(&"dash", DeviceInput.KEYBOARD_WASD) == "Shift or E", "WASD dash lists both keys")
 	_check(DeviceInput.glyph(&"throw", DeviceInput.KEYBOARD_ARROWS) == "Enter", "Arrows throw is Enter")

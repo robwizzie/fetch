@@ -25,9 +25,11 @@ player gets a walled `ReadyPen` with a toy to try and a pad to stand on; the wal
 than a toy flies, so nobody can be knocked out while they are still finding the buttons. The
 real first round only begins once every pen has been stepped on — bots check themselves in after
 a few seconds. Nothing is scored and `round_number` stays at 0, so the first scored round is
-still round 1. `TutorialCoach` rides on top showing the controls, ticking each step off as
-someone performs it, with a timeout on every step so a table that already knows the game is
-never held up. Button names come from `DeviceInput.button_label()`, which
+still round 1. Each human gets a `PracticeCard` beside their own pen: their own keys drawn as
+keycaps (`UiKit.keycaps()`), ticking off as *that* player moves, picks up, throws, catches and
+dashes. Nothing is compulsory, so a table that already knows the game just walks to the pads. In
+the match, each human's HUD card shows the key for what they can do right now (catch or throw,
+and dash), and the pause menu lists everyone's controls. Button names come from `DeviceInput`, which
 words them for an arcade cabinet when one is detected (`DeviceInput.is_arcade()` reads the pad's
 reported name; Settings can force it either way).
 
@@ -46,7 +48,10 @@ paws lets every rival see it coming. Opening toy placement is
 mirror-symmetric about both arena axes and kept clear of every spawn, so each dog has the same run to the
 nearest toy, and it is redrawn each round. With `Game.random_arena_each_round` (the setup screen's default)
 the match swaps the whole arena between rounds. The HUD shows score, toy/dash status, round time, input hints, and pause controls.
-The arena camera is orthographic and adjusts framing to keep the full arena visible.
+The arena camera is a narrow (30°) perspective lens at a fixed 58° pitch, so the arena reads as a diorama. It keeps
+the whole arena in frame, leans in only a little when the pack bunches up (`closest_share`), punches in on knockouts,
+and keeps the top of the screen (`hud_top`) clear for the player cards. Match end is a 3D podium (`PodiumStage`) with
+each dog's knockouts, catches and an award, counted on `PlayerSlot` during scored rounds.
 
 Dog selection uses front-view crops from `images/models`; rotating 3D portraits and matches use
 the procedural `DogModel`. Barkley retains the old `hattie` data ID for compatibility and uses the
@@ -95,7 +100,7 @@ tests/
 ## Flow
 
 `main_menu` → `dog_select` (press-to-join, pick dog, ready) → `match_setup` (mode/arena/toy/points) →
-`match` (rounds until someone reaches `Game.points_to_win`) → `results` (play again / change / menu).
+`match` (rounds until someone reaches `Game.points_to_win`) → `results` (podium, play again / change / menu).
 
 Scene changes go through `Game.goto(path)`. Scenes never reference each other directly.
 
@@ -205,10 +210,26 @@ lane on a timer and knocks dogs dizzy with a null-attacker whack), `TallGrass` (
 via `Dog.set_cover`; moving rustles, throwing or dashing reveals), `DogBed` (Living Room, an
 `AnimatableBody3D` that slides when a toy hits it). Warp Yard's gimmick is its doggy doors.
 
-**Modes.** `GameMode` has `tick`, `timeout_winner`, `bot_goal` and `bot_should_throw_now` hooks; the match
+**Arena mechanics.** `Pit` (Backyard's dug holes): walking in stops at the rim, but a dog moved by
+anything else - a whack, sprinkler, mower, or dizziness - falls in and is out, credited through
+`Dog.knocked_out_by()` to whoever whacked it there in the last two seconds; a dash hops over, toys that
+roll in pop out, and spawns, toy placement and bot routes all avoid holes. `Obstacle.breakable` props
+(Backyard's crates) lose a hit per toy (two for a wound-up throw), splinter at `toughness`, and are rebuilt
+by `reset_for_round()`. `SwingBoard` (Agility Park) is a pivoting wall a `SwitchPad` swings a quarter turn,
+changing which way throws bounce; a switch drives anything with `toggle()`/`set_open()`. Every arena node
+with `reset_for_round()` is reset when the next round starts on the same arena. As a backstop, the match
+moves any settled toy no dog in play can reach back to open ground (`Match._rescue_stranded_toys`).
+
+**Modes.** `GameMode` has `tick`, `timeout_winner`, `bot_goal`, `bot_keeps` and `bot_should_throw_now` hooks; the match
 calls `tick` every frame and asks `is_round_over` after it. `HotPotato` marks one toy as the hot bone and
 knocks out its holder (or last holder) when the fuse pops. `KingOfTheBed` banks time for a side alone on a
-bed placed clear of other gimmicks; first to `CLAIM_TIME` wins, or most time at the whistle.
+bed placed clear of other gimmicks; first to `CLAIM_TIME` wins, or most time at the whistle. `GoldenBall`
+banks time for whichever side holds one golden toy (bots keep it and run). Unfinished mode ideas live in
+`data/modes/shelved/`, out of every menu.
+
+**Comfort.** `Game` keeps rumble, knockout slow motion, screen shake, a colour-blind player palette
+(`PlayerSlot.palette()`, `Game.team_color()`) and how long HUD button prompts stay, all saved to settings.
+`Rumble` (autoload) buzzes pads from `Events`.
 
 **Lighting.** `Arena._style_lighting()` sets one warm key with soft orthogonal shadows, a cool shadowless
 fill, and linear tonemapping for every map. `ArenaCamera` keeps `far` at 80 m: the default 4 km far plane

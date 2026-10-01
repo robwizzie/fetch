@@ -94,6 +94,13 @@ var dizzy_time := 0.0
 ## out. Learning which button throws should never cost you a knockout.
 var practice_safe := false
 var _weapon_impulse := Vector3.ZERO
+## Who last knocked this dog about, and when (msec), so a fall into a hole is credited to them.
+var _last_pusher: Dog
+var _last_push_msec := -100000
+## Set while going down a hole, so the knockout plays as a fall rather than a tumble.
+var _falling_into := Vector3.INF
+## A push this recent still counts as the reason a dog ended up down a hole.
+const PUSH_CREDIT_MSEC := 2000
 ## Height of the deck under the paws. Zero everywhere except on a ramp.
 var ground_y := 0.0
 var _slow_sources: Dictionary = {}
@@ -192,7 +199,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if state != State.ALIVE or round_locked:
 		return
-	_powerup_halo.visible = shield_charges > 0
+	_powerup_halo.visible = shield_charges > 0 and not concealed
 	_powerup_halo.scale = Vector3.ONE * (1.0 + sin(Time.get_ticks_msec() * 0.006) * 0.055)
 	_spawn_grace = maxf(0.0, _spawn_grace - delta)
 	_pickup_lock = maxf(0.0, _pickup_lock - delta)
@@ -467,7 +474,8 @@ func _reject_press() -> void:
 func _update_shield_bubble(delta: float) -> void:
 	if not is_instance_valid(_shield_bubble):
 		return
-	var want := shield_charges > 0
+	# A hidden dog does not get a bubble giving its position away.
+	var want := shield_charges > 0 and not concealed and not _burrowed
 	if _shield_bubble.visible != want:
 		_shield_bubble.visible = want
 		if want:
@@ -500,10 +508,6 @@ func _throw_or_catch() -> void:
 		return
 	if _catch_cooldown > 0.0 or _catch_buffer > 0.0:
 		_reject_press()
-		return
-	var toy := _find_catchable_toy()
-	if toy:
-		_catch(toy)
 		return
 	# Arm the catch window: a toy that reaches us in the next catch_window seconds is caught.
 	_catch_buffer = data.catch_window
@@ -570,6 +574,7 @@ func _advance_charge(delta: float) -> void:
 		Sfx.play("charge", 0.85 + _charge * 1.05, -14.0)
 	if before < 1.0 and _charge >= 1.0:
 		Sfx.play_at("charged", global_position, 1.0, -10.0)
+		Events.throw_charged.emit(self)
 		Juice.pop(model, 1.07, 0.14)
 	_charge_meter.set_charge(_charge, facing)
 	model.set_charge(_charge, true)
@@ -644,6 +649,9 @@ func _whack(target: Dog) -> void:
 func receive_whack(direction: Vector3, from: Dog) -> void:
 	if not alive or round_locked or invincible or _spawn_grace > 0.0 or practice_safe:
 		return
+	if from != null:
+		_last_pusher = from
+		_last_push_msec = Time.get_ticks_msec()
 	_cancel_charge()
 	_buffered_throw = 0.0
 	if is_instance_valid(held_toy):
@@ -658,7 +666,10 @@ func receive_whack(direction: Vector3, from: Dog) -> void:
 		Juice.float_text(get_parent(), global_position + Vector3.UP * 1.6, DogTalk.disarm(), UiKit.CREAM, 0.6)
 	else:
 		dizzy_time = DIZZY_TIME
-		_catch_buffer = 0.0
+		if _catch_buffer > 0.0:
+			_catch_buffer = 0.0
+			_catch_cooldown = data.catch_cooldown
+			model.set_catching(false)
 		_weapon_impulse = direction * 5.0
 		if model.has_method("set_dizzy"):
 			model.call("set_dizzy", true)
@@ -783,6 +794,34 @@ func _resolve_hit(toy: Toy, area_hit: bool, direction: Vector3) -> bool:
 	return true
 
 
+func is_dashing() -> bool:
+	return _dash_timer > 0.0
+
+
+## True while something other than this dog's own legs is moving it: a whack, a sprinkler, a mower.
+func is_being_pushed(threshold: float) -> bool:
+	return _weapon_impulse.length() > threshold
+
+
+## Whoever put this dog out: the thrower of the toy that hit it, or - for a fall down a hole -
+## whoever whacked it there in the last couple of seconds. Null for nobody in particular.
+func knocked_out_by(by: Node) -> Dog:
+	var thrower: Variant = by.get("thrower") if is_instance_valid(by) else null
+	if thrower is Dog and is_instance_valid(thrower):
+		return thrower
+	if is_instance_valid(_last_pusher) and Time.get_ticks_msec() - _last_push_msec < PUSH_CREDIT_MSEC:
+		return _last_pusher
+	return null
+
+
+## Down a hole: out of the round, the same as a bonk.
+func fall_into(centre: Vector3) -> void:
+	if not alive or round_locked or practice_safe:
+		return
+	_falling_into = centre
+	eliminate(null, Vector3(centre.x - global_position.x, 0, centre.z - global_position.z).normalized())
+
+
 func eliminate(by: Toy = null, impact_direction: Vector3 = Vector3.ZERO) -> void:
 	if state == State.ELIMINATED:
 		return
@@ -820,11 +859,14 @@ func eliminate(by: Toy = null, impact_direction: Vector3 = Vector3.ZERO) -> void
 	Juice.burst(get_parent(), global_position + dir * DogModel.KO_KNOCKBACK + Vector3(0, 0.12, 0),
 		Color(0.85, 0.8, 0.7, 0.75), 14, 2.6)
 	var own_goal := by != null and by.thrower == self
-	Juice.float_text(get_parent(), global_position + Vector3(0, 1.8, 0),
-		DogTalk.own_goal() if own_goal else DogTalk.knockout(), Color(1.0, 0.85, 0.2), 1.0)
+	var line := "DOWN THE HOLE!" if _falling_into != Vector3.INF else (DogTalk.own_goal() if own_goal else DogTalk.knockout())
+	Juice.float_text(get_parent(), global_position + Vector3(0, 1.8, 0), line, Color(1.0, 0.85, 0.2), 1.0)
 	_cover.clear()
 	_update_concealment()
-	model.play_knocked_out(dir)
+	if _falling_into != Vector3.INF:
+		model.play_fall(model.get_parent().to_local(_falling_into) if model.get_parent() is Node3D else Vector3.ZERO)
+	else:
+		model.play_knocked_out(dir)
 	ring.visible = false
 	_powerup_halo.visible = false
 	_aim_marker.visible = false

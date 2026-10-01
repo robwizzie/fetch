@@ -9,6 +9,7 @@ signal banner_finished
 
 @onready var scores: HBoxContainer = %Scores
 @onready var center: Label = %Center
+var _pause_controls: VBoxContainer
 @onready var hint: Label = %Hint
 
 var _slots: Array[PlayerSlot] = []
@@ -47,11 +48,13 @@ func _ready() -> void:
 
 func setup(slots: Array[PlayerSlot], mode_hint: String) -> void:
 	_slots = slots
-	var controls := _control_hint(slots)
+	# Controls live on each player's own card now (and in the pause menu); the floor gets only
+	# the goal.
 	hint.text = "%s · First to %d" % [mode_hint, Game.points_to_win]
-	if not controls.is_empty():
-		hint.text += "\n" + controls
-	hint.offset_top = -50 - 24 * hint.text.count("\n")
+	hint.offset_top = -50
+	for child in _pause_controls.get_children():
+		child.queue_free()
+	_pause_controls.add_child(_controls_card(slots))
 	hint.offset_left = -850
 	hint.offset_right = 850
 	hint.add_theme_font_override("font", UiKit.FONT_UI)
@@ -73,8 +76,8 @@ func refresh_scores() -> void:
 		var dots: HBoxContainer = chip.get_node("VBox/Dots")
 		for i in dots.get_child_count():
 			var dot: ColorRect = dots.get_child(i)
-			dot.color = UiKit.YELLOW if i < slot.score else Color(1, 1, 1, 0.18)
-		if slot.score > 0:
+			dot.color = UiKit.YELLOW if i < Game.score_for(slot) else Color(1, 1, 1, 0.18)
+		if Game.score_for(slot) > 0:
 			Juice.pop(chip, 1.15)
 
 
@@ -100,6 +103,7 @@ func _show_countdown_step() -> void:
 
 ## Owned by the HUD: pausing freezes the sequence and leaving the match cancels it cleanly.
 func _process(delta: float) -> void:
+	_stack_under_cards()
 	if _announcement_time > 0.0:
 		_announcement_time -= delta
 		_announcement.visible = _announcement_time > 0.0
@@ -294,7 +298,35 @@ func _make_chip(slot: PlayerSlot) -> PanelContainer:
 	status.autowrap_mode = TextServer.AUTOWRAP_OFF
 	status.add_theme_font_override("font", UiKit.FONT_UI)
 	vbox.add_child(status)
+	if not slot.is_bot and slot.device != DeviceInput.VIRTUAL:
+		vbox.add_child(_key_row(slot))
 	return chip
+
+
+## This player's two buttons, named for what they do right now: the throw button is CATCH with
+## empty paws and THROW with a toy, and the dash key dims while it recharges. The first thing a
+## new player looks for is their own card, so that is where their buttons are.
+func _key_row(slot: PlayerSlot) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "Keys"
+	row.add_theme_constant_override("separation", 6)
+	row.add_child(UiKit.keycaps(&"throw", slot.device, 15))
+	var verb := UiKit.label("CATCH", 15, UiKit.YELLOW)
+	verb.name = "Verb"
+	verb.autowrap_mode = TextServer.AUTOWRAP_OFF
+	verb.add_theme_font_override("font", UiKit.FONT_DISPLAY)
+	verb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(verb)
+	var dash := HBoxContainer.new()
+	dash.name = "Dash"
+	dash.add_theme_constant_override("separation", 6)
+	dash.add_child(UiKit.keycaps(&"dash", slot.device, 15))
+	var word := UiKit.label("DASH", 15, UiKit.CREAM)
+	word.autowrap_mode = TextServer.AUTOWRAP_OFF
+	word.add_theme_font_override("font", UiKit.FONT_DISPLAY)
+	dash.add_child(word)
+	row.add_child(dash)
+	return row
 
 
 ## A thin power bar under the score dots. It is only there while a throw is being wound up,
@@ -348,6 +380,16 @@ func practice_clock() -> void:
 	_clock.add_theme_color_override("font_color", UiKit.YELLOW)
 
 
+## The clock and the announcement hang just under the player cards, however tall the cards
+## are - fixed offsets put the clock over the bottom of the cards once they grew a key row.
+func _stack_under_cards() -> void:
+	var top := scores.position.y + scores.size.y + 4.0
+	_clock.offset_top = top
+	_clock.offset_bottom = top + 36.0
+	_announcement.offset_top = top + 38.0
+	_announcement.offset_bottom = top + 74.0
+
+
 func announce(text: String) -> void:
 	_announcement.text = text
 	_announcement_time = 3.0
@@ -358,6 +400,9 @@ func update_match(dogs: Array[Dog], seconds: float, round_number: int) -> void:
 	var remaining := ceili(seconds)
 	_clock.text = "ROUND %d  ·  %d:%02d" % [round_number, remaining / 60, remaining % 60]
 	_clock.add_theme_color_override("font_color", UiKit.YELLOW if remaining <= 10 else UiKit.CREAM)
+	# The controls line teaches the warm-up and the first round, then gets off the floor: two
+	# lines of small print over the near wall is the last thing a round two needs.
+	hint.modulate.a = move_toward(hint.modulate.a, 1.0 if round_number <= 1 else 0.0, 0.02)
 	for dog in dogs:
 		if not _chips.has(dog.slot):
 			continue
@@ -380,7 +425,17 @@ func update_match(dogs: Array[Dog], seconds: float, round_number: int) -> void:
 				toy_status = "WINDING UP"
 			if dog.dizzy_time > 0.0:
 				toy_status = "SEEING STARS"
-			status.text = "%s · %s" % [toy_status, "DASH READY" if dog.dash_ready() else "DASH RECHARGING"]
+			var keys := chip.get_node_or_null("VBox/Keys")
+			if keys == null:
+				status.text = "%s · %s" % [toy_status, "DASH READY" if dog.dash_ready() else "DASH RECHARGING"]
+			else:
+				# The key row carries the dash state, so the status line is just the toy.
+				status.text = toy_status
+				keys.visible = Game.control_hints == Game.ControlHints.ALWAYS \
+					or (Game.control_hints == Game.ControlHints.FIRST_ROUNDS and round_number <= 2)
+				var verb: Label = keys.get_node("Verb")
+				verb.text = "LET GO!" if charge > 0.0 else ("THROW (HOLD)" if dog.held_toy else "CATCH")
+				(keys.get_node("Dash") as Control).modulate.a = 1.0 if dog.dash_ready() else 0.35
 		var belt := chip.get_node("VBox/Belt")
 		for i in belt.get_child_count():
 			var socket := belt.get_child(i) as Panel
@@ -427,10 +482,9 @@ func _build_pause() -> void:
 	_pause_overlay.add_child(shade)
 	var card := PanelContainer.new()
 	card.set_anchors_preset(Control.PRESET_CENTER)
-	card.offset_left = -310
-	card.offset_right = 310
-	card.offset_top = -220
-	card.offset_bottom = 220
+	card.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	card.grow_vertical = Control.GROW_DIRECTION_BOTH
+	card.custom_minimum_size = Vector2(620, 0)
 	card.add_theme_stylebox_override("panel", UiKit.panel_style(UiKit.YELLOW, Color(0.13, 0.2, 0.13, 0.98)))
 	_pause_overlay.add_child(card)
 	var box := VBoxContainer.new()
@@ -445,8 +499,40 @@ func _build_pause() -> void:
 	var leave := UiKit.wood_button("MAIN MENU", 540)
 	leave.pressed.connect(func() -> void: quit_requested.emit())
 	box.add_child(leave)
+	_pause_controls = VBoxContainer.new()
+	box.add_child(_pause_controls)
 	box.add_child(UiKit.label("%s to resume" % DeviceInput.button_label(&"pause", Game.slots), 20, Color(1, 1, 1, 0.7)))
 	_pause_overlay.hide()
+
+
+## Everyone's controls, one row per device in use, drawn as keys. Players sharing a layout share
+## a row. The pause menu is where a lost player looks, so the answer has to be there.
+func _controls_card(slots: Array[PlayerSlot]) -> VBoxContainer:
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 10)
+	var seen: Array[int] = []
+	for slot in slots:
+		if slot.is_bot or slot.device == DeviceInput.VIRTUAL or seen.has(slot.device):
+			continue
+		seen.append(slot.device)
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 7)
+		for other in slots:
+			if other.device == slot.device and not other.is_bot:
+				row.add_child(UiKit.chip(other.label, other.color, 18))
+		for pair in [[&"move", "move"], [&"throw", "throw / catch"], [&"dash", "dash"]]:
+			var spacer := Control.new()
+			spacer.custom_minimum_size = Vector2(8, 0)
+			row.add_child(spacer)
+			row.add_child(UiKit.keycaps(pair[0], slot.device, 17))
+			var word := UiKit.label(pair[1], 18, UiKit.CREAM)
+			word.autowrap_mode = TextServer.AUTOWRAP_OFF
+			row.add_child(word)
+		column.add_child(row)
+	if not seen.is_empty():
+		column.add_child(UiKit.label("Hold throw for a harder throw  ·  one hit from a flying toy and you're out", 17, UiKit.YELLOW))
+	return column
 
 
 func show_pause(paused: bool) -> void:

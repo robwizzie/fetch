@@ -15,10 +15,16 @@ var _continue: Button
 func _ready() -> void:
 	Music.play("menu")
 	UiKit.backdrop(self)
+	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	Game.reset_scores()
 	for slot in Game.slots:
 		slot.ready = slot.is_bot
-		_inputs[slot] = DeviceInput.new(slot.device)
+		var inp := DeviceInput.new(slot.device)
+		# A button still down from the screen we came from (B out of setup, A into here) is
+		# not a fresh press: without this it would kick the player out or ready them up.
+		for action in [&"confirm", &"back", &"left", &"right", &"up", &"down"]:
+			inp.just_pressed(action)
+		_inputs[slot] = inp
 
 	var root := VBoxContainer.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -59,6 +65,19 @@ func _ready() -> void:
 		if _all_ready():
 			Game.goto(Game.SCENE_MATCH_SETUP))
 	actions.add_child(_continue)
+	_refresh_all()
+
+
+## A pad unplugged before its player readied up would hold the lobby forever, since only that
+## pad can ready or remove the seat. Let it go; plugging back in and pressing A rejoins.
+func _on_joy_connection_changed(device: int, connected: bool) -> void:
+	if connected:
+		return
+	var slot := Game.get_slot_by_device(device)
+	if slot == null or slot.is_bot or slot.ready:
+		return
+	Game.remove_player(slot)
+	_inputs.erase(slot)
 	_refresh_all()
 
 

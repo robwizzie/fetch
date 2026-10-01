@@ -8,7 +8,7 @@
 script = ExtResource("1")
 id = &"agility_park"
 display_name = "Agility Park"
-description = "Tunnels, an A-frame and weave poles. Long sightlines and fast lanes."
+description = "Tunnels, an A-frame and swing boards: step on a switch to change where every throw bounces."
 scene = ExtResource("2")
 swatch = Color(0.36, 0.62, 0.86, 1)
 thumbnail = ExtResource("3")

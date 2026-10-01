@@ -9,12 +9,30 @@ const COLORS: Array[Color] = [
 	Color(1.0, 0.8, 0.2),     # P4 yellow
 ]
 
+## Okabe-Ito based: blue, orange, pink and yellow stay apart under red-green and blue-yellow
+## colour blindness, where the default blue/red/green/yellow collapses to two or three colours.
+const COLORS_COLORBLIND: Array[Color] = [
+	Color("3d8fe0"),   # P1 blue
+	Color("e69f00"),   # P2 orange
+	Color("d77fbd"),   # P3 pink
+	Color("f0e442"),   # P4 yellow
+]
+
+
+static func palette() -> Array[Color]:
+	return COLORS_COLORBLIND if Game.colorblind_colors else COLORS
+
+
 ## Which side this player is on: -1 in a free-for-all, otherwise an index into Game.TEAM_NAMES.
 var team: int = -1
 var index: int = 0
 var device: int = DeviceInput.NONE
 var dog: DogData
 var score: int = 0
+## This match's story, for the podium: rivals bonked, toys caught, times bonked.
+var knockouts: int = 0
+var catches: int = 0
+var bonked: int = 0
 var ready: bool = false
 ## AI is opt-in: virtual devices are also used by scripted tests and menu dogs.
 var is_bot: bool = false
@@ -97,7 +115,8 @@ func powerup_count(kind: StringName) -> int:
 
 var color: Color:
 	get:
-		return COLORS[index % COLORS.size()]
+		var colors := palette()
+		return colors[index % colors.size()]
 
 var label: String:
 	get:

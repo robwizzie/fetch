@@ -199,6 +199,53 @@ static func chip(text: String, color: Color, size: int = 22, text_color: Color =
 	return p
 
 
+## One key or button drawn as a key: a pale cap with a heavier bottom edge, so "Space" reads as
+## something to press rather than a word in a sentence.
+static func keycap(text: String, size: int = 18) -> PanelContainer:
+	var cap := PanelContainer.new()
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var s := StyleBoxFlat.new()
+	s.bg_color = CREAM
+	s.border_color = Color(0.55, 0.5, 0.42)
+	s.set_border_width_all(2)
+	s.border_width_bottom = 5
+	s.set_corner_radius_all(7)
+	s.content_margin_left = 9
+	s.content_margin_right = 9
+	s.content_margin_top = 1
+	s.content_margin_bottom = 0
+	cap.add_theme_stylebox_override("panel", s)
+	var l := label(text, size, INK)
+	l.name = "Text"
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	l.add_theme_font_override("font", FONT_DISPLAY)
+	cap.add_child(l)
+	return cap
+
+
+## The key(s) for one action on one player's device. A keyboard shows every key the game
+## accepts ("Shift" and "E") as caps; a pad shows its main button only, since the alternatives
+## ("X or Y/LT/RT") are a wall of letters to someone who has never held one, and draws a face
+## button the way it looks on the pad (see PadButton). [param family] overrides the detected
+## pad type, so tools can show every kind without one plugged in.
+static func keycaps(action: StringName, device: int, size: int = 18, family: int = -1) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 4)
+	if device == DeviceInput.KEYBOARD_WASD or device == DeviceInput.KEYBOARD_ARROWS:
+		for word in DeviceInput.glyph(action, device).split(" or "):
+			if not word.is_empty():
+				row.add_child(keycap(word.to_upper() if word.length() <= 6 else word, size))
+		return row
+	var pad: DeviceInput.PadFamily = DeviceInput.pad_family(device) if family < 0 else family as DeviceInput.PadFamily
+	var word := DeviceInput.pad_glyph(action, pad).get_slice(" or ", 0)
+	if word.is_empty():
+		return row
+	var badge := PadButton.for_label(word, pad, size * 1.75)
+	row.add_child(badge if badge != null else keycap(word.to_upper() if word.length() <= 6 else word, size))
+	return row
+
+
 static func stat_row(name: String, rating: int, color: Color) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 5)

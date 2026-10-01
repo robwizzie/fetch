@@ -58,6 +58,17 @@ func _build() -> void:
 	ArenaArt.paw(_body, Vector3(0, SIZE.y * 0.95, 0), 0.22, Color("fff1d6"))
 
 
+## Parked and resting at the start of every round, never already mid-lane at the whistle.
+func reset_for_round() -> void:
+	phase = Phase.RESTING
+	heading = 1.0
+	_timer = rest * 0.5
+	_hit.clear()
+	_lane_material.albedo_color.a = 0.0
+	_lamp.visible = false
+	_park()
+
+
 func _park() -> void:
 	_body.position = Vector3(-heading * (half_width + 1.4), 0, lane_z)
 	_body.rotation.y = 0.0 if heading > 0.0 else PI

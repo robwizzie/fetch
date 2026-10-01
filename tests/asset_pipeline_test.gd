@@ -38,7 +38,7 @@ func _ready() -> void:
 	await get_tree().process_frame
 	var mouth_before := imported.get_mouth_transform().origin
 	_check(mouth_before.distance_to(imported.global_position) > 0.5, "mouth uses actual rig socket, not dog origin")
-	imported._player.advance(0.16)
+	imported._tree.advance(0.16)
 	await get_tree().process_frame
 	var mouth_after := imported.get_mouth_transform().origin
 	_check(mouth_before.distance_to(mouth_after) > 0.03, "mouth follows animated bone in world space")
@@ -46,7 +46,9 @@ func _ready() -> void:
 	_check(imported._active_state == "run", "locomotion selects run")
 	imported.play_throw()
 	_check(imported._active_state == "throw", "throw plays one-shot")
-	imported._player.advance(0.5)
+	# Frame-sized steps, as in play: the step that fires a one-shot does not also run it.
+	for i in 10:
+		imported._tree.advance(0.05)
 	await get_tree().process_frame
 	_check(imported._active_state == "run", "throw returns to queued locomotion")
 	imported.set_dashing(true)
@@ -78,8 +80,61 @@ func _ready() -> void:
 	_check(studio.get("_model") != null, "model studio loads with visible runtime model")
 	studio.queue_free()
 	await get_tree().process_frame
+	for dog in Game.dogs:
+		await _check_motion(dog)
 	print("[asset-pipeline] %s (%d failures)" % ["PASSED" if _failures == 0 else "FAILED", _failures])
 	get_tree().quit(0 if _failures == 0 else 1)
+
+
+## The generated clips on the real pack. Each of these was broken once: the rig is Z-up, so the
+## win hop slid the dog along the floor, and a run arc that ignored how the legs stand at rest
+## dug paws into the ground; a throw also froze the legs mid-stride.
+func _check_motion(data: DogData) -> void:
+	var model := DogModel.new()
+	add_child(model)
+	model.setup(data, Color.WHITE)
+	if not model.uses_authored_model:
+		model.queue_free()
+		return
+	var skeleton := model.find_child("Skeleton3D", true, false) as Skeleton3D
+	var player := model._player
+	var height := func(bone: String) -> float:
+		return (skeleton.global_transform * skeleton.get_bone_global_pose(skeleton.find_bone(bone))).origin.y
+	model._tree.active = false
+	skeleton.reset_bone_poses()
+	var floor_y: float = height.call("backleg2")
+	var hips_rest: float = height.call("Hips")
+	var lowest := INF
+	var highest := -INF
+	player.play(data.model_animations.get("run", &"run"))
+	for i in 24:
+		player.seek(player.current_animation_length * i / 24.0, true)
+		for paw in ["frontleg2", "R_frontleg2", "backleg2", "R_backleg2"]:
+			var y: float = height.call(paw) - floor_y if paw.begins_with("back") else 0.0
+			lowest = minf(lowest, y)
+			highest = maxf(highest, y)
+	_check(lowest > -0.06, "%s: run keeps hind paws out of the floor (lowest %.2f m)" % [data.display_name, lowest])
+	_check(highest > 0.05, "%s: run lifts the paws clear on the swing" % data.display_name)
+	var hop := -INF
+	player.play(data.model_animations.get("win", &"win"))
+	for i in 20:
+		player.seek(player.current_animation_length * i / 20.0, true)
+		hop = maxf(hop, height.call("Hips") - hips_rest)
+	_check(hop > 0.08, "%s: the win hop leaves the ground (%.2f m)" % [data.display_name, hop])
+	player.stop()
+	model._tree.active = true
+	model.update_motion(Vector3.FORWARD, 1.0, 0.1)
+	for i in 8:
+		model._tree.advance(0.05)
+	model.play_throw()
+	var leg := skeleton.find_bone("backleg")
+	var poses: Array[Quaternion] = []
+	for i in 6:
+		model._tree.advance(0.05)
+		poses.append(skeleton.get_bone_pose_rotation(leg))
+	_check(poses[0].angle_to(poses[5]) > 0.05, "%s: hind legs keep running through a throw" % data.display_name)
+	model.queue_free()
+	await get_tree().process_frame
 
 
 func _check(condition: bool, message: String) -> void:

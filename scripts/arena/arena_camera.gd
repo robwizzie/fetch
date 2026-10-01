@@ -1,16 +1,33 @@
 class_name ArenaCamera
 extends Camera3D
-## Shared arena camera. A fixed heading keeps movement predictable while the group
-## gets a closer view as the pack converges. All live dogs and airborne toys stay in frame.
+## Shared arena camera. A fixed tilted heading and a narrow perspective lens show the arena as a
+## diorama - wall faces, prop sides and dogs all read as solid - and the whole park stays in
+## shot nearly all the time, the way a couch party game wants it: you should never lose your dog
+## off the edge or have to learn where the camera is going. It leans in only a little when the
+## pack bunches up, and punches in on a knockout.
 
-@export_range(35.0, 75.0) var pitch_degrees := 56.0
+@export_range(35.0, 75.0) var pitch_degrees := 58.0
+## Vertical field of view. Narrow, so the far wall is not dwarfed by the near one.
+@export_range(15.0, 60.0) var lens_degrees := 30.0
+@export var look_target := Vector3(0, 0.0, 0.0)
+@export var follow_speed := 3.0
+@export var zoom_in_speed := 1.8
+## How far towards the pack the framing centre may drift (0 = locked on the arena centre).
+@export_range(0.0, 1.0) var follow_share := 0.35
+## How close the camera may come when everyone is bunched up, as a share of the full overview.
+@export_range(0.5, 1.0) var closest_share := 0.76
+## Screen kept clear at the top for the player cards, and a sliver at the bottom, as shares of
+## the screen height. The arena is framed into what is left.
+@export_range(0.0, 0.4) var hud_top := 0.17
+@export_range(0.0, 0.4) var hud_bottom := 0.035
+@export_range(0.0, 0.2) var side_margin := 0.02
+## Legacy scene properties; the perspective framing works out distance itself.
 @export var height := 17.0
 @export var framing_height := 13.5
-@export var look_target := Vector3(0, 0.65, 0.3)
-@export var follow_speed := 4.0
-@export var zoom_in_speed := 2.4
 @export var edge_padding := Vector2(2.1, 2.0)
 
+## How far the camera sits from its target, along the fixed view direction. This is the zoom.
+var distance := 30.0
 var _arena_size := Vector2(26, 14.6)
 var _home := Vector3.ZERO
 var _target := Vector3.ZERO
@@ -29,12 +46,13 @@ var locked_wide := false
 func _ready() -> void:
 	# Camera and impact timing continue during a slow-motion KO, but not during pause.
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	projection = Camera3D.PROJECTION_ORTHOGONAL
+	projection = Camera3D.PROJECTION_PERSPECTIVE
 	keep_aspect = Camera3D.KEEP_HEIGHT
+	fov = lens_degrees
 	# The default 4 km far plane stretched the directional shadow's depth range until no prop
-	# or dog cast a shadow at all. The whole diorama sits within ~35 m of the lens.
+	# or dog cast a shadow at all. A tall portrait window can push the lens out past 100 m.
 	near = 1.0
-	far = 80.0
+	far = 220.0
 	if get_parent() is Arena:
 		_arena_size = get_parent().size
 	_home = look_target
@@ -43,8 +61,8 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_on_viewport_changed)
 	Events.dog_eliminated.connect(_on_dog_eliminated)
 	Events.round_started.connect(_on_round_started)
+	distance = _maximum_distance(_aspect())
 	_place()
-	size = _maximum_size(_aspect())
 
 
 func _exit_tree() -> void:
@@ -66,38 +84,44 @@ func _update_framing(real_delta: float) -> void:
 	var aspect := _aspect()
 	if locked_wide:
 		_target = _home
-		size = _maximum_size(aspect)
+		distance = _maximum_distance(aspect)
 		_place()
 		return
 	var points := _gather_points()
 	var frame := _fit_points(points, aspect)
 	var goal: Vector3 = frame.target
-	var goal_size: float = frame.size
+	var goal_distance: float = frame.distance
 	if _snap_next:
 		_target = goal
-		size = goal_size
+		distance = goal_distance
 		_snap_next = false
 	else:
 		var speed := 8.0 if _focus_left > 0.0 else follow_speed
 		_target = _target.lerp(goal, 1.0 - exp(-speed * real_delta))
 		# Pulling back is quick; moving closer is gradual so the floor never pumps.
-		var zoom_speed := 10.0 if goal_size > size else zoom_in_speed
+		var zoom_speed := 10.0 if goal_distance > distance else zoom_in_speed
 		if _focus_left > 0.0:
 			zoom_speed = 7.0
-		size = lerpf(size, goal_size, 1.0 - exp(-zoom_speed * real_delta))
+		distance = lerpf(distance, goal_distance, 1.0 - exp(-zoom_speed * real_delta))
 		# An accelerating dog or ricochet must never outrun camera interpolation.
-		var maximum := _maximum_size(aspect)
-		var required := _required_size(points, _target, aspect)
+		var maximum := _maximum_distance(aspect)
+		var required := _required_distance(points, _target, aspect)
 		if required > maximum:
 			_target = goal
-			required = _required_size(points, _target, aspect)
-		size = clampf(maxf(size, required), 1.0, maximum)
+			required = _required_distance(points, _target, aspect)
+		distance = clampf(maxf(distance, required), 1.0, maximum)
 	_place()
 
 
-func _place() -> void:
+## Back along the fixed view direction: up and towards the players' side of the room (+Z).
+func _view_direction() -> Vector3:
 	var pitch := deg_to_rad(clampf(pitch_degrees, 35.0, 75.0))
-	look_at_from_position(_target + Vector3(0, height, height / tan(pitch)), _target, Vector3.UP)
+	return Vector3(0.0, sin(pitch), cos(pitch))
+
+
+func _place() -> void:
+	fov = lens_degrees
+	look_at_from_position(_target + _view_direction() * distance, _target, Vector3.UP)
 
 
 func _aspect() -> float:
@@ -128,34 +152,55 @@ func _gather_points() -> Array[Vector3]:
 	return points
 
 
+## A flat stand-in for the screen, used only to find the middle of the action.
 func _plane(point: Vector3) -> Vector2:
 	var pitch := deg_to_rad(clampf(pitch_degrees, 35.0, 75.0))
 	return Vector2(point.x, point.y * cos(pitch) - point.z * sin(pitch))
 
 
-func _required_size(points: Array[Vector3], target: Vector3, aspect: float) -> float:
-	var center := _plane(target)
+## The closest the camera can sit to [param target] with every point inside the usable part of
+## the screen. Solved per point rather than searched: with the heading fixed, a point's screen
+## position is linear in its offset and inversely proportional to its depth, so each edge gives
+## a distance directly.
+func _required_distance(points: Array[Vector3], target: Vector3, aspect: float) -> float:
+	var back := _view_direction()
+	var forward := -back
+	var up := Vector3(0.0, back.z, -back.y)
+	var tan_v := tan(deg_to_rad(lens_degrees) * 0.5)
+	var tan_h := tan_v * maxf(aspect, 0.01)
+	# Usable screen, in normalised device units (-1..1), after the HUD bands and side margin.
+	var right_limit := (1.0 - side_margin * 2.0) * tan_h
+	var top_limit := (1.0 - hud_top * 2.0) * tan_v
+	var bottom_limit := (1.0 - hud_bottom * 2.0) * tan_v
 	var required := 1.0
 	for point in points:
-		var distance := (_plane(point) - center).abs() + edge_padding
-		required = maxf(required, maxf(distance.x * 2.0 / maxf(aspect, 0.01), distance.y * 2.0))
+		var offset := point - target
+		var depth := offset.dot(forward)
+		var across := absf(offset.x)
+		var lift := offset.dot(up)
+		required = maxf(required, across / right_limit - depth)
+		required = maxf(required, (lift / top_limit if lift > 0.0 else -lift / bottom_limit) - depth)
 	return required
 
 
-func _maximum_size(aspect: float) -> float:
+func _arena_corners() -> Array[Vector3]:
 	var corners: Array[Vector3] = []
 	for x in [-1.0, 1.0]:
 		for z in [-1.0, 1.0]:
 			for y in [0.0, 2.4]:
 				corners.append(Vector3(x * (_arena_size.x * 0.5 + 0.8), y, z * (_arena_size.y * 0.5 + 0.8)))
-	return maxf(framing_height, _required_size(corners, _home, aspect))
+	return corners
+
+
+func _maximum_distance(aspect: float) -> float:
+	return _required_distance(_arena_corners(), _home, aspect)
 
 
 ## Pure framing calculation, exercised at portrait and ultra-wide aspects by tests.
 func _fit_points(points: Array[Vector3], aspect: float) -> Dictionary:
-	var maximum := _maximum_size(aspect)
+	var maximum := _maximum_distance(aspect)
 	if points.is_empty():
-		return {"target": _home, "size": maximum}
+		return {"target": _home, "distance": maximum}
 	var low := _plane(points[0])
 	var high := low
 	for point in points:
@@ -165,24 +210,24 @@ func _fit_points(points: Array[Vector3], aspect: float) -> Dictionary:
 	var center := (low + high) * 0.5
 	var pitch := deg_to_rad(clampf(pitch_degrees, 35.0, 75.0))
 	var target := Vector3(center.x, _home.y, (_home.y * cos(pitch) - center.y) / sin(pitch))
-	target = _home.lerp(target, 0.85)
+	target = _home.lerp(target, follow_share)
 	if _focus_left > 0.0:
 		var strength := smoothstep(0.0, _focus_duration, _focus_left)
 		var impact := Vector3(_focus_position.x, _home.y, _focus_position.z)
-		target = target.lerp(impact, strength * (0.55 if _final_focus else 0.18))
-	target.x = clampf(target.x, -_arena_size.x * 0.16, _arena_size.x * 0.16)
-	target.z = clampf(target.z, -_arena_size.y * 0.16, _arena_size.y * 0.16)
+		target = target.lerp(impact, strength * (0.5 if _final_focus else 0.15))
+	target.x = clampf(target.x, -_arena_size.x * 0.12, _arena_size.x * 0.12)
+	target.z = clampf(target.z, -_arena_size.y * 0.12, _arena_size.y * 0.12)
 	# A pack spanning the whole park needs its full overview again.
 	for attempt in 8:
-		if _required_size(points, target, aspect) <= maximum:
+		if _required_distance(points, target, aspect) <= maximum:
 			break
 		target = target.lerp(_home, 0.5)
-	if _required_size(points, target, aspect) > maximum:
+	if _required_distance(points, target, aspect) > maximum:
 		target = _home
-	var minimum := maxf(framing_height, 19.0 / maxf(aspect, 0.01))
+	var minimum := maximum * closest_share
 	if _focus_left > 0.0 and _final_focus:
-		minimum *= 0.90
-	return {"target": target, "size": clampf(maxf(minimum, _required_size(points, target, aspect)), 1.0, maximum)}
+		minimum *= 0.86
+	return {"target": target, "distance": clampf(maxf(minimum, _required_distance(points, target, aspect)), 1.0, maximum)}
 
 
 func _on_dog_eliminated(dog: Node, _toy: Node) -> void:

@@ -65,15 +65,16 @@ func build(p_slot: PlayerSlot, centre: Vector3, size: Vector2) -> void:
 	_pad_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 	_label = Label3D.new()
-	_label.text = "STAND HERE\nWHEN READY"
+	_label.text = "READY?\nSTAND HERE"
 	_label.font = UiKit.FONT_DISPLAY
-	_label.font_size = 40
-	_label.pixel_size = 0.0042
+	_label.font_size = 64
+	_label.pixel_size = 0.0062
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_label.modulate = tint.lightened(0.45)
-	_label.outline_size = 6
+	_label.outline_size = 14
 	_label.outline_modulate = Color(0.06, 0.1, 0.06)
-	_label.position = pad_at + Vector3(0, 1.35, 0)
+	_label.position = pad_at + Vector3(0, 1.1, 0.4)
+	_label.no_depth_test = true
 	add_child(_label)
 
 
@@ -95,6 +96,11 @@ func _physics_process(delta: float) -> void:
 		_dwell = maxf(0.0, _dwell - delta * 2.0)
 
 
+## The pen's floor size in metres (width, depth), for laying out what sits beside it.
+func footprint() -> Vector2:
+	return _size
+
+
 ## A dog can only check in from inside its own pen, so one that ends up outside - warped out,
 ## shoved through a corner, anything - is put back rather than left stranded.
 func _keep_dog_inside() -> void:
@@ -111,7 +117,10 @@ func _keep_dog_inside() -> void:
 
 ## Bots do not need teaching; they take a moment so the pens do not all pop at once.
 func auto_ready_after(seconds: float) -> void:
-	await get_tree().create_timer(seconds).timeout
+	# Pause-aware, so bots do not check in behind the pause menu and open the pens.
+	await get_tree().create_timer(seconds, false).timeout
+	if not is_instance_valid(self) or not is_inside_tree():
+		return
 	if not is_ready and not _opening:
 		_set_ready()
 

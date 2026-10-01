@@ -27,6 +27,9 @@ enum GroundStyle { AUTO, PATCHES, BOARDS, TILES }
 ## Name burned into the welcome sign behind the back fence. Empty hides the sign.
 @export var sign_text := "THE DOG PARK"
 
+## Edge of one square of the mown lawn, in metres (rounded to fit the arena exactly).
+const LAWN_SQUARE := 2.6
+
 @onready var spawn_points: Node3D = $SpawnPoints
 @onready var toy_spawns: Node3D = $ToySpawns
 
@@ -67,7 +70,8 @@ func _style_lighting() -> void:
 			child.shadow_opacity = 0.78
 			child.shadow_blur = 1.6
 			child.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
-			child.directional_shadow_max_distance = 48.0
+			# The perspective lens sits ~35-45 m out; the far wall has to stay in shadow range.
+			child.directional_shadow_max_distance = 80.0
 		if child is WorldEnvironment and child.environment != null:
 			var env: Environment = child.environment.duplicate()
 			child.environment = env
@@ -132,18 +136,28 @@ func _build_ground() -> void:
 	elif decor_theme == "Beach":
 		_build_sand(root, rng)
 	else:
-		# Broad, low-contrast mowing stripes read as a tended lawn. Avoid the old
-		# scattered circular patches, which looked like overlapping collision discs.
-		for i in int(ceil(size.x / 3.0)):
-			var x0 := -size.x * 0.5 + i * 3.0
-			var width := minf(3.0, size.x * 0.5 - x0)
-			if i % 2 == 0:
-				_floor_strip(root, Vector3(width, 0.009, size.y), ground_color.lerp(ground_accent, 0.38), Vector3(x0 + width * 0.5, 0.018, 0))
+		_build_lawn(root)
 		_build_lawn_border(root, rng)
 		if decor_theme == "Agility":
 			for side in [-1.0, 1.0]:
 				for i in 14:
 					_floor_strip(root, Vector3(0.65, 0.01, 0.065), Color("d7dcba"), Vector3(-size.x * 0.5 + 2.0 + i * (size.x - 4.0) / 13.0, 0.032, side * (size.y * 0.5 - 1.25)))
+
+
+## A mown checkerboard: squares of light and dark grass a couple of metres across. A flat green
+## floor gave the eye nothing to measure a throw or a run against; the squares do, and they
+## are what makes a toy-sized lawn read as a tended little arena rather than a field.
+func _build_lawn(parent: Node3D) -> void:
+	var cols := maxi(2, int(round(size.x / LAWN_SQUARE)))
+	var rows := maxi(2, int(round(size.y / LAWN_SQUARE)))
+	var width := size.x / cols
+	var depth := size.y / rows
+	var light := ground_color.lightened(0.07)
+	var dark := ground_color.darkened(0.06)
+	for row in rows:
+		for col in cols:
+			_floor_strip(parent, Vector3(width, 0.009, depth), light if (row + col) % 2 == 0 else dark,
+				Vector3(-size.x * 0.5 + (col + 0.5) * width, 0.018, -size.y * 0.5 + (row + 0.5) * depth))
 
 
 func _floor_strip(parent: Node3D, dimensions: Vector3, tint: Color, at: Vector3) -> void:
@@ -200,7 +214,21 @@ func _build_lawn_border(parent: Node3D, rng: RandomNumberGenerator) -> void:
 
 
 func _build_sand(parent: Node3D, rng: RandomNumberGenerator) -> void:
-	# Small, composed shell groups sit at the margin; the warm sand stays quiet in play.
+	# Wind ripples: broken pale ridges across the sand, so the floor has a grain to read a run
+	# and a throw against instead of being one flat colour.
+	var ridge := ground_color.lightened(0.09)
+	var trough := ground_color.darkened(0.05)
+	var z := -size.y * 0.5 + 1.1
+	while z < size.y * 0.5 - 0.9:
+		var x := -size.x * 0.5 + rng.randf_range(0.4, 1.4)
+		while x < size.x * 0.5 - 1.0:
+			var length := minf(rng.randf_range(1.4, 3.2), size.x * 0.5 - 0.6 - x)
+			var bend := rng.randf_range(-0.12, 0.12)
+			_floor_strip(parent, Vector3(length, 0.008, 0.09), ridge, Vector3(x + length * 0.5, 0.017, z + bend))
+			_floor_strip(parent, Vector3(length * 0.9, 0.007, 0.07), trough, Vector3(x + length * 0.5, 0.016, z + bend + 0.12))
+			x += length + rng.randf_range(0.5, 1.6)
+		z += rng.randf_range(1.05, 1.45)
+	# Small, composed shell groups sit at the margin.
 	for side in [-1.0, 1.0]:
 		_floor_strip(parent, Vector3(size.x, 0.012, 0.45), ground_accent, Vector3(0, 0.022, side * (size.y * 0.5 - 0.25)))
 		for i in 16:
@@ -392,14 +420,26 @@ func _build_baseboard(parent: Node3D, hx: float, hz: float) -> void:
 			ArenaArt.block(parent, Vector3(0.025, wall_height * 0.54, 1.9), wall_color.darkened(0.055), Vector3(x - side * 0.22, wall_height * 0.5, z_panel), Vector3.ZERO, 0.012)
 
 
+## A shape a dog actually bumps into: walls, props and dog beds on the world layer. Sight-line
+## occluders (tunnel, A-frame) and trigger areas are not solid.
+static func is_solid_shape(collider: CollisionShape3D) -> bool:
+	var body := collider.get_parent() as CollisionObject3D
+	if not (body is StaticBody3D or body is AnimatableBody3D):
+		return false
+	return body.collision_layer & 1 != 0
+
+
 ## Uses authored collision shapes, including before the first physics tick.
 func is_clear_position(at: Vector3, radius: float) -> bool:
 	var local := to_local(at)
 	if absf(local.x) + radius > size.x * 0.5 or absf(local.z) + radius > size.y * 0.5:
 		return false
+	for pit in find_children("*", "Pit", true, false):
+		if (pit as Pit).covers(at, radius + 0.4):
+			return false
 	for node in find_children("*", "CollisionShape3D", true, false):
 		var collider := node as CollisionShape3D
-		if collider.disabled or not (collider.get_parent() is StaticBody3D):
+		if collider.disabled or not is_solid_shape(collider):
 			continue
 		if collider.shape is BoxShape3D:
 			var half := (collider.shape as BoxShape3D).size * 0.5

@@ -42,7 +42,7 @@ func _ready() -> void:
 		"dogs":
 			var i := 0
 			for d in Game.dogs:
-				var color: Color = PlayerSlot.COLORS[i % PlayerSlot.COLORS.size()]
+				var color: Color = PlayerSlot.palette()[i % PlayerSlot.palette().size()]
 				var card := _card(d.card_color, d.display_name, d.description)
 				# This page exists to show the dogs off, and the row has a screen to itself: give
 				# them the room rather than five small cards adrift in the middle of it.

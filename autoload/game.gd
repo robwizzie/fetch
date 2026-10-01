@@ -17,6 +17,8 @@ const SETTINGS_PATH := "user://settings.cfg"
 const AUDIO_BUSES: Array[String] = ["Master", "Music", "SFX"]
 const TEAM_NAMES: Array[String] = ["RED PACK", "BLUE PACK"]
 const TEAM_COLORS: Array[Color] = [Color(0.95, 0.36, 0.32), Color(0.36, 0.56, 0.95)]
+## Red against blue is fine for most, but orange against blue holds up for every common type.
+const TEAM_COLORS_COLORBLIND: Array[Color] = [Color("e69f00"), Color("3d8fe0")]
 
 var dogs: Array[DogData] = []
 var toys: Array[ToyData] = []
@@ -38,6 +40,17 @@ enum ArcadeHints { AUTO, ALWAYS, NEVER }
 var arcade_hints: ArcadeHints = ArcadeHints.AUTO
 ## Remembered across launches so a cabinet comes up filling its screen.
 var fullscreen := false
+## Comfort and accessibility, set in Settings and remembered.
+## Controller rumble on hits, catches and full wind-ups.
+var rumble := true
+## The slow-motion beat on a knockout. Some players find it disorienting; hit-stop stays.
+var knockout_slowmo := true
+var screen_shake := true
+## A player palette chosen to stay distinct for the common kinds of colour blindness.
+var colorblind_colors := false
+## Each player's button row on their HUD card: always, only for the first rounds, or never.
+enum ControlHints { ALWAYS, FIRST_ROUNDS, OFF }
+var control_hints: ControlHints = ControlHints.ALWAYS
 var selected_toy: ToyData
 var selected_mode: GameModeData
 ## Two packs instead of a free-for-all. Teams are assigned by seat: odd seats against even.
@@ -96,7 +109,7 @@ func _bind_menu_gamepad() -> void:
 	if _has_unmapped_pad():
 		var accept: Array[int] = []
 		for index in range(0, 16):
-			if index != JOY_BUTTON_B:
+			if index != JOY_BUTTON_B and not DeviceInput.is_dpad_button(index):
 				accept.append(index)
 		_add_joy_buttons(&"ui_accept", accept)
 
@@ -150,6 +163,7 @@ func _input(event: InputEvent) -> void:
 	var toggle := false
 	if event is InputEventKey:
 		var key := event as InputEventKey
+		DeviceInput.note_key(key)
 		toggle = key.pressed and not key.echo and key.keycode == KEY_F11
 	elif event is InputEventJoypadButton:
 		var pad := event as InputEventJoypadButton
@@ -180,6 +194,11 @@ func _load_settings() -> void:
 		fullscreen = config.get_value("display", "fullscreen", fullscreen)
 		arcade_hints = config.get_value("input", "arcade_hints", int(arcade_hints)) as ArcadeHints
 		treats_from_round = config.get_value("match", "treats_from_round", treats_from_round)
+		rumble = config.get_value("comfort", "rumble", rumble)
+		knockout_slowmo = config.get_value("comfort", "knockout_slowmo", knockout_slowmo)
+		screen_shake = config.get_value("comfort", "screen_shake", screen_shake)
+		colorblind_colors = config.get_value("comfort", "colorblind_colors", colorblind_colors)
+		control_hints = config.get_value("comfort", "control_hints", int(control_hints)) as ControlHints
 	elif _has_unmapped_pad():
 		# First run on a cabinet. Nobody plays an arcade machine in a window.
 		fullscreen = true
@@ -221,6 +240,11 @@ func save_settings() -> void:
 			config.set_value("audio", bus.to_lower() + "_volume", AudioServer.get_bus_volume_linear(index))
 	config.set_value("input", "arcade_hints", int(arcade_hints))
 	config.set_value("match", "treats_from_round", treats_from_round)
+	config.set_value("comfort", "rumble", rumble)
+	config.set_value("comfort", "knockout_slowmo", knockout_slowmo)
+	config.set_value("comfort", "screen_shake", screen_shake)
+	config.set_value("comfort", "colorblind_colors", colorblind_colors)
+	config.set_value("comfort", "control_hints", int(control_hints))
 	config.save(SETTINGS_PATH)
 
 
@@ -303,16 +327,21 @@ func get_slot_by_device(device: int) -> PlayerSlot:
 func reset_scores() -> void:
 	for s in slots:
 		s.score = 0
+		s.knockouts = 0
+		s.catches = 0
+		s.bonked = 0
 		s.clear_powerups()
 	team_scores = [0, 0]
 	assign_teams()
 
 
 ## Seats alternate sides, so two players sitting next to each other are opponents and a
-## four-player cabinet splits two against two without anybody choosing.
+## four-player cabinet splits two against two without anybody choosing. Goes by position in the
+## list rather than seat number: seats keep their number when someone leaves, and two dogs on
+## seats 0 and 2 would otherwise both land on the same pack.
 func assign_teams() -> void:
-	for s in slots:
-		s.team = (s.index % TEAM_NAMES.size()) if team_mode else -1
+	for i in slots.size():
+		slots[i].team = (i % TEAM_NAMES.size()) if team_mode else -1
 
 
 ## What a side is called, and what colour it flies. Falls back to the player's own colour in a
@@ -322,7 +351,8 @@ func team_name(team: int) -> String:
 
 
 func team_color(team: int) -> Color:
-	return TEAM_COLORS[team] if team >= 0 and team < TEAM_COLORS.size() else UiKit.CREAM
+	var colors := TEAM_COLORS_COLORBLIND if colorblind_colors else TEAM_COLORS
+	return colors[team] if team >= 0 and team < colors.size() else UiKit.CREAM
 
 
 ## Points on the board for whichever side this slot is on.

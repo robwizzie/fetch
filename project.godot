@@ -23,6 +23,7 @@ Game="*res://autoload/game.gd"
 Juice="*res://autoload/juice.gd"
 Sfx="*res://autoload/sfx.gd"
 Music="*res://autoload/music.gd"
+Rumble="*res://autoload/rumble.gd"
 
 [display]
 

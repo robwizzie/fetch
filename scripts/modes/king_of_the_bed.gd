@@ -123,16 +123,16 @@ func round_winner(dogs: Array[Dog]) -> PlayerSlot:
 func timeout_winner(dogs: Array[Dog]) -> PlayerSlot:
 	var best_key := -1
 	var best := 0.0
-	var tied := false
 	for key in banked:
-		if banked[key] > best + 0.05:
+		if banked[key] > best:
 			best = banked[key]
 			best_key = key
-			tied = false
-		elif absf(banked[key] - best) <= 0.05:
-			tied = true
-	if best_key < 0 or tied:
+	if best_key < 0:
 		return null
+	# Anyone within a twentieth of a second of the leader makes it a tie.
+	for key in banked:
+		if key != best_key and best - banked[key] <= 0.05:
+			return null
 	for dog in dogs:
 		if _key(dog.slot) == best_key:
 			return dog.slot

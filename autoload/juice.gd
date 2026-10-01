@@ -51,6 +51,8 @@ func _process(_delta: float) -> void:
 
 ## Amount is in metres of camera offset; 0.3 is a solid hit.
 func shake(amount: float = 0.2) -> void:
+	if not Game.screen_shake:
+		return
 	_shake_amount = maxf(_shake_amount, amount)
 
 
@@ -66,6 +68,10 @@ func hitstop(duration: float = 0.055, time_scale: float = 0.06) -> void:
 ## Hit-stop takes priority then releases into slow motion. Overlapping KOs cannot
 ## prematurely reset the game speed, and all deadlines use unscaled real time.
 func elimination_slowmo(final_hit: bool = false) -> void:
+	if not Game.knockout_slowmo:
+		# Comfort setting: keep the tiny freeze that makes the hit land, skip the slow motion.
+		hitstop(0.045)
+		return
 	var now := float(Time.get_ticks_usec()) / 1000000.0
 	var duration := 0.72 if final_hit else 0.25
 	if now + duration >= _slowmo_until:
@@ -111,10 +117,19 @@ func pop(node: Node, amount: float = 1.3, time: float = 0.18) -> void:
 	if node.has_method("pop_feedback"):
 		node.pop_feedback(amount, time)
 		return
+	# A pop landing on a pop must ease back to the resting size, not to wherever the first one
+	# had got to, or quick focus changes ratchet a button bigger and bigger.
+	var running: Tween = node.get_meta(&"juice_pop") if node.has_meta(&"juice_pop") else null
 	var base: Variant = node.scale
+	if running != null and running.is_valid():
+		base = node.get_meta(&"juice_rest")
+		running.kill()
+	node.set_meta(&"juice_rest", base)
 	node.scale = base * amount
-	var t := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_STOP)
+	# Bound to the node so it runs whenever the node does: a pause-menu button still settles.
+	var t := node.create_tween()
 	t.tween_property(node, "scale", base, time).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	node.set_meta(&"juice_pop", t)
 
 
 ## Spawns a rising, fading billboard label in world space ("BONK!", "CATCH!").

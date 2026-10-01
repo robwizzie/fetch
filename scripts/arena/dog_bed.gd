@@ -15,10 +15,12 @@ const FRICTION := 7.0
 
 var slide := Vector3.ZERO
 var _visual: Node3D
+var _home: Transform3D
 
 
 func _ready() -> void:
 	add_to_group("gimmicks")
+	_home = transform
 	sync_to_physics = false
 	collision_layer = 1
 	collision_mask = 1 | 2
@@ -40,6 +42,12 @@ func _ready() -> void:
 	ArenaArt.block(_visual, Vector3(size.x - bolster * 1.7, 0.16, size.z - bolster * 1.7), lining, Vector3(0, 0.3, 0), Vector3.ZERO, 0.07)
 	ArenaArt.paw(_visual, Vector3(0, 0.39, 0), 0.4, fabric.lightened(0.2))
 	Mats.contact_shadow(self, maxf(size.x, size.z) * 0.55)
+
+
+## Beds knocked about last round go back where they belong, so nothing spawns inside one.
+func reset_for_round() -> void:
+	slide = Vector3.ZERO
+	transform = _home
 
 
 ## A toy struck the bed: it takes some of the toy's momentum and slides with it.

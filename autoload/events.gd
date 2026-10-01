@@ -10,6 +10,8 @@ signal round_over(winner: PlayerSlot)          ## winner is null on a draw
 signal match_over(winner: PlayerSlot)
 
 signal toy_thrown(toy: Node, by: Node)
+## A wind-up just reached full power.
+signal throw_charged(dog: Node)
 ## A bare-pawed dog swiped at another: the target dropped its toy or went dizzy.
 signal dog_whacked(dog: Node, by: Node)
 ## A crate was opened; the kind was a mystery until this moment.
