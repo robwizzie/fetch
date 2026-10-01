@@ -2,22 +2,38 @@ extends Control
 ## Read-only showcase of dogs / toys / arenas / modes, driven entirely by the data folders.
 
 
+## What each page is called on its sign, and the line under it.
+const HEADINGS := {
+	"dogs": ["MEET THE PACK", "Every dog plays the same game - they just play it differently."],
+	"toys": ["TOYS", "What turns up on the grass, and what each one does when you throw it."],
+	"arenas": ["ARENAS", "Where the pack plays."],
+	"powerups": ["POWER-UPS", "Grab one off the grass and it is yours until you are bonked."],
+	"hats": ["HATS", "Earn them by playing. Wear them from Choose Your Dog."],
+	"modes": ["MODES", "Ways to play."],
+}
+
+
 func _ready() -> void:
-	UiKit.backdrop(self)
+	UiKit.cover_backdrop(self)
 	# One column with air around it: heading at the top, the way out at the bottom, and the
-	# cards centred in everything between. The heading used to sit against the top edge and the
-	# cards hung from it, which on a five-dog page left half a screen of empty green underneath.
+	# cards centred in everything between.
 	var page := MarginContainer.new()
 	page.set_anchors_preset(Control.PRESET_FULL_RECT)
 	page.add_theme_constant_override("margin_left", 56)
 	page.add_theme_constant_override("margin_right", 56)
-	page.add_theme_constant_override("margin_top", 28)
-	page.add_theme_constant_override("margin_bottom", 28)
+	page.add_theme_constant_override("margin_top", 30)
+	page.add_theme_constant_override("margin_bottom", 30)
 	add_child(page)
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 18)
+	root.add_theme_constant_override("separation", 14)
 	page.add_child(root)
-	root.add_child(UiKit.title(Game.gallery_kind.to_upper(), 72, UiKit.ACCENT))
+	var heading: Array = HEADINGS.get(Game.gallery_kind, [Game.gallery_kind.to_upper(), ""])
+	root.add_child(UiKit.sign(heading[0], 58))
+	if heading[1] != "":
+		var line := UiKit.label(heading[1], 22, Color(1, 1, 1, 0.78))
+		line.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.5))
+		line.add_theme_constant_override("outline_size", 4)
+		root.add_child(line)
 
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -34,37 +50,44 @@ func _ready() -> void:
 	var flow := HFlowContainer.new()
 	flow.alignment = FlowContainer.ALIGNMENT_CENTER
 	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	flow.add_theme_constant_override("h_separation", 20)
-	flow.add_theme_constant_override("v_separation", 20)
+	flow.add_theme_constant_override("h_separation", 22)
+	flow.add_theme_constant_override("v_separation", 22)
 	middle.add_child(flow)
 
 	match Game.gallery_kind:
 		"dogs":
-			var i := 0
 			for d in Game.dogs:
-				var color: Color = PlayerSlot.palette()[i % PlayerSlot.palette().size()]
 				var card := _card(d.card_color, d.display_name, d.description)
 				# This page exists to show the dogs off, and the row has a screen to itself: give
 				# them the room rather than five small cards adrift in the middle of it.
 				card.custom_minimum_size = Vector2(330, 0)
-				var dog_shot := _stage(ModelPreview.new(Vector2i(400, 340)), Vector2(294, 262), color)
-				(dog_shot.get_child(0) as ModelPreview).show_dog(d)
-				card.get_node("VBox").add_child(dog_shot)
-				card.get_node("VBox").move_child(dog_shot, 1)
+				var box := _box(card)
+				var dog_shot := _stage(ModelPreview.new(Vector2i(400, 360)), Vector2(298, 280), d.card_color)
+				(dog_shot.get_child(1) as ModelPreview).show_dog(d)
+				box.add_child(dog_shot)
+				box.move_child(dog_shot, 0)
+				var stats := VBoxContainer.new()
+				stats.add_theme_constant_override("separation", 6)
+				stats.add_child(UiKit.stat_row("Speed", d.speed_rating, d.card_color.lightened(0.15)))
+				stats.add_child(UiKit.stat_row("Throw", d.throw_rating, d.card_color.lightened(0.15)))
+				stats.add_child(UiKit.stat_row("Catch", d.catch_rating, d.card_color.lightened(0.15)))
+				stats.add_child(UiKit.stat_row("Dash", d.dash_rating, d.card_color.lightened(0.15)))
+				var stats_center := CenterContainer.new()
+				stats_center.add_child(stats)
+				box.add_child(stats_center)
 				flow.add_child(card)
-				i += 1
 		"toys":
 			for t in Game.toys:
 				var card := _card(t.color, t.display_name + ("" if t.fully_implemented else " (prototype)"), t.description)
 				# Even cards make an even grid; ragged heights were most of why this page
 				# looked thrown together. Two rows of these have to fit the screen without a
 				# scrollbar, because nothing on this page takes focus for a pad to scroll it with.
-				card.custom_minimum_size = Vector2(320, 400)
-				var box := card.get_node("VBox")
-				var shot := _stage(ModelPreview.new(Vector2i(360, 300)), Vector2(272, 150), t.color)
-				(shot.get_child(0) as ModelPreview).show_toy(t)
+				card.custom_minimum_size = Vector2(320, 0)
+				var box := _box(card)
+				var shot := _stage(ModelPreview.new(Vector2i(360, 260)), Vector2(286, 140), t.color)
+				(shot.get_child(1) as ModelPreview).show_toy(t)
 				box.add_child(shot)
-				box.move_child(shot, 1)
+				box.move_child(shot, 0)
 				box.add_child(_chip_row(_toy_trait(t), t.color))
 				box.add_child(_facts([
 					["Throw", "%.0f m/s" % t.throw_speed],
@@ -74,42 +97,67 @@ func _ready() -> void:
 		"arenas":
 			for a in Game.arenas:
 				var card := _card(a.swatch, a.display_name, a.description)
+				card.custom_minimum_size = Vector2(340, 0)
 				if a.thumbnail != null:
+					var frame := PanelContainer.new()
+					var frame_style := StyleBoxFlat.new()
+					frame_style.bg_color = Color.WHITE
+					frame_style.set_corner_radius_all(14)
+					frame.add_theme_stylebox_override("panel", frame_style)
+					# Clipped to the frame's rounded corners, so the picture sits in the card
+					# instead of poking square corners out of it.
+					frame.clip_children = CanvasItem.CLIP_CHILDREN_ONLY
 					var shot := TextureRect.new()
 					shot.texture = a.thumbnail
 					shot.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 					shot.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-					shot.custom_minimum_size = Vector2(260, 146)
-					var box := card.get_node("VBox")
-					box.add_child(shot)
-					box.move_child(shot, 1)
+					shot.custom_minimum_size = Vector2(300, 168)
+					frame.add_child(shot)
+					var box := _box(card)
+					box.add_child(frame)
+					box.move_child(frame, 0)
 				flow.add_child(card)
 		"powerups":
 			for kind in PowerupKinds.ALL:
 				var tint := PowerupKinds.color(kind)
 				var card := _card(tint, PowerupKinds.display_name(kind), PowerupKinds.blurb(kind))
-				var box := card.get_node("VBox")
-				var badge := _stage(ModelPreview.new(Vector2i(300, 260)), Vector2(260, 170), tint)
-				(badge.get_child(0) as ModelPreview).show_powerup(kind)
+				var box := _box(card)
+				var badge := _stage(ModelPreview.new(Vector2i(300, 240)), Vector2(264, 160), tint)
+				(badge.get_child(1) as ModelPreview).show_powerup(kind)
 				box.add_child(badge)
-				box.move_child(badge, 1)
+				box.move_child(badge, 0)
+				flow.add_child(card)
+		"hats":
+			# Every hat, earned or not: the locked ones say how to get them and how close you are.
+			for hat in Game.hats:
+				var owned := Progress.is_unlocked(hat)
+				var tint := hat.color if owned else Color(0.4, 0.42, 0.41)
+				var progress := "" if owned or hat.stat == &"" else "\n%d / %d" % [mini(Progress.stat(hat.stat), hat.threshold), hat.threshold]
+				var card := _card(tint, hat.display_name if owned else "???", ("Earned: " if owned else "") + hat.unlock_text + progress)
+				var shot := _stage(ModelPreview.new(Vector2i(300, 240)), Vector2(264, 160), tint)
+				var preview := shot.get_child(1) as ModelPreview
+				preview.show_hat(hat)
+				if not owned:
+					# A silhouette: you can see there is something to earn, not what it looks like.
+					preview.modulate = Color(0.05, 0.05, 0.08)
+				_box(card).add_child(shot)
+				_box(card).move_child(shot, 0)
 				flow.add_child(card)
 		"modes":
 			for m in Game.modes:
 				flow.add_child(_card(m.swatch, m.display_name + ("" if m.fully_implemented else " (coming soon)"), m.description))
 
-	if Game.gallery_kind == "dogs":
-		var studio := UiKit.button("3D DOG STUDIO")
-		studio.pressed.connect(func() -> void: Game.goto("res://scenes/ui/model_review.tscn"))
-		var studio_center := CenterContainer.new()
-		studio_center.add_child(studio)
-		root.add_child(studio_center)
-
-	var back := UiKit.button("Back")
+	var buttons := HBoxContainer.new()
+	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	buttons.add_theme_constant_override("separation", 18)
+	root.add_child(buttons)
+	var back := UiKit.wood_button("Back", 300)
 	back.pressed.connect(func() -> void: Game.goto(Game.SCENE_MAIN_MENU))
-	var center := CenterContainer.new()
-	center.add_child(back)
-	root.add_child(center)
+	buttons.add_child(back)
+	if Game.gallery_kind == "dogs":
+		var studio := UiKit.wood_button("3D Dog Studio", 300, true)
+		studio.pressed.connect(func() -> void: Game.goto("res://scenes/ui/model_review.tscn"))
+		buttons.add_child(studio)
 	back.grab_focus()
 
 
@@ -118,16 +166,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		Game.goto(Game.SCENE_MAIN_MENU)
 
 
-## Frames a preview so every card has the same window, whatever is turning inside it.
-func _stage(preview: ModelPreview, size: Vector2, tint: Color) -> PanelContainer:
-	var holder := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0, 0, 0, 0.22)
-	style.border_color = tint.lightened(0.25)
-	style.set_border_width_all(3)
-	style.set_corner_radius_all(14)
-	holder.add_theme_stylebox_override("panel", style)
+## Stands a preview in a soft pool of light in the card's colour, so every card has the same
+## window whatever is turning inside it. The preview is child 1 (the light is child 0).
+func _stage(preview: ModelPreview, size: Vector2, tint: Color) -> Control:
+	var holder := Control.new()
 	holder.custom_minimum_size = size
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var light := UiKit.spotlight(tint)
+	light.set_anchors_preset(Control.PRESET_FULL_RECT)
+	holder.add_child(light)
+	preview.set_anchors_preset(Control.PRESET_FULL_RECT)
 	holder.add_child(preview)
 	return holder
 
@@ -205,20 +253,34 @@ func _powerup_badge(kind: StringName) -> Control:
 	return holder
 
 
+## A showcase card: the name on a banner in [param color], then a body column (see [method _box])
+## that the page fills with a picture and facts, and the description at the foot.
 func _card(color: Color, title: String, desc: String) -> PanelContainer:
 	var p := PanelContainer.new()
 	p.custom_minimum_size = Vector2(300, 0)
-	p.add_theme_stylebox_override("panel", UiKit.panel_style(color))
+	p.add_theme_stylebox_override("panel", UiKit.card_style(color))
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 0)
+	p.add_child(column)
+	column.add_child(UiKit.card_banner(title.to_upper(), color, 30))
+	var margin := MarginContainer.new()
+	for side in ["left", "right"]:
+		margin.add_theme_constant_override("margin_" + side, 16)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(margin)
 	var v := VBoxContainer.new()
 	v.name = "VBox"
-	v.add_theme_constant_override("separation", 8)
-	p.add_child(v)
-	var heading := UiKit.title(title, 30, color)
-	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	v.add_child(heading)
-	var d := UiKit.label(desc, 19, Color(1, 1, 1, 0.82))
+	v.add_theme_constant_override("separation", 10)
+	margin.add_child(v)
+	var d := UiKit.label(desc, 19, Color(1, 1, 1, 0.86))
 	d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	d.custom_minimum_size = Vector2(260, 56)
+	d.custom_minimum_size = Vector2(260, 52)
 	v.add_child(d)
+	p.set_meta("box", v)
 	return p
+
+
+func _box(card: PanelContainer) -> VBoxContainer:
+	return card.get_meta("box") as VBoxContainer

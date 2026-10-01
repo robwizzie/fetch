@@ -32,6 +32,7 @@ func setup(p_slot: PlayerSlot, p_dog: Dog, p_pen: ReadyPen, p_camera: Camera3D) 
 	camera = p_camera
 	Events.toy_thrown.connect(_on_thrown)
 	Events.toy_caught.connect(_on_caught)
+	Events.dog_barked.connect(_on_barked)
 
 
 func _ready() -> void:
@@ -54,6 +55,7 @@ func _ready() -> void:
 	_add_step(column, "throw", UiKit.keycaps(&"throw", device_id), "Throw  ·  hold it for a harder throw")
 	_add_step(column, "catch", UiKit.keycaps(&"throw", device_id), "Catch: same button, paws empty, as a toy flies at you")
 	_add_step(column, "dash", UiKit.keycaps(&"dash", device_id), "Dash  ·  nothing can hit you mid-dash")
+	_add_step(column, "bark", UiKit.keycaps(&"bark", device_id), "Bark at your rivals")
 	var rule := UiKit.label("One hit from a flying toy and you're out!", 17, UiKit.YELLOW)
 	rule.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(rule)
@@ -114,6 +116,12 @@ func _on_thrown(_toy: Node, by: Node) -> void:
 func _on_caught(_toy: Node, by: Node) -> void:
 	if by == dog and not _done.catch:
 		_tick("catch")
+		_refresh()
+
+
+func _on_barked(by: Node) -> void:
+	if by == dog and not _done.bark:
+		_tick("bark")
 		_refresh()
 
 

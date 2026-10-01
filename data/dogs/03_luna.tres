@@ -41,3 +41,4 @@ catch_radius = 1.9
 catch_window = 0.18
 dash_distance = 3.4
 body_radius = 0.638
+hat_scale = 0.92

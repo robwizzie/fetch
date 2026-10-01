@@ -48,14 +48,14 @@ func _ready() -> void:
 	menu.call("_show_settings")
 	await _capture("03_settings")
 	var settings: Control = menu.get("_modal")
-	var sound := _find_button(settings, "SOUND EFFECTS:")
+	var sound := _find_button(settings, "Sound effects")
 	var original_sound: bool = Sfx.enabled
 	_check(sound != null, "settings contains the real sound toggle")
 	if sound:
 		sound.pressed.emit()
 		_check(Sfx.enabled != original_sound, "sound setting changes audio state")
 		sound.pressed.emit()
-	var music := _find_button(settings, "MUSIC:")
+	var music := _find_button(settings, "Music")
 	var original_music: bool = Music.enabled
 	_check(music != null, "settings contains the real music toggle")
 	if music:
@@ -85,8 +85,9 @@ func _ready() -> void:
 	_check(has_axis, "menu navigation responds to the stick")
 	_check(has_dpad, "menu navigation responds to the d-pad")
 
-	# The soundtrack is rendered rather than loaded, and an empty track fails silently: it
-	# still "plays", just with nothing in it. So the sequencer output is checked directly.
+	# Any track without a recording is rendered rather than loaded, and an empty track fails
+	# silently: it still "plays", just with nothing in it. So the sequencer output is checked
+	# directly, even though the recordings below cover every track today.
 	var track: PackedFloat32Array = Music._render(Music._menu_spec())
 	_check(track.size() > 0, "the menu track renders")
 	var peak := 0.0
@@ -100,9 +101,29 @@ func _ready() -> void:
 			audible += 1
 	_check(peak > 0.5, "the rendered track reaches a usable level")
 	_check(float(audible) / maxf(1.0, float(sampled)) > 0.5, "the track carries sustained tone, not just percussion hits")
+	# The synthesised kit stays as the fallback for any cue whose recordings go missing.
 	for cue in ["throw", "catch", "bonk", "bark", "treat", "squeak", "whistle", "ui_move"]:
 		var stream: AudioStreamWAV = Sfx._streams.get(cue)
 		_check(stream != null and stream.data.size() > 0, "the %s cue is synthesised" % cue)
+	# The recordings come first: every screen's track is a file, set to loop.
+	for track_name in Music.TRACKS:
+		var recorded: AudioStream = Music.stream_for(track_name)
+		_check(recorded != null and Music.is_recorded(track_name), "the %s track is a recording" % track_name)
+		_check(recorded != null and recorded.get("loop") == true, "the %s track loops" % track_name)
+	for cue in ["catch", "bonk", "whistle", "blast", "fanfare", "squeak", "throw", "hit", "whack"]:
+		var takes: Array = Sfx._pools.get(cue, [])
+		_check(not takes.is_empty() and takes[0] is AudioStream, "the %s cue has a recording" % cue)
+	# Every breed barks in its own recorded voice, and the big dogs sit below the little ones.
+	for breed: int in DogData.Breed.values():
+		var voice := Sfx.bark_sound(breed)
+		var barks: Array = Sfx._pools.get(voice, [])
+		_check(voice != "bark" and not barks.is_empty() and barks[0] is AudioStream,
+			"the %s has its own bark" % DogData.Breed.keys()[breed])
+	for dog in Game.dogs:
+		_check(Sfx.bark_sound(dog.breed) != "bark", "%s barks in their breed's voice" % dog.display_name)
+	var pit_bull: Array = Sfx.BREED_VOICES[DogData.Breed.PITBULL]
+	var corgi: Array = Sfx.BREED_VOICES[DogData.Breed.CORGI]
+	_check(float(pit_bull[1]) < float(corgi[1]) and float(pit_bull[2]) < float(corgi[2]), "a pit bull barks lower than a corgi")
 	menu.call("_close_modal")
 	await get_tree().process_frame
 	_check(get_viewport().gui_get_focus_owner() is Button, "modal close restores menu focus")
@@ -166,7 +187,8 @@ func _scene(path: String) -> Node:
 
 func _find_button(parent: Node, prefix: String) -> Button:
 	for child in parent.get_children():
-		if child is Button and child.text.begins_with(prefix):
+		# Settings rows draw their own label, so they carry what they are as metadata.
+		if child is Button and (child.text.begins_with(prefix) or str(child.get_meta("setting", "")).begins_with(prefix)):
 			return child
 		var found := _find_button(child, prefix)
 		if found:

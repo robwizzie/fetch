@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="HatData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/hat_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"halo"
+display_name = "Halo"
+unlock_text = "Get bonked 30 times. Bless."
+stat = &"times_bonked"
+threshold = 30
+style = 8
+color = Color(0.973, 0.863, 0.424, 1)
+accent = Color(1.000, 0.957, 0.753, 1)

@@ -10,7 +10,8 @@ extends StaticBody3D
 ## [Terrain], so dogs and toys run up and over it. Both are still solid from the side.
 
 enum Kind { BOX, CRATE, DOGHOUSE, TABLE, BUSH, COUCH, ARMCHAIR, TV, PLANT, TIRE, CUSTOM,
-	RAMP, TUNNEL, WEAVE, COUNTER, FRIDGE, UMBRELLA, ROCK, COOLER }
+	RAMP, TUNNEL, WEAVE, COUNTER, FRIDGE, UMBRELLA, ROCK, COOLER,
+	SNOWMAN, DRIFT, BLOCKS, TOY_CHEST }
 
 @export var kind := Kind.BOX:
 	set(v):
@@ -121,6 +122,14 @@ func _rebuild() -> void:
 			_rock()
 		Kind.COOLER:
 			_cooler()
+		Kind.SNOWMAN:
+			_snowman()
+		Kind.DRIFT:
+			_drift()
+		Kind.BLOCKS:
+			_blocks()
+		Kind.TOY_CHEST:
+			_toy_chest()
 		Kind.CUSTOM:
 			pass
 		_:
@@ -480,6 +489,89 @@ func _rock() -> void:
 			Vector3((i - 1) * s.x * 0.22, s.y * (0.45 if i == 1 else 0.30), (0.08 if i == 1 else -0.08) * s.z))
 		rock.scale = Vector3(s.x * (0.61 if i == 1 else 0.49), s.y * (1.05 if i == 1 else 0.68), s.z * 0.89)
 		rock.rotation_degrees.y = i * 31.0
+
+
+func _snowman() -> void:
+	var s := size
+	var r := minf(s.x, s.z) * 0.5
+	# Three stacked balls, a stick-arm each side, a scarf in the accent colour and a carrot nose
+	# pointing at the camera so it reads as a face from above.
+	Mats.mesh(_visual, Mats.sphere(r), color, Vector3(0, r * 0.85, 0), Vector3.ZERO, Vector3(1, 0.9, 1))
+	Mats.mesh(_visual, Mats.sphere(r * 0.72), color, Vector3(0, r * 1.95, 0))
+	var head_y := minf(s.y - r * 0.5, r * 2.75)
+	Mats.mesh(_visual, Mats.sphere(r * 0.5), color, Vector3(0, head_y, 0))
+	var scarf := Mats.mesh(_visual, Mats.torus(r * 0.38, r * 0.6), accent, Vector3(0, head_y - r * 0.42, 0))
+	scarf.scale.y = 0.7
+	_block(Vector3(r * 0.24, r * 0.6, 0.06), accent, Vector3(r * 0.25, head_y - r * 0.75, r * 0.55), 0.02, Vector3(0, 0, -12))
+	Mats.mesh(_visual, Mats.cone(r * 0.1, r * 0.55), Color("ef8a3c"), Vector3(0, head_y, r * 0.65), Vector3(90, 0, 0))
+	for side: float in [-1.0, 1.0]:
+		Mats.mesh(_visual, Mats.sphere(r * 0.06), Color("2a2c30"), Vector3(side * r * 0.18, head_y + r * 0.16, r * 0.43))
+		ArenaArt.rod(_visual, Vector3(side * r * 0.62, r * 1.95, 0), Vector3(side * r * 1.25, r * 2.4, 0.05), 0.035, Color("6b4a2f"))
+	for i in 3:
+		Mats.mesh(_visual, Mats.sphere(r * 0.07), Color("2a2c30"), Vector3(0, r * (1.7 + i * 0.22), r * 0.7 - i * 0.02))
+	# A bobble hat, because this is a dog park.
+	var hat := Mats.mesh(_visual, Mats.cylinder(r * 0.34, r * 0.3, r * 0.2), accent, Vector3(0, head_y + r * 0.5, 0))
+	hat.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	Mats.mesh(_visual, Mats.sphere(r * 0.13), Color("fff6ea"), Vector3(0, head_y + r * 0.72, 0))
+
+
+func _drift() -> void:
+	var s := size
+	# Heaped snow: overlapping soft mounds over a packed base, cool blue in the hollows.
+	_block(Vector3(s.x * 0.96, 0.18, s.z * 0.96), accent.lightened(0.25), Vector3(0, 0.09, 0), 0.08)
+	for i in 5:
+		var x := ((i % 3) - 1) * s.x * 0.24
+		var z := (-0.2 if i < 3 else 0.22) * s.z
+		var mound := Mats.mesh(_visual, Mats.sphere(0.5), color.lerp(accent, 0.08 * float(i % 2)), Vector3(x, s.y * (0.46 if i == 1 else 0.34), z))
+		mound.scale = Vector3(s.x * 0.52, s.y * (0.98 if i == 1 else 0.76), s.z * 0.62)
+	# Snowballs stacked ready at the foot of the heap.
+	for i in 3:
+		Mats.mesh(_visual, Mats.sphere(0.17), color.lightened(0.06), Vector3((float(i) - 1.0) * 0.34, 0.17 + (0.26 if i == 1 else 0.0), s.z * 0.5 - 0.16))
+
+
+func _blocks() -> void:
+	var s := size
+	# Building blocks stacked into a wobbly tower: alternating colours, each slightly turned,
+	# with a raised letter panel on the front face like the wooden ones.
+	var palette := [color, accent, Color("f2c84b"), Color("5bb06a"), Color("3f86e0"), Color("e2533f")]
+	var rows := maxi(1, int(round(s.y / 0.55)))
+	var block_h := s.y / float(rows)
+	var across := maxi(1, int(round(s.x / 0.75)))
+	var deep := maxi(1, int(round(s.z / 0.75)))
+	var bx := s.x / float(across)
+	var bz := s.z / float(deep)
+	var n := 0
+	for row in rows:
+		# Each layer up is a little narrower, so the stack reads as a pile, not a box.
+		var shrink := 1.0 - float(row) * 0.06
+		for ix in across:
+			for iz in deep:
+				n += 1
+				if row == rows - 1 and (ix + iz + row) % 2 == 1:
+					continue
+				var tint: Color = palette[(ix * 3 + iz * 2 + row) % palette.size()]
+				var at := Vector3((-s.x * 0.5 + (ix + 0.5) * bx) * shrink, (row + 0.5) * block_h, (-s.z * 0.5 + (iz + 0.5) * bz) * shrink)
+				var cube := Vector3(bx * 0.94, block_h * 0.96, bz * 0.94)
+				_block(cube, tint, at, 0.05, Vector3(0, float((n * 37) % 13) - 6.0, 0))
+				_block(Vector3(cube.x * 0.55, cube.y * 0.55, 0.02), tint.lightened(0.35), at + Vector3(0, 0, cube.z * 0.5), 0.015)
+
+
+func _toy_chest() -> void:
+	var s := size
+	_block(Vector3(s.x, s.y * 0.78, s.z), color, Vector3(0, s.y * 0.39, 0), 0.08)
+	_block(Vector3(s.x + 0.08, s.y * 0.2, s.z + 0.08), color.lightened(0.12), Vector3(0, s.y * 0.88, 0), 0.07)
+	for x: float in [-s.x * 0.47, s.x * 0.47]:
+		_block(Vector3(0.12, s.y * 0.78, s.z + 0.04), accent, Vector3(x, s.y * 0.39, 0), 0.03)
+	_block(Vector3(s.x + 0.04, 0.1, 0.06), accent, Vector3(0, s.y * 0.55, s.z * 0.5 + 0.01), 0.02)
+	# The lid is what the camera sees: a bright inset panel with a band of stars across it.
+	_block(Vector3(s.x * 0.86, 0.03, s.z * 0.7), accent, Vector3(0, s.y * 0.98 + 0.012, 0), 0.015)
+	for i in 5:
+		var star := Mats.mesh(_visual, Mats.cylinder(0.09, 0.02), Color("fff6ea"), Vector3((float(i) - 2.0) * s.x * 0.17, s.y * 0.98 + 0.035, s.z * 0.22))
+		star.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Toys spilling over the rim: a ball, a block and a ring stacker peg.
+	Mats.mesh(_visual, Mats.sphere(0.24), Color("e2533f"), Vector3(-s.x * 0.25, s.y + 0.1, 0))
+	_block(Vector3(0.34, 0.34, 0.34), Color("5bb06a"), Vector3(s.x * 0.18, s.y + 0.1, 0.05), 0.04, Vector3(0, 25, 12))
+	Mats.mesh(_visual, Mats.torus(0.1, 0.2), Color("f2c84b"), Vector3(s.x * 0.36, s.y + 0.04, -0.1))
 
 
 ## A thrown toy struck this prop. Only breakable props care: each hit darkens and jolts it, and

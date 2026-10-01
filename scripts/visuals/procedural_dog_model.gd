@@ -494,6 +494,7 @@ func play_knocked_out(dir: Vector3) -> void:
 	for mesh in _meshes:
 		mesh.transparency = 0.45
 	var tween := create_tween().set_parallel(true)
-	tween.tween_property(self, "rotation:z", PI / 2.0, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tween.tween_property(self, "rotation:y", rotation.y + TAU, 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.tween_property(self, "position", position + dir * 1.2 + Vector3(0, 0.1, 0), 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	# Matches DogModel's knockdown: tipped over with a slight twist, a short slide back. No spin.
+	tween.tween_property(self, "rotation:z", deg_to_rad(82.0), 0.36).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(self, "rotation:y", rotation.y + deg_to_rad(25.0), 0.36).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_property(self, "position", position + dir * 0.8, 0.36).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)

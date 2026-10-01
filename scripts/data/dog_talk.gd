@@ -5,7 +5,8 @@ extends RefCounted
 ## worth glancing at without ever making them long enough to cost a player their eyes.
 
 const KNOCKOUTS: Array[String] = ["BONK!", "RUFF!", "YELP!", "OOF!", "WHUMP!", "BAD DOG!"]
-const OWN_GOALS: Array[String] = ["CHASED OWN TAIL!", "OWN GOAL!", "SELF BONK!", "WHO THREW THAT?!"]
+## Bonked by your own toy coming back off a wall.
+const SELF_BONKS: Array[String] = ["SELF-BONK!", "CHASED OWN TAIL!", "WHO THREW THAT?!", "BONKED BY OWN TOY!"]
 const CATCHES: Array[String] = ["CATCH!", "CHOMP!", "GOOD CATCH!", "NICE MOUTH!", "GOTCHA!"]
 const DISARMS: Array[String] = ["DROP IT!", "LEAVE IT!", "MINE NOW!"]
 const SHIELD_POPS: Array[String] = ["BUBBLE POP!", "SPLOOSH!", "BATH SAVED YOU!"]
@@ -39,8 +40,8 @@ static func knockout() -> String:
 	return KNOCKOUTS.pick_random()
 
 
-static func own_goal() -> String:
-	return OWN_GOALS.pick_random()
+static func self_bonk() -> String:
+	return SELF_BONKS.pick_random()
 
 
 static func catch_line() -> String:

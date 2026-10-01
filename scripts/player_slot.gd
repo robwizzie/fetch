@@ -34,6 +34,10 @@ var knockouts: int = 0
 var catches: int = 0
 var bonked: int = 0
 var ready: bool = false
+## The hat this player wears (a HatData id), or empty for none.
+var hat: StringName = &""
+## How hard this seat's CPU plays: 0 easy, 1 normal, 2 hard. Humans ignore it.
+var cpu_level: int = 1
 ## AI is opt-in: virtual devices are also used by scripted tests and menu dogs.
 var is_bot: bool = false
 ## Power-ups held for the rest of the match, one per belt slot. Capped at PowerupKinds.MAX_SLOTS.

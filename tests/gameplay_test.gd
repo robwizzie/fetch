@@ -71,9 +71,14 @@ func _ready() -> void:
 	toy.pick_up(opponent)
 	_check(toy.holder == opponent and toy.thrower == null, "pickup transfers toy ownership")
 	game_match.round_time_left = 0.05
+	await get_tree().create_timer(0.6).timeout
+	_check(game_match.sudden_death and game_match.phase == game_match.Phase.PLAYING, "running out of time is sudden death, not a draw")
+	_check(Game.slots[0].score == 0 and Game.slots[1].score == 0, "the clock awards no arbitrary points")
+	_check(not get_tree().get_nodes_in_group(SkyDrop.GROUP).is_empty() or _rounds == 1, "the sky starts dropping toys")
+	game_match.overtime = game_match.OVERTIME_LIMIT
 	await get_tree().create_timer(0.15).timeout
-	_check(_rounds == 1 and _last_winner == null, "timeout announces a draw")
-	_check(Game.slots[0].score == 0 and Game.slots[1].score == 0, "timeout awards no arbitrary points")
+	_check(_rounds == 1, "an overtime nobody ever loses still ends")
+	_check(Game.slots[0].score + Game.slots[1].score <= 1, "and gives nobody points for waiting")
 	game_match.queue_free()
 	await get_tree().process_frame
 

@@ -7,7 +7,7 @@
 script = ExtResource("1")
 id = &"last_dog_standing"
 display_name = "Last Dog Standing"
-description = "Classic free-for-all. Last dog standing wins the round."
+description = "The last dog (or pack) standing wins the round."
 mode_script = ExtResource("2")
 default_points_to_win = 5
 team_based = false

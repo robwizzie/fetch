@@ -52,7 +52,7 @@ static func blurb(kind: StringName) -> String:
 		ZOOMIES: return "Tear around at full pelt with a dash that's always ready"
 		TELEPAWTHY: return "Steer your throw in mid-air with the stick"
 		GHOST_PUP: return "Invisible until you throw or dash. Only your paw prints show"
-		DIG: return "Your dash burrows under the lawn and pops up further on"
+		DIG: return "Your dash tunnels under the lawn - and under anything in the way - and pops up further on"
 		SQUEAKY_BLAST: return "Impact arms a squeaky bomb; grab it quick to defuse"
 		MUD_TRACK: return "Throws leave a mud trail that slows everyone down"
 		SCATTER_FETCH: return "Every throw sends two extra toys out wide"

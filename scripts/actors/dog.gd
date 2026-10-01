@@ -44,6 +44,12 @@ const ZOOMIES_COOLDOWN := 0.45
 ## Dig!: a burrow covers this much more ground than a dash, and takes this much longer.
 const DIG_DISTANCE := 1.9
 const DIG_TIME_SCALE := 1.7
+## A burrow that ends under something keeps tunnelling to come out the far side - for at most
+## this long, after which the dog surfaces at the nearest clear spot instead.
+const DIG_OVERRUN_MAX := 0.45
+## Seconds a dog must spend above ground after surfacing before it can dig again, so nobody
+## spends a round underground.
+const DIG_SURFACE_REST := 0.6
 
 var slot: PlayerSlot
 var data: DogData
@@ -57,6 +63,9 @@ var invincible := false
 var round_locked := false
 ## Set by zones (e.g. the pool) to slow the dog down.
 var speed_scale := 1.0
+## Grip, set by ice (IceSheet). Below 1 the dog gets going, stops and turns that much more
+## slowly - so it slides - and a push takes longer to wear off. Owned per source, like slows.
+var traction := 1.0
 var shield_charges := 0
 var _powerup_halo: MeshInstance3D
 ## Rebuilt from the slot's power-ups whenever the belt changes (see apply_powerups).
@@ -68,6 +77,12 @@ var ghost := false
 ## Dig!: the dash goes underground - longer, fully protected, and out of sight until it surfaces.
 var digger := false
 var _burrowed := false
+var _dig_overrun := 0.0
+var _bark_cooldown := 0.0
+## Long enough that a held button is a bark every beat, not a buzz.
+const BARK_COOLDOWN := 0.55
+## Collision layers the dog had before going under, restored when it comes back up.
+var _surface_layers := Vector2i.ZERO
 var _mound: MeshInstance3D
 var _print_side := 1.0
 
@@ -104,6 +119,9 @@ const PUSH_CREDIT_MSEC := 2000
 ## Height of the deck under the paws. Zero everywhere except on a ramp.
 var ground_y := 0.0
 var _slow_sources: Dictionary = {}
+var _traction_sources: Dictionary = {}
+## Even on ice a push wears off at no less than this share of its usual rate.
+const MIN_PUSH_FADE := 0.35
 ## Where the dog meant to go this frame, before walls took their share. A dog leaning into a
 ## wall has no velocity left after sliding, and portals need to know it was pushing.
 var push_velocity := Vector3.ZERO
@@ -163,6 +181,7 @@ func _ready() -> void:
 	catch_shape.shape = catch
 	catch_shape.position.y = 0.5
 	model.setup(data, slot.color)
+	model.set_hat(Game.hat(slot.hat))
 	model.setup_silhouette(slot.color)
 	name_tag.text = "%s · %s" % [slot.label, data.display_name.to_upper()]
 	name_tag.font = UiKit.FONT_DISPLAY
@@ -211,7 +230,7 @@ func _physics_process(delta: float) -> void:
 		dizzy_time = maxf(0.0, dizzy_time - delta)
 		if dizzy_time <= 0.0 and model.has_method("set_dizzy"):
 			model.call("set_dizzy", false)
-	_weapon_impulse = _weapon_impulse.move_toward(Vector3.ZERO, 20.0 * delta)
+	_weapon_impulse = _weapon_impulse.move_toward(Vector3.ZERO, 20.0 * delta * maxf(traction, MIN_PUSH_FADE))
 	_dash_cooldown = maxf(0.0, _dash_cooldown - delta)
 	_catch_cooldown = maxf(0.0, _catch_cooldown - delta)
 	if _charging:
@@ -243,14 +262,20 @@ func _physics_process(delta: float) -> void:
 	if _dash_timer > 0.0:
 		_dash_timer -= delta
 		if _dash_timer <= 0.0:
-			model.set_dashing(false)
-			if _burrowed:
-				_surface()
+			if _burrowed and not _clear_to_surface(global_position) and _dig_overrun < DIG_OVERRUN_MAX:
+				# Still under a crate, a hole or another dog: keep digging the same way.
+				_dig_overrun += delta
+				_dash_timer = delta
+				_iframe_timer = maxf(_iframe_timer, 0.1)
+			else:
+				model.set_dashing(false)
+				if _burrowed:
+					_surface()
 	else:
 		var stagger_scale := 0.55 if _stagger_time > 0.0 else 1.0
 		# Planting your feet is what a wind-up costs: the harder the throw, the slower the walk.
 		var wind_up_scale := lerpf(1.0, CHARGE_MOVE_SCALE, _charge) if _charging else 1.0
-		var rate := BRAKE if move.is_zero_approx() else (TURN_ACCEL if velocity.dot(move) < 0.0 else ACCEL)
+		var rate := (BRAKE if move.is_zero_approx() else (TURN_ACCEL if velocity.dot(move) < 0.0 else ACCEL)) * traction
 		velocity = velocity.move_toward(move * data.move_speed * speed_scale * stagger_scale * wind_up_scale * _speed_mult + _weapon_impulse, rate * delta)
 		if dash_pressed and _dash_cooldown <= 0.0 and dizzy_time <= 0.0:
 			_start_dash()
@@ -278,6 +303,8 @@ func _physics_process(delta: float) -> void:
 	velocity.y = 0.0
 	push_velocity = velocity
 	move_and_slide()
+	if _burrowed:
+		_stay_in_bounds()
 	ground_y = move_toward(ground_y, Terrain.ground_height(self, global_position), CLIMB_SPEED * delta)
 	global_position.y = ground_y
 	var traveled := global_position.distance_to(_last_step_position)
@@ -307,6 +334,10 @@ func _process(delta: float) -> void:
 	# A round can end, or a dog go out, mid-burrow; nobody should finish a round underground.
 	if _burrowed and (round_locked or not alive):
 		_surface()
+	_bark_cooldown = maxf(0.0, _bark_cooldown - delta)
+	# Polled here rather than in physics, so a winner can still bark once the round is locked.
+	if alive and input != null and input.just_pressed(&"bark"):
+		bark()
 	_reveal_time = maxf(0.0, _reveal_time - delta)
 	_update_concealment()
 	_sight_timer -= delta
@@ -411,9 +442,17 @@ func _start_dash() -> void:
 	Juice.burst(get_parent(), global_position - facing * 0.3 + Vector3(0, 0.3, 0), Color(1, 1, 1, 0.7), 8, 3.0)
 
 
-## Dig!: the dog drops out of sight and a molehill tears across the lawn in its place.
+## Dig!: the dog drops out of sight and a molehill tears across the lawn in its place. Under
+## the lawn nothing touches it - it tunnels beneath crates, beds and boards, under holes, past
+## other dogs - and nothing notices it: switches, slow zones, toys and treats ignore a dog that
+## is not there. The practice pens are the exception: their walls still count.
 func _burrow() -> void:
 	_burrowed = true
+	_dig_overrun = 0.0
+	if not practice_safe:
+		_surface_layers = Vector2i(collision_layer, collision_mask)
+		collision_layer = 0
+		collision_mask = 0
 	_set_body_shown(false)
 	if not is_instance_valid(_mound):
 		_mound = Mats.mesh(self, Mats.sphere(data.body_radius * 0.7), Color("7a5a3a"), Vector3.ZERO)
@@ -427,7 +466,14 @@ func _burrow() -> void:
 func _surface() -> void:
 	if not _burrowed:
 		return
+	# Never up inside something: if this spot is taken, the nearest one that is not.
+	global_position = _surface_spot()
 	_burrowed = false
+	if _surface_layers != Vector2i.ZERO:
+		collision_layer = _surface_layers.x
+		collision_mask = _surface_layers.y
+		_surface_layers = Vector2i.ZERO
+	_dash_cooldown = maxf(_dash_cooldown, DIG_SURFACE_REST)
 	if is_instance_valid(_mound):
 		_mound.visible = false
 	_set_body_shown(not concealed)
@@ -436,6 +482,81 @@ func _surface() -> void:
 		Juice.pop(model, 1.2, 0.16)
 		Sfx.play_at("splat", global_position, 1.1, -6.0)
 		Juice.burst(get_parent(), global_position + Vector3.UP * 0.3, Color("8a6844"), 18, 4.2)
+
+
+## The taunt: a hop, the breed's own bark and its word over its head. No gameplay effect at all -
+## which is exactly why people press it constantly.
+func bark() -> void:
+	if not alive or _burrowed or _bark_cooldown > 0.0:
+		return
+	_bark_cooldown = BARK_COOLDOWN
+	var word: String = {DogData.Breed.LABRADOR: "WOOF!", DogData.Breed.PITBULL: "BORK!",
+		DogData.Breed.CORGI: "YIP!", DogData.Breed.SPANIEL: "ARF!",
+		DogData.Breed.GOLDEN: "RUFF!", DogData.Breed.DACHSHUND: "YAP!"}.get(data.breed, "WOOF!")
+	Sfx.bark(data.breed, randf_range(0.95, 1.05), -1.0, global_position)
+	Juice.float_text(get_parent(), global_position + Vector3(0, 1.9, 0), word, slot.color.lightened(0.35), 0.75)
+	model.play_bark()
+	Events.dog_barked.emit(self)
+
+
+## True once this dog has gone down a hole.
+func is_falling() -> bool:
+	return _falling_into != Vector3.INF
+
+
+func is_burrowed() -> bool:
+	return _burrowed
+
+
+func _arena() -> Arena:
+	var arenas := get_tree().get_nodes_in_group("arenas")
+	return arenas.back() as Arena if not arenas.is_empty() else null
+
+
+## Underground there are no walls to stop a dog, so the arena's edge does it instead.
+func _stay_in_bounds() -> void:
+	var arena := _arena()
+	if arena == null:
+		return
+	var local := arena.to_local(global_position)
+	var half := arena.size * 0.5 - Vector2.ONE * (effective_radius() + 0.1)
+	var held := Vector3(clampf(local.x, -half.x, half.x), local.y, clampf(local.z, -half.y, half.y))
+	if not held.is_equal_approx(local):
+		global_position = arena.to_global(held)
+
+
+## Somewhere a dog can come up: inside the arena, clear of every prop and hole, and not on top
+## of another dog.
+func _clear_to_surface(at: Vector3) -> bool:
+	var arena := _arena()
+	if arena == null:
+		return true
+	if not arena.is_clear_position(at, effective_radius() + 0.05):
+		return false
+	for node in get_tree().get_nodes_in_group("dogs"):
+		var other := node as Dog
+		if other == null or other == self or not other.alive or other.is_burrowed():
+			continue
+		var gap := Vector2(other.global_position.x - at.x, other.global_position.z - at.z).length()
+		if gap < effective_radius() + other.effective_radius():
+			return false
+	return true
+
+
+## Here if it is clear; otherwise a little further along the tunnel; otherwise the nearest clear
+## spot in any direction.
+func _surface_spot() -> Vector3:
+	if _clear_to_surface(global_position):
+		return global_position
+	var ahead := Vector3(facing.x, 0, facing.z).normalized()
+	for step in range(1, 9):
+		var spot := global_position + ahead * 0.25 * float(step)
+		if _clear_to_surface(spot):
+			return spot
+	var arena := _arena()
+	if arena == null:
+		return global_position
+	return arena.clear_pickup_position(global_position, effective_radius() + 0.1)
 
 
 func _set_body_shown(shown: bool) -> void:
@@ -673,7 +794,7 @@ func receive_whack(direction: Vector3, from: Dog) -> void:
 		_weapon_impulse = direction * 5.0
 		if model.has_method("set_dizzy"):
 			model.call("set_dizzy", true)
-		Sfx.play_at("bark", global_position, randf_range(0.8, 0.92), -5.0)
+		Sfx.bark(data.breed, randf_range(0.86, 0.94), -5.0, global_position)
 		Sfx.play_at("dizzy", global_position, randf_range(0.95, 1.05), -8.0)
 		Juice.float_text(get_parent(), global_position + Vector3.UP * 1.7, "DIZZY!", Color(1.0, 0.88, 0.4), 0.8)
 	model.play_stagger()
@@ -712,7 +833,7 @@ func _catch(toy: Toy) -> void:
 
 ## Called by an idle toy the dog walks over.
 func try_pickup(toy: Toy) -> bool:
-	if toy.ephemeral or held_toy != null or not alive or round_locked or _pickup_lock > 0.0:
+	if toy.ephemeral or held_toy != null or not alive or round_locked or _pickup_lock > 0.0 or _burrowed:
 		return false
 	if toy.state != Toy.State.IDLE:
 		return false
@@ -747,6 +868,12 @@ func _resolve_hit(toy: Toy, area_hit: bool, direction: Vector3) -> bool:
 	# Toys from one volley are one hit: once a volley has landed, its other toys pass through.
 	var volley := toy.power_effects.volley if toy.power_effects != null else 0
 	if volley != 0 and volley == _last_volley and Time.get_ticks_msec() - _last_volley_msec < VOLLEY_WINDOW_MSEC:
+		return false
+	# A pack-mate's throw is a pass: caught if your paws are free, through you if not.
+	if not area_hit and not toy.ephemeral and is_instance_valid(toy.thrower) and toy.thrower != self \
+			and slot.allied_with(toy.thrower.slot):
+		if held_toy == null and not _burrowed:
+			_receive_pass(toy)
 		return false
 	if not can_be_hurt_by(toy):
 		# Reads as a hit so the throw is not silently ignored, but nobody goes out.
@@ -794,6 +921,59 @@ func _resolve_hit(toy: Toy, area_hit: bool, direction: Vector3) -> bool:
 	return true
 
 
+## A ghost's "BOO!": a startled jump away and a moment's stumble. Never a knockout on its own.
+func spook(from: Vector3) -> void:
+	if not alive or round_locked or invincible or _burrowed or practice_safe:
+		return
+	var away := Vector3(global_position.x - from.x, 0, global_position.z - from.z)
+	away = away.normalized() if away.length() > 0.01 else Vector3.BACK
+	_weapon_impulse = away * 4.5
+	_stagger_time = maxf(_stagger_time, 0.45)
+	_cancel_charge()
+	model.play_stagger()
+	Juice.float_text(get_parent(), global_position + Vector3(0, 1.7, 0), "EEP!", Color(0.85, 0.95, 1.0), 0.6)
+
+
+func _receive_pass(toy: Toy) -> void:
+	toy.pick_up(self)
+	Sfx.play_at("catch", global_position, 1.25)
+	Juice.pop(model, 1.2)
+	Juice.float_text(get_parent(), global_position + Vector3(0, 1.6, 0), "PASS!", slot.color.lightened(0.3), 0.7)
+
+
+## Back on its paws where it lay, brought back by a pack-mate. A moment of protection so it is
+## not bonked again before it has stood up.
+const REVIVE_GRACE := 1.4
+
+
+func revive(at: Vector3) -> void:
+	if alive:
+		return
+	state = State.ALIVE
+	global_position = at
+	velocity = Vector3.ZERO
+	push_velocity = Vector3.ZERO
+	_weapon_impulse = Vector3.ZERO
+	dizzy_time = 0.0
+	_falling_into = Vector3.INF
+	_last_pusher = null
+	_spawn_grace = REVIVE_GRACE
+	body_shape.set_deferred("disabled", false)
+	catch_shape.set_deferred("disabled", false)
+	model.setup(data, slot.color)
+	model.set_hat(Game.hat(slot.hat))
+	model.setup_silhouette(slot.color)
+	for part: Node3D in [model, ring, name_tag, _contact_disc]:
+		if is_instance_valid(part):
+			part.visible = true
+	_update_concealment()
+	Juice.pop(model, 1.35, 0.3)
+	Juice.burst(get_parent(), global_position + Vector3.UP * 0.6, slot.color.lightened(0.3), 26, 5.0)
+	Juice.float_text(get_parent(), global_position + Vector3(0, 1.9, 0), "BACK IN!", slot.color.lightened(0.35), 1.0)
+	Sfx.play_at("treat", global_position, 1.1)
+	Sfx.bark(data.breed, 1.12, 0.0, global_position)
+
+
 func is_dashing() -> bool:
 	return _dash_timer > 0.0
 
@@ -839,28 +1019,29 @@ func eliminate(by: Toy = null, impact_direction: Vector3 = Vector3.ZERO) -> void
 	velocity = Vector3.ZERO
 	Sfx.play_at("hit", global_position)
 	Sfx.play_at("bonk", global_position, 1.0, -4.0)
-	Sfx.play_at("bark", global_position, randf_range(0.92, 1.12), -3.0)
+	Sfx.bark(data.breed, randf_range(0.94, 1.06), -3.0, global_position)
 	var landing := global_position
 	# The thump lands with the body at the end of the tumble, not with the hit.
-	get_tree().create_timer(0.36, false).timeout.connect(func() -> void: Sfx.play_at("land", landing, randf_range(0.9, 1.1), -6.0))
+	get_tree().create_timer(0.34, false).timeout.connect(func() -> void: Sfx.play_at("land", landing, randf_range(0.9, 1.1), -6.0))
 	Music.duck(0.9)
 	# A knockout is the loudest thing that happens in a round, so it gets the longest freeze.
 	Juice.hitstop(0.085, 0.05)
-	Juice.shake(0.42)
+	Juice.shake(0.3)
 	var dir := by.velocity.normalized() if by and by.velocity.length() > 0.1 else Vector3(0, 0, 1)
 	if not impact_direction.is_zero_approx():
 		dir = impact_direction
-	# Three layers, because one puff of the player colour read as a tidy little sparkle rather
-	# than as someone being knocked out of the round: a hard flash at the point of impact, fur
-	# thrown along the line of the throw, and dust kicked up where the body lands.
-	Juice.burst(get_parent(), global_position + Vector3(0, 0.75, 0), Color(1, 1, 1, 0.9), 12, 8.5)
-	Juice.burst(get_parent(), global_position + Vector3(0, 0.6, 0), slot.color, 26, 6.0)
-	Juice.burst(get_parent(), global_position + dir * 0.5 + Vector3(0, 0.5, 0), data.fur_color.lightened(0.12), 18, 5.0)
+	# A flash at the point of impact in the player's colour, and a little dust where the body
+	# lands. More layers than this turned a knockout into a firework.
+	Juice.burst(get_parent(), global_position + Vector3(0, 0.75, 0), Color(1, 1, 1, 0.9), 8, 6.5)
+	Juice.burst(get_parent(), global_position + Vector3(0, 0.6, 0), slot.color, 14, 4.5)
 	Juice.burst(get_parent(), global_position + dir * DogModel.KO_KNOCKBACK + Vector3(0, 0.12, 0),
-		Color(0.85, 0.8, 0.7, 0.75), 14, 2.6)
-	var own_goal := by != null and by.thrower == self
-	var line := "DOWN THE HOLE!" if _falling_into != Vector3.INF else (DogTalk.own_goal() if own_goal else DogTalk.knockout())
-	Juice.float_text(get_parent(), global_position + Vector3(0, 1.8, 0), line, Color(1.0, 0.85, 0.2), 1.0)
+		Color(0.85, 0.8, 0.7, 0.75), 10, 2.2)
+	var self_bonk := by != null and by.thrower == self
+	var line := "DOWN THE HOLE!" if _falling_into != Vector3.INF else (DogTalk.self_bonk() if self_bonk else DogTalk.knockout())
+	# Racing to bonks, the match calls a self-bonk out across the screen (it costs a bone);
+	# a second line over the dog would only talk over it.
+	if not (self_bonk and _falling_into == Vector3.INF and Game.scoring == Game.Scoring.BONKS):
+		Juice.float_text(get_parent(), global_position + Vector3(0, 1.8, 0), line, Color(1.0, 0.85, 0.2), 1.0)
 	_cover.clear()
 	_update_concealment()
 	if _falling_into != Vector3.INF:
@@ -920,6 +1101,23 @@ func set_slow(source: Node, factor: float) -> void:
 func clear_slow(source: Node) -> void:
 	_slow_sources.erase(source.get_instance_id())
 	_refresh_slows()
+
+
+## Ice: the slipperiest active source wins, and leaving one sheet never restores grip on another.
+func set_traction(source: Node, factor: float) -> void:
+	_traction_sources[source.get_instance_id()] = clampf(factor, 0.05, 1.0)
+	_refresh_traction()
+
+
+func clear_traction(source: Node) -> void:
+	_traction_sources.erase(source.get_instance_id())
+	_refresh_traction()
+
+
+func _refresh_traction() -> void:
+	traction = 1.0
+	for factor: float in _traction_sources.values():
+		traction = minf(traction, factor)
 
 
 func _refresh_slows() -> void:

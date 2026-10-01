@@ -9,6 +9,12 @@ extends Node3D
 ##
 ## How far a running dog tips into its own direction, in degrees at full speed. A dog standing
 ## bolt upright while it slides across the floor is what makes top-down movement look weightless.
+## Every visible thing the dog is told to do - throw, catch, dash, bark, a crown, a knockout -
+## as the method and its arguments. The final-bonk replay records these and has its stand-ins
+## do the same at the same moment, so the replay is the round as it happened, not an
+## approximation of it.
+signal acted(method: StringName, args: Array)
+
 const RUN_LEAN := 9.0
 const DASH_LEAN := 10.0
 ## How sharply the body swings round to a new heading. Higher is snappier.
@@ -38,8 +44,10 @@ const BREATH := 0.014
 const DIZZY_WOBBLE := 12.0
 const DIZZY_SPIN := 7.0
 ## The bonk launch: how far back along the throw the body is thrown, and how high it goes.
-const KO_KNOCKBACK := 1.15
-const KO_HOP := 0.8
+const KO_KNOCKBACK := 0.8
+const KO_HOP := 0.38
+## How big a hat is on a dog, before the dog's own hat_scale.
+const HAT_SIZE := 0.74
 
 var data: DogData
 var player_color := Color.WHITE
@@ -54,6 +62,12 @@ var _player: AnimationPlayer
 ## throws on the move keeps running instead of freezing mid-stride and skating; dash, KO and win
 ## take over the whole body.
 var _tree: AnimationTree
+var _head_top: Node3D
+var _hat: HatModel
+## Where the body came to rest after a knockout, relative to the dog.
+var ko_spot := Vector3.ZERO
+var _hat_data: HatData
+var _crowned := false
 var _run_weight := 0.0
 ## Empty until the first request: the transition node has no current state of its own.
 var _body_state := ""
@@ -98,6 +112,10 @@ func setup(p_data: DogData, p_color: Color) -> void:
 	_socket = null
 	_player = null
 	_tree = null
+	_head_top = null
+	_hat = null
+	_hat_data = null
+	_crowned = false
 	_run_weight = 0.0
 	_body_state = ""
 	uses_authored_model = false
@@ -187,6 +205,122 @@ func _anchor_grip() -> void:
 	var grip := Transform3D(Basis(Vector3.RIGHT, deg_to_rad(-12.0)), data.mouth_grip)
 	# The inverse also cancels the armature's export scale, so the grip is true size.
 	_socket.transform = bone_rest.affine_inverse() * grip
+
+
+## Puts a hat on (or takes it off, for null). It rides the head through every animation. While
+## the dog wears the leader's crown the hat waits underneath and comes back with the lead lost.
+func set_hat(hat: HatData) -> void:
+	_report(&"set_hat", [hat])
+	_hat_data = hat
+	if not _crowned:
+		_show_hat(hat)
+
+
+## The leader's crown, worn in place of whatever hat the dog has on.
+func set_crown(on: bool) -> void:
+	_report(&"set_crown", [on])
+	if on == _crowned:
+		return
+	_crowned = on
+	_show_hat(HatData.crown() if on else _hat_data)
+	if on and is_inside_tree():
+		Juice.pop(self, 1.15, 0.25)
+
+
+func _show_hat(hat: HatData) -> void:
+	if is_instance_valid(_hat):
+		_hat.queue_free()
+	_hat = null
+	if hat == null:
+		return
+	_hat = HatModel.new()
+	_hat.name = "Hat"
+	_hat.build(hat)
+	var head := head_top_anchor()
+	if head != null:
+		head.add_child(_hat)
+		# Set back from the brow, settled into the fur by however much this style needs, and
+		# tipped at a jaunty angle; each dog's own fit on top.
+		var size := HAT_SIZE * data.hat_scale
+		_hat.position = Vector3(0, -HatModel.sink(hat.style) * size, 0.04) + data.hat_offset
+		_hat.rotation_degrees = Vector3(-8, 0, 6)
+		_hat.scale = Vector3.ONE * size
+	else:
+		add_child(_hat)
+		_hat.position = Vector3(0, height() / maxf(scale.y, 0.01) - 0.05, 0)
+
+
+func is_crowned() -> bool:
+	return _crowned
+
+
+func hide_hat() -> void:
+	if is_instance_valid(_hat):
+		_hat.visible = false
+
+
+## A point riding on top of the dog's head, for things that sit there (the winner's crown). It
+## is bound to the head bone, so it follows every nod and hop of the animation, and placed at
+## the top of the skull as the mesh actually has it: the highest point along the middle of the
+## head, which leaves the ears - off to either side - out of it. Level and facing forward at
+## rest. Null for the placeholder model, which has no rig.
+func head_top_anchor() -> Node3D:
+	if is_instance_valid(_head_top):
+		return _head_top
+	if not is_instance_valid(_imported):
+		return null
+	var skeletons := DogAssetValidator.find_skeletons(_imported)
+	if skeletons.is_empty():
+		return null
+	var skeleton: Skeleton3D = skeletons[0]
+	var bone := skeleton.find_bone("head")
+	if bone < 0:
+		bone = skeleton.find_bone(data.mouth_socket_bone)
+	if bone < 0:
+		return null
+	var bone_rest := _relative_transform(skeleton) * skeleton.get_bone_global_rest(bone)
+	var top := _skull_top(bone_rest.origin, skeleton)
+	var attachment := BoneAttachment3D.new()
+	attachment.name = "HeadTopAttachment"
+	attachment.bone_name = skeleton.get_bone_name(bone)
+	skeleton.add_child(attachment)
+	_head_top = Node3D.new()
+	_head_top.name = "HeadTop"
+	attachment.add_child(_head_top)
+	# The inverse cancels the bone's rest pose and the armature's export scale, so whatever is
+	# hung here is upright and true to size when the dog stands at rest.
+	_head_top.transform = bone_rest.affine_inverse() * Transform3D(Basis.IDENTITY, top)
+	return _head_top
+
+
+## The highest vertex of the body mesh close to the head's centre line, in this model's space.
+## Skinned vertices are placed the way the renderer places them - through the skin's bind pose
+## onto the rest skeleton - because a rig's mesh need not share the skeleton's space.
+func _skull_top(head: Vector3, skeleton: Skeleton3D) -> Vector3:
+	var best := head + Vector3(0, 0.25, 0)
+	var found := false
+	for node in _imported.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := node as MeshInstance3D
+		if mesh_instance.mesh == null:
+			continue
+		var to_model := _relative_transform(mesh_instance)
+		var skin := mesh_instance.skin
+		if skin != null and skin.get_bind_count() > 0:
+			var bound := skin.get_bind_bone(0)
+			if bound < 0:
+				bound = skeleton.find_bone(skin.get_bind_name(0))
+			if bound >= 0:
+				to_model = _relative_transform(skeleton) * skeleton.get_bone_global_rest(bound) * skin.get_bind_pose(0)
+		for surface in mesh_instance.mesh.get_surface_count():
+			var vertices: PackedVector3Array = mesh_instance.mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]
+			for vertex in vertices:
+				var point := to_model * vertex
+				if absf(point.x - head.x) > 0.06 or absf(point.z - head.z) > 0.18:
+					continue
+				if not found or point.y > best.y:
+					best = point
+					found = true
+	return Vector3(head.x, best.y, best.z)
 
 
 ## The skeleton's transform inside the imported scene, before this renderer turns and scales it.
@@ -327,6 +461,7 @@ func _shape_body(was: float, delta: float) -> void:
 
 
 func set_dashing(value: bool) -> void:
+	_report(&"set_dashing", [value])
 	var landing := _dashing and not value
 	_dashing = value
 	if _fallback != null:
@@ -340,6 +475,7 @@ func set_dashing(value: bool) -> void:
 
 
 func set_catching(value: bool) -> void:
+	_report(&"set_catching", [value])
 	_catching = value
 	if _fallback != null:
 		_fallback.set_catching(value)
@@ -348,6 +484,7 @@ func set_catching(value: bool) -> void:
 
 
 func squash() -> void:
+	_report(&"squash", [])
 	if _fallback != null:
 		_fallback.squash()
 	else:
@@ -355,6 +492,7 @@ func squash() -> void:
 
 
 func play_throw() -> void:
+	_report(&"play_throw", [])
 	if _knocked_out:
 		return
 	if _fallback != null:
@@ -368,6 +506,7 @@ func play_throw() -> void:
 
 
 func play_knocked_out(direction: Vector3) -> void:
+	_report(&"play_knocked_out", [direction])
 	_knocked_out = true
 	if is_instance_valid(_pose):
 		# Only the ears keep moving after a knockout (see DogPoseMotion.ears_up).
@@ -385,6 +524,8 @@ func play_knocked_out(direction: Vector3) -> void:
 ## Down a hole: the body slides to the middle, drops out of sight spinning, and is gone.
 ## [param into] is the hole's centre in this model's parent's space.
 func play_fall(into: Vector3) -> void:
+	_report(&"play_fall", [into])
+	ko_spot = into
 	_knocked_out = true
 	if is_instance_valid(_pose):
 		_pose.knocked_out = true
@@ -404,61 +545,40 @@ func play_fall(into: Vector3) -> void:
 	drop.chain().tween_callback(func() -> void: visible = false)
 
 
-## A bonk should throw you. The rig's ko clip plays underneath; this is the launch that sells
-## the hit - up and back along the throw, then a finish that is each breed's own joke, so four
-## dogs going out never look like one animation. An authored clip cannot know which way the toy
-## came from, so this part has to be code.
+## A bonk knocks you down: a short hop back along the hit, a tip onto the side with a slight
+## turn, one soft bounce, and still. The rig's ko clip plays underneath. It used to be a launch
+## with a different stunt per breed - full spins, rolls, a pancake squash - which read as chaos
+## rather than "that dog is out". An authored clip cannot know which way the toy came from, so
+## the direction part stays code.
 func _tumble(direction: Vector3) -> void:
 	if _impact_tween != null:
 		_impact_tween.kill()
 	var away := Vector3(direction.x, 0.0, direction.z)
 	away = Vector3(0, 0, 1) if away.length_squared() < 0.001 else away.normalized()
 	var land := away * KO_KNOCKBACK
+	ko_spot = land
 	var base := _base_scale()
 	scale = base
-	var hop := KO_HOP
-	var turn := TAU * (1.0 if randf() > 0.5 else -1.0)
-	var flat := Vector3(0.0, rotation.y + turn, deg_to_rad(88.0))
-	match data.breed:
-		DogData.Breed.PITBULL:
-			# Spins like a top on the way up, then drops on its side.
-			flat.y = rotation.y + turn * 3.0
-			hop *= 1.15
-		DogData.Breed.SPANIEL:
-			# Sent high, ears straight up like a pair of wings.
-			hop *= 1.6
-			if is_instance_valid(_pose):
-				_pose.ears_up = true
-		DogData.Breed.GOLDEN:
-			# Flips right over onto its back: legs in the air.
-			flat = Vector3(0.0, rotation.y, deg_to_rad(180.0))
-		DogData.Breed.CORGI:
-			# Short legs, long loaf: keeps rolling along the ground after it lands.
-			flat.z = deg_to_rad(88.0)
+	# A slight twist away from the hit, never a spin, then over onto whichever side faces away.
+	var twist := deg_to_rad(25.0) * (1.0 if randf() > 0.5 else -1.0)
+	var flat := Vector3(0.0, rotation.y + twist, deg_to_rad(82.0) * signf(twist))
+	var rise := 0.16
+	var fall := 0.2
 	var fly := create_tween().set_parallel(true)
-	fly.tween_property(self, "position", land + Vector3(0, hop, 0), 0.17 * hop / KO_HOP) \
+	fly.tween_property(self, "position", land * 0.6 + Vector3(0, KO_HOP, 0), rise) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	fly.tween_property(self, "position", land, 0.18 * hop / KO_HOP) \
-		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN).set_delay(0.17 * hop / KO_HOP)
-	fly.tween_property(self, "rotation", flat, 0.42).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	var landed := 0.35 * hop / KO_HOP
-	match data.breed:
-		DogData.Breed.LABRADOR:
-			# Flops flat as a pancake and stays that way.
-			fly.tween_property(self, "scale", Vector3(base.x * 1.3, base.y * 0.42, base.z * 1.3), 0.09).set_delay(landed)
-			fly.tween_property(self, "scale", Vector3(base.x * 1.18, base.y * 0.55, base.z * 1.18), 0.3) \
-				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).set_delay(landed + 0.09)
-		DogData.Breed.CORGI:
-			var roll_to := land + away * 1.4
-			fly.tween_property(self, "position", roll_to, 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT).set_delay(landed)
-			fly.tween_property(self, "rotation:z", flat.z + TAU * 2.0, 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT).set_delay(landed)
-		_:
-			# Landing knocks the air out of it before it settles.
-			fly.tween_property(self, "scale", Vector3(base.x * 1.24, base.y * 0.6, base.z * 1.24), 0.07).set_delay(landed)
-			fly.tween_property(self, "scale", base, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).set_delay(landed + 0.07)
+	fly.tween_property(self, "position", land, fall) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN).set_delay(rise)
+	fly.tween_property(self, "rotation", flat, rise + fall).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	var landed := rise + fall
+	# One small bounce off the ground, and a gentle give in the body as it lands.
+	fly.tween_property(self, "position:y", 0.07, 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT).set_delay(landed)
+	fly.tween_property(self, "position:y", 0.0, 0.11).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN).set_delay(landed + 0.09)
+	fly.tween_property(self, "scale", Vector3(base.x * 1.06, base.y * 0.9, base.z * 1.06), 0.07).set_delay(landed)
+	fly.tween_property(self, "scale", base, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT).set_delay(landed + 0.07)
 	var dog := get_parent() as Node3D
 	if dog != null:
-		get_tree().create_timer(landed + 0.25, false).timeout.connect(func() -> void:
+		get_tree().create_timer(landed + 0.3, false).timeout.connect(func() -> void:
 			if is_instance_valid(dog):
 				_snooze(dog, land + Vector3(0, 0.7, 0)))
 
@@ -495,6 +615,7 @@ func _snooze(dog: Node3D, at: Vector3) -> void:
 ## tell: three stars going round over the head and the body rolling under them. Without it the
 ## HUD said SEEING STARS while the dog on the field looked perfectly fine.
 func set_dizzy(on: bool) -> void:
+	_report(&"set_dizzy", [on])
 	if _fallback != null:
 		_fallback.set_dizzy(on)
 		return
@@ -519,6 +640,7 @@ func set_dizzy(on: bool) -> void:
 
 
 func play_victory() -> void:
+	_report(&"play_victory", [])
 	if _knocked_out:
 		return
 	_victory = true
@@ -658,6 +780,7 @@ func _process(_delta: float) -> void:
 
 
 func set_size_multiplier(value: float) -> void:
+	_report(&"set_size_multiplier", [value])
 	_size_multiplier = value
 	if _impact_tween != null:
 		_impact_tween.kill()
@@ -670,6 +793,7 @@ func _base_scale() -> Vector3:
 
 
 func set_charge(value: float, held: bool) -> void:
+	_report(&"set_charge", [value, held])
 	_charge_amount = value
 	_charging = held
 	if is_instance_valid(_pose):
@@ -677,12 +801,29 @@ func set_charge(value: float, held: bool) -> void:
 		_pose.charging = held
 
 
+## A bark: a quick hop with a stretch on the way up and a squash on landing.
+func play_bark() -> void:
+	_report(&"play_bark", [])
+	if _knocked_out:
+		return
+	var hop := create_tween()
+	hop.tween_property(self, "position:y", 0.22, 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	hop.tween_property(self, "position:y", 0.0, 0.11).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_pulse(Vector3(0.94, 1.1, 0.94))
+	hop.tween_callback(func() -> void: _pulse(Vector3(1.08, 0.9, 1.08)))
+
+
 func play_whack() -> void:
+	_report(&"play_whack", [])
+	# A whack is a throw underneath; only the whack is reported, or a replay would swing twice.
+	_mute += 1
 	play_throw()
+	_mute -= 1
 	_pulse(Vector3(1.1, 0.9, 1.15))
 
 
 func play_stagger() -> void:
+	_report(&"play_stagger", [])
 	if _knocked_out:
 		return
 	_abort_action()
@@ -739,3 +880,11 @@ func _install_release_animation() -> void:
 	library.add_animation(&"release", release)
 	_player.add_animation_library(&"fetch", library)
 	_release_clip = &"fetch/release"
+
+
+var _mute := 0
+
+
+func _report(method: StringName, args: Array) -> void:
+	if _mute == 0:
+		acted.emit(method, args)

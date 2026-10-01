@@ -66,7 +66,7 @@ func _physics_process(delta: float) -> void:
 		return
 	for node in get_tree().get_nodes_in_group("dogs"):
 		var dog := node as Dog
-		if not dog.alive or dog.round_locked or dog.dizzy_time > 0.0:
+		if not dog.alive or dog.round_locked or dog.dizzy_time > 0.0 or dog.is_burrowed():
 			continue
 		var gap := Vector2(dog.global_position.x - global_position.x, dog.global_position.z - global_position.z)
 		if gap.length() > dog.data.body_radius + 0.55:

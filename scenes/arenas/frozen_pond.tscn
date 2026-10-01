@@ -1,0 +1,146 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/arena/arena.gd" id="1_arena"]
+[ext_resource type="Script" path="res://scripts/arena/obstacle.gd" id="2_obstacle"]
+[ext_resource type="Script" path="res://scripts/arena/arena_camera.gd" id="4_camera"]
+[ext_resource type="Script" path="res://scripts/arena/pit.gd" id="5_pit"]
+[ext_resource type="Script" path="res://scripts/arena/ice_sheet.gd" id="g_ice"]
+
+[sub_resource type="Environment" id="Environment_winter"]
+background_mode = 1
+background_color = Color(0.72, 0.84, 0.95, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.86, 0.92, 1, 1)
+ambient_light_energy = 0.70
+tonemap_mode = 0
+
+[node name="FrozenPond" type="Node3D"]
+script = ExtResource("1_arena")
+decor_theme = "Pond"
+size = Vector2(26, 14.6)
+wall_style = 3
+ground_color = Color(0.71, 0.76, 0.84, 1)
+ground_accent = Color(0.63, 0.7, 0.81, 1)
+wall_color = Color(0.78, 0.83, 0.9, 1)
+wall_accent = Color(0.62, 0.7, 0.8, 1)
+surround_color = Color(0.62, 0.69, 0.79, 1)
+flowers = false
+pattern_seed = 13
+sign_text = "FROZEN POND"
+
+[node name="Camera" type="Camera3D" parent="."]
+fov = 44.0
+height = 17.0
+script = ExtResource("4_camera")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.3214, 0.383, 0, 0.766, 0.6428, -0.5, -0.5567, 0.6634, 0, 12, 0)
+light_color = Color(1, 0.957, 0.878, 1)
+light_energy = 0.90
+shadow_enabled = true
+directional_shadow_max_distance = 60.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_winter")
+
+[node name="SpawnPoints" type="Node3D" parent="."]
+
+[node name="P1" type="Marker3D" parent="SpawnPoints"]
+position = Vector3(-10, 0, -5)
+
+[node name="P2" type="Marker3D" parent="SpawnPoints"]
+position = Vector3(10, 0, 5)
+
+[node name="P3" type="Marker3D" parent="SpawnPoints"]
+position = Vector3(10, 0, -5)
+
+[node name="P4" type="Marker3D" parent="SpawnPoints"]
+position = Vector3(-10, 0, 5)
+
+[node name="ToySpawns" type="Node3D" parent="."]
+
+[node name="T1" type="Marker3D" parent="ToySpawns"]
+position = Vector3(-7.4, 0, -5.3)
+
+[node name="T2" type="Marker3D" parent="ToySpawns"]
+position = Vector3(7.4, 0, 5.3)
+
+[node name="T3" type="Marker3D" parent="ToySpawns"]
+position = Vector3(7.4, 0, -5.3)
+
+[node name="T4" type="Marker3D" parent="ToySpawns"]
+position = Vector3(-7.4, 0, 5.3)
+
+[node name="T5" type="Marker3D" parent="ToySpawns"]
+position = Vector3(0, 0, -2.6)
+
+[node name="T6" type="Marker3D" parent="ToySpawns"]
+position = Vector3(0, 0, 2.6)
+
+[node name="Gimmicks" type="Node3D" parent="."]
+
+[node name="Ice" type="Node3D" parent="Gimmicks"]
+script = ExtResource("g_ice")
+size = Vector2(15.4, 9.4)
+
+[node name="Obstacles" type="Node3D" parent="."]
+
+[node name="DriftWest" type="StaticBody3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.6, 0, 0)
+script = ExtResource("2_obstacle")
+kind = 20
+size = Vector3(2.4, 1.3, 3.0)
+color = Color(0.8, 0.85, 0.92, 1)
+accent = Color(0.55, 0.63, 0.76, 1)
+
+[node name="DriftEast" type="StaticBody3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10.6, 0, 0)
+script = ExtResource("2_obstacle")
+kind = 20
+size = Vector3(2.4, 1.3, 3.0)
+color = Color(0.8, 0.85, 0.92, 1)
+accent = Color(0.55, 0.63, 0.76, 1)
+
+[node name="SnowmanNorth" type="StaticBody3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.4, 0, -5.6)
+script = ExtResource("2_obstacle")
+kind = 19
+size = Vector3(1.3, 2.0, 1.3)
+color = Color(0.86, 0.89, 0.94, 1)
+accent = Color(0.86, 0.3, 0.27, 1)
+
+[node name="SnowmanSouth" type="StaticBody3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.4, 0, 5.6)
+script = ExtResource("2_obstacle")
+kind = 19
+size = Vector3(1.3, 2.0, 1.3)
+color = Color(0.86, 0.89, 0.94, 1)
+accent = Color(0.24, 0.52, 0.8, 1)
+
+[node name="RockWest" type="StaticBody3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.4, 0, 2.3)
+script = ExtResource("2_obstacle")
+kind = 17
+size = Vector3(1.6, 0.9, 1.3)
+color = Color(0.42, 0.44, 0.5, 1)
+accent = Color(0.32, 0.34, 0.4, 1)
+
+[node name="RockEast" type="StaticBody3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.4, 0, -2.3)
+script = ExtResource("2_obstacle")
+kind = 17
+size = Vector3(1.6, 0.9, 1.3)
+color = Color(0.42, 0.44, 0.5, 1)
+accent = Color(0.32, 0.34, 0.4, 1)
+
+[node name="Holes" type="Node3D" parent="."]
+
+[node name="WaterNorth" type="Node3D" parent="Holes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.3, 0, -1.9)
+script = ExtResource("5_pit")
+look = 1
+
+[node name="WaterSouth" type="Node3D" parent="Holes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3, 0, 1.9)
+script = ExtResource("5_pit")
+look = 1

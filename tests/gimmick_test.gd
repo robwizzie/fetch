@@ -1,5 +1,6 @@
 extends Node
-## One dog-themed gimmick per arena: the sprinkler, the robot mower, tall grass, sliding dog beds.
+## One dog-themed gimmick per arena: the sprinkler, the robot mower, tall grass, sliding dog beds,
+## the frozen pond's ice, the kitchen's conveyor belts and the toy room's train.
 ##   godot --headless --path . res://tests/gimmick_test.tscn
 
 const DOG_SCENE := preload("res://scenes/actors/dog.tscn")
@@ -19,8 +20,12 @@ func _ready() -> void:
 	await _breakable_crate()
 	await _swing_board()
 	await _stranded_toy()
+	await _dig_rules()
+	await _ice()
+	await _conveyor()
+	await _toy_train()
 	if not _failed:
-		print("[gimmicks] PASSED: sprinkler shoves, mower knocks dizzy, grass hides, dog beds slide, one per arena, holes, crates that break, swing boards, stranded toys come back")
+		print("[gimmicks] PASSED: sprinkler shoves, mower knocks dizzy, grass hides, dog beds slide, one per arena, holes, crates that break, swing boards, stranded toys come back, digging under props and never up inside one, ice, conveyor belts, the toy train")
 	get_tree().quit(1 if _failed else 0)
 
 
@@ -239,6 +244,206 @@ func _stranded_toy() -> void:
 	_check(game_match._reachable(toy.global_position, biggest, biggest + toy.data.radius + 0.1), "a toy wedged behind the hedge comes back out where dogs can reach it")
 	game_match.queue_free()
 	await get_tree().process_frame
+
+
+## Dig!: under anything in the way, never up inside it, never off the map, never for long.
+func _dig_rules() -> void:
+	Game.tutorial_shown = true
+	Game.random_arena_each_round = false
+	for arena_data in Game.arenas:
+		if arena_data.id == &"backyard":
+			Game.selected_arena = arena_data
+	Game.debug_fill_players(2)
+	var game_match: Node = load("res://scenes/match/match.tscn").instantiate()
+	add_child(game_match)
+	while game_match.phase != game_match.Phase.PLAYING:
+		await get_tree().process_frame
+	var arena: Arena = game_match.arena
+	var digger: Dog = game_match.dogs[0]
+	var other: Dog = game_match.dogs[1]
+	other.set_physics_process(false)
+	other.global_position = Vector3(10, 0, 5)
+	digger.input = DeviceInput.new(DeviceInput.VIRTUAL)
+	digger.slot.powerups.assign([PowerupKinds.DIG])
+	digger.apply_powerups()
+
+	# Straight at the west crate (centre -3.2, -4.8; 1.7 wide): under it and out the far side.
+	digger.global_position = Vector3(-6.2, 0, -4.8)
+	digger.facing = Vector3.RIGHT
+	digger._dash_cooldown = 0.0
+	digger._start_dash()
+	_check(digger.is_burrowed() and digger.collision_mask == 0, "a digging dog leaves the props behind")
+	var frames := 0
+	while digger.is_burrowed() and frames < 200:
+		await get_tree().physics_frame
+		frames += 1
+	_check(digger.global_position.x > -3.2 + 0.85, "it tunnels under a crate and comes out the far side")
+	_check(arena.is_clear_position(digger.global_position, digger.effective_radius()), "and comes up on open ground")
+	var limit := Dog.DASH_TIME * Dog.DIG_TIME_SCALE + Dog.DIG_OVERRUN_MAX + 0.1
+	_check(frames / float(Engine.physics_ticks_per_second) <= limit, "and is never under for long (%.2fs)" % (frames / float(Engine.physics_ticks_per_second)))
+	_check(not digger.dash_ready() and digger._dash_cooldown >= Dog.DIG_SURFACE_REST - 0.05, "and has to stay up a moment before digging again")
+	_check(digger.collision_mask != 0, "and is solid again")
+
+	# Ending a dig right inside a crate: up beside it instead.
+	digger._dash_cooldown = 0.0
+	digger.global_position = Vector3(3.2, 0, 4.8)
+	digger.facing = Vector3.LEFT
+	digger._start_dash()
+	digger.global_position = Vector3(3.2, 0, 4.8)
+	digger._surface()
+	_check(arena.is_clear_position(digger.global_position, digger.effective_radius()), "a dig that ends inside a crate comes up beside it")
+
+	# Ending over a hole: up on solid ground, not down it.
+	digger._dash_cooldown = 0.0
+	digger._start_dash()
+	digger.global_position = Vector3(3.4, 0, -4.6)
+	digger._surface()
+	_check(digger.alive, "a dig that ends over a hole comes up on the rim, not in it")
+
+	# Straight at the fence: the map edge stops it underground too.
+	digger._dash_cooldown = 0.0
+	digger.global_position = Vector3(11.0, 0, -5.5)
+	digger.facing = Vector3.RIGHT
+	digger._start_dash()
+	frames = 0
+	while digger.is_burrowed() and frames < 200:
+		await get_tree().physics_frame
+		frames += 1
+	_check(digger.global_position.x < arena.size.x * 0.5, "nobody digs out of the arena")
+	game_match.queue_free()
+	await get_tree().process_frame
+
+
+## Ice takes a dog's grip and gives it back the moment it steps off; it never undoes a slow,
+## and a whack on the ice carries further than one on the snow. Open water is still a hole.
+func _ice() -> void:
+	await _new_arena()
+	var sheet := IceSheet.new()
+	sheet.size = Vector2(8, 6)
+	_arena.add_child(sheet)
+	var pool := SlowZone.new()
+	pool.radius = 1.0
+	pool.position = Vector3(20, 0, 0)
+	_arena.add_child(pool)
+	var dog := _dog(Vector3(0, 0, 0))
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	_check(is_equal_approx(dog.traction, sheet.traction), "a dog on the ice loses its grip (%.2f)" % dog.traction)
+	dog.set_slow(pool, 0.5)
+	_check(is_equal_approx(dog.speed_scale, 0.5) and dog.traction < 1.0, "ice and a slow stack rather than replace each other")
+	# Same input, same time: the dog on ice has picked up far less speed.
+	dog.velocity = Vector3.ZERO
+	dog.clear_slow(pool)
+	dog.input.virtual_move = Vector2.RIGHT
+	for i in 6:
+		await get_tree().physics_frame
+	var icy_speed := dog.velocity.length()
+	dog.input.virtual_move = Vector2.ZERO
+	dog.global_position = Vector3(10, 0, 0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	_check(is_equal_approx(dog.traction, 1.0), "stepping off the ice gives the grip straight back")
+	dog.velocity = Vector3.ZERO
+	dog.input.virtual_move = Vector2.RIGHT
+	for i in 6:
+		await get_tree().physics_frame
+	_check(icy_speed < dog.velocity.length() * 0.6, "on ice a dog gets going slowly (%.1f vs %.1f m/s)" % [icy_speed, dog.velocity.length()])
+	dog.input.virtual_move = Vector2.ZERO
+	# Let go of the stick at speed: on the snow it stops dead, on the ice it slides on.
+	dog.global_position = Vector3(-2, 0, 0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	dog.velocity = Vector3.RIGHT * 6.0
+	for i in 12:
+		await get_tree().physics_frame
+	_check(dog.velocity.length() > 2.0, "and keeps sliding when it lets go (%.1f m/s)" % dog.velocity.length())
+	sheet.queue_free()
+	await get_tree().physics_frame
+	_check(is_equal_approx(dog.traction, 1.0), "an ice sheet that goes away takes its slip with it")
+	var water := Pit.new()
+	water.look = Pit.Look.WATER
+	water.position = Vector3(-10, 0, 0)
+	_arena.add_child(water)
+	var swimmer := _dog(Vector3(-10.3, 0, 0), 1)
+	swimmer.set_physics_process(false)
+	swimmer.receive_whack(Vector3(1, 0, 0), dog)
+	water._handle_dog(swimmer)
+	_check(not swimmer.alive and swimmer.knocked_out_by(null) == dog, "knocked into open water is a knockout, credited to the whacker")
+
+
+## A belt carries a loose toy and a dog standing still; a dog can still walk against it.
+func _conveyor() -> void:
+	await _new_arena()
+	var belt := Conveyor.new()
+	belt.length = 10.0
+	# Wide enough to keep the three apart, so nobody picks the toy up on the way.
+	belt.width = 3.4
+	_arena.add_child(belt)
+	var toy := TOY_SCENE.instantiate() as Toy
+	toy.setup(Game.toys[0])
+	toy.position = Vector3(-3, 0, -1.4)
+	_arena.add_child(toy)
+	toy.state = Toy.State.IDLE
+	var rider := _dog(Vector3(-2, 0, 0))
+	var walker := _dog(Vector3(3, 0, 1.3), 1)
+	walker.input.virtual_move = Vector2.LEFT
+	await get_tree().create_timer(0.5).timeout
+	_check(toy.global_position.x > -2.2, "a loose toy rides the belt (%.2f m)" % (toy.global_position.x + 3.0))
+	_check(rider.global_position.x > -1.0, "a dog standing on it is carried along (%.2f m)" % (rider.global_position.x + 2.0))
+	_check(walker.global_position.x < 2.5, "a dog walking against it still gets somewhere (%.2f m)" % (3.0 - walker.global_position.x))
+	# Ride it into a wall: the wall wins.
+	var wall := Obstacle.new()
+	wall.size = Vector3(1, 1.2, 3)
+	wall.position = Vector3(4, 0, 0)
+	_arena.add_child(wall)
+	walker.input.virtual_move = Vector2.ZERO
+	rider.global_position = Vector3(2.5, 0, 0)
+	await get_tree().create_timer(1.0).timeout
+	_check(rider.global_position.x < 3.5 - rider.effective_radius() + 0.05, "a belt never pushes a dog through a wall (x %.2f)" % rider.global_position.x)
+
+
+## The train laps its loop, bounces a throw off a car, bumps a dog clear and starts each round
+## where it was built.
+func _toy_train() -> void:
+	await _new_arena()
+	var train := ToyTrain.new()
+	_arena.add_child(train)
+	await get_tree().physics_frame
+	var start := train.engine_position()
+	await get_tree().create_timer(0.5).timeout
+	_check(train.engine_position().distance_to(start) > 1.0, "the train runs round its track")
+	# Freeze it mid-lap and throw straight at a car.
+	train.set_physics_process(false)
+	var car := train.cars()[1]
+	var thrower := _dog(Vector3(car.global_position.x, 0, car.global_position.z + 6.0))
+	thrower.set_physics_process(false)
+	var toy := TOY_SCENE.instantiate() as Toy
+	toy.setup(Game.toys[0])
+	toy.position = car.global_position + Vector3(0, Toy.FLY_HEIGHT, 3.0)
+	_arena.add_child(toy)
+	toy.set_physics_process(false)
+	toy.state = Toy.State.FLYING
+	toy.thrower = thrower
+	toy.velocity = Vector3(0, 0, -18.0)
+	await get_tree().physics_frame
+	toy._slide(0.25)
+	_check(toy.velocity.z > 0.0, "a throw bounces off a passing car")
+	_check(toy.global_position.z > car.global_position.z, "and never goes through it")
+	# A dog standing on the rails is bumped to the side the train is not.
+	train.set_physics_process(true)
+	var ahead := train.point_at(train.distance + 1.6)
+	var stander := _dog(train.to_global(ahead.origin) + ahead.basis.z * 0.15, 1)
+	var before := stander.global_position
+	var clear := false
+	for i in 90:
+		await get_tree().physics_frame
+		if not train.near_track(stander.global_position, ToyTrain.CAR.z * 0.5 + stander.effective_radius() - 0.05):
+			clear = true
+	_check(clear and stander.alive, "a dog on the track is bumped clear, not hurt")
+	_check(stander.global_position.distance_to(before) < 4.0, "and only nudged aside, not flung")
+	train.reset_for_round()
+	var home := train.to_global(train.point_at(train.start_distance).origin)
+	_check(train.engine_position().distance_to(home) < 0.01, "the train is back at the start each round")
 
 
 func _check(ok: bool, message: String) -> void:

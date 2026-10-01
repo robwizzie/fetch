@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="HatData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/hat_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"ball_cap"
+display_name = "Ball Cap"
+unlock_text = "Play 3 matches"
+stat = &"matches"
+threshold = 3
+style = 1
+color = Color(0.247, 0.525, 0.878, 1)
+accent = Color(0.949, 0.937, 0.902, 1)

@@ -10,6 +10,12 @@ signal round_over(winner: PlayerSlot)          ## winner is null on a draw
 signal match_over(winner: PlayerSlot)
 
 signal toy_thrown(toy: Node, by: Node)
+## A knockout worth shouting about (see Highlights): kind, who earned it, who it was on.
+signal highlight(kind: StringName, by: PlayerSlot, victim: PlayerSlot)
+## A downed dog was brought back by a pack-mate.
+signal dog_revived(dog: Node, by: Node)
+## A dog barked (the taunt button).
+signal dog_barked(dog: Node)
 ## A wind-up just reached full power.
 signal throw_charged(dog: Node)
 ## A bare-pawed dog swiped at another: the target dropped its toy or went dizzy.
