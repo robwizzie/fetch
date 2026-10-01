@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="HatData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/hat_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"daisy_chain"
+display_name = "Daisy Chain"
+unlock_text = "Catch 10 toys"
+stat = &"catches"
+threshold = 10
+style = 2
+color = Color(1.000, 0.965, 0.878, 1)
+accent = Color(0.949, 0.784, 0.294, 1)

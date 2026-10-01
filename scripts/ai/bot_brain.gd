@@ -9,6 +9,7 @@ var _aim_time := 0.0
 ## goal means it is not winding anything up.
 var _charge_goal := -1.0
 var _charge_held := 0.0
+var _aim_error := Vector3.ZERO
 var _reaction_wait := 0.0
 var _stuck_time := 0.0
 var _detour_time := 0.0
@@ -31,6 +32,12 @@ const HIDDEN_NOTICE := 3.0
 ## How often a bot takes the bait when a rival's decoy is nearer than the rival. Decided once
 ## per decoy, so a bot does not flicker between the two.
 const DECOY_BELIEF := 0.65
+## Per difficulty (easy, normal, hard): chance of ignoring an incoming toy, the pause after a
+## throw, how far off its aim is in metres, and how quickly it moves.
+const LEVEL_IGNORE := [0.75, 0.45, 0.15]
+const LEVEL_PAUSE := [1.6, 1.0, 0.6]
+const LEVEL_AIM_ERROR := [1.6, 0.45, 0.0]
+const LEVEL_PACE := [0.78, 0.92, 1.0]
 var _decoy_verdicts: Dictionary = {}
 
 
@@ -69,6 +76,13 @@ func _physics_process(delta: float) -> void:
 		if away.length() > dog.effective_radius() + fused.data.radius + 0.6 or dog.held_toy != null or fused.ephemeral:
 			dog.input.virtual_move = _steer(dog, away.normalized(), delta)
 			return
+	# Sudden death: out from under anything about to land.
+	for node in get_tree().get_nodes_in_group(SkyDrop.GROUP):
+		var drop := node as SkyDrop
+		if drop != null and drop.threatens(dog.global_position, dog.effective_radius() + 0.3) and _rng.randf() > LEVEL_IGNORE[_level()] * 0.3:
+			var out := Vector2(dog.global_position.x - drop.global_position.x, dog.global_position.z - drop.global_position.z)
+			dog.input.virtual_move = _steer(dog, out.normalized() if out.length() > 0.05 else Vector2.RIGHT, delta)
+			return
 	if rival == null:
 		_search(dog, delta)
 		return
@@ -89,6 +103,10 @@ func _physics_process(delta: float) -> void:
 	# The mode may want the bot somewhere (King of the Bed): holding a toy it goes there unless a
 	# shot is on; empty-pawed it goes there when that is nearer than the next toy.
 	var mode_goal := GameMode.current.bot_goal(dog) if GameMode.current != null else Vector3.INF
+	# A downed pack-mate nearby with no rival on top of it: go and stand on it.
+	var rescue := _pack_mate_to_revive(dog)
+	if rescue != Vector3.INF:
+		mode_goal = rescue
 	if mode_goal != Vector3.INF:
 		if dog.held_toy != null or goal == aim_at or dog.global_position.distance_to(mode_goal) < dog.global_position.distance_to(goal):
 			goal = mode_goal
@@ -121,7 +139,7 @@ func _physics_process(delta: float) -> void:
 					dog.input.virtual_buttons[&"throw"] = true
 				else:
 					# Leaving the button up this frame is what throws it.
-					_attack_wait = _rng.randf_range(0.9, 1.6)
+					_attack_wait = _rng.randf_range(0.9, 1.6) * LEVEL_PAUSE[_level()]
 					_aim_time = 0.0
 					_charge_goal = -1.0
 			_react(dog)
@@ -129,7 +147,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		_aim_time = 0.0
 		_charge_goal = -1.0
-	dog.input.virtual_move = _move_along_route(dog, goal, delta) * 0.92
+	dog.input.virtual_move = _move_along_route(dog, goal, delta) * LEVEL_PACE[_level()]
 	_react(dog)
 
 
@@ -148,11 +166,38 @@ func _search(dog: Dog, delta: float) -> void:
 	if treat:
 		goal = treat.global_position
 	var mode_goal := GameMode.current.bot_goal(dog) if GameMode.current != null else Vector3.INF
+	# A downed pack-mate nearby with no rival on top of it: go and stand on it.
+	var rescue := _pack_mate_to_revive(dog)
+	if rescue != Vector3.INF:
+		mode_goal = rescue
 	if mode_goal != Vector3.INF and (goal == Vector3.ZERO or dog.global_position.distance_to(mode_goal) < dog.global_position.distance_to(goal)):
 		goal = mode_goal
 	var flat := Vector2(goal.x - dog.global_position.x, goal.z - dog.global_position.z)
-	dog.input.virtual_move = _move_along_route(dog, goal, delta) * 0.92 if flat.length() > 1.0 else Vector2.ZERO
+	dog.input.virtual_move = _move_along_route(dog, goal, delta) * LEVEL_PACE[_level()] if flat.length() > 1.0 else Vector2.ZERO
 	_react(dog)
+
+
+func _pack_mate_to_revive(dog: Dog) -> Vector3:
+	for node in get_tree().get_nodes_in_group(ReviveSpot.GROUP):
+		var spot := node as ReviveSpot
+		if spot == null or not is_instance_valid(spot.dog) or not spot.dog.slot.allied_with(dog.slot):
+			continue
+		if dog.global_position.distance_to(spot.global_position) > 14.0:
+			continue
+		var guarded := false
+		for other in get_tree().get_nodes_in_group("dogs"):
+			if other is Dog and other.alive and not other.slot.allied_with(dog.slot) \
+					and other.global_position.distance_to(spot.global_position) < 3.5:
+				guarded = true
+		if not guarded:
+			return spot.global_position
+	return Vector3.INF
+
+
+## The seat's difficulty: 0 easy, 1 normal, 2 hard.
+func _level() -> int:
+	var dog := get_parent() as Dog
+	return clampi(dog.slot.cpu_level, 0, 2) if dog != null and dog.slot != null else 1
 
 
 ## How much wind-up this shot needs to still be dangerous when it lands, worked out from the
@@ -173,7 +218,11 @@ func _charge_for(dog: Dog, distance: float) -> float:
 
 ## Where to throw: the rival, unless a decoy of theirs is nearer and this bot believes it.
 func _aim_point(dog: Dog, rival: Dog) -> Vector3:
-	var best := rival.global_position
+	# Easy bots miss by a margin, hard ones lead a moving target; the error is fixed per target
+	# lock so the aim does not jitter frame to frame.
+	var best := rival.global_position + _aim_error
+	if _level() == 2:
+		best += rival.velocity * 0.25
 	var best_distance := dog.global_position.distance_to(best)
 	for node in get_tree().get_nodes_in_group("decoys"):
 		var decoy := node as Decoy
@@ -199,6 +248,8 @@ func _committed_rival(dog: Dog) -> Dog:
 	if nearest != _target:
 		_target = nearest
 		_target_time = TARGET_COMMIT
+		var spread: float = LEVEL_AIM_ERROR[_level()]
+		_aim_error = Vector3(_rng.randf_range(-spread, spread), 0, _rng.randf_range(-spread, spread))
 	elif valid:
 		_target_time = TARGET_COMMIT * 0.5
 	return _target
@@ -274,8 +325,8 @@ func _react(dog: Dog) -> void:
 			continue
 		if (to_dog - heading * along).length() > dog.effective_radius() + toy.data.radius:
 			continue
-		_reaction_wait = _rng.randf_range(0.7, 1.3)
-		if _rng.randf() < 0.45:
+		_reaction_wait = _rng.randf_range(0.7, 1.3) * (0.55 if _level() == 2 else 1.0)
+		if _rng.randf() < LEVEL_IGNORE[_level()]:
 			return
 		if dog.held_toy == null:
 			dog.input.virtual_buttons[&"throw"] = true

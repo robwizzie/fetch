@@ -33,7 +33,8 @@ func _ready() -> void:
 			node.free()
 
 	# Keyboards name their real keys, including every alternative the input code accepts.
-	_check(DeviceInput.glyph(&"dash", DeviceInput.KEYBOARD_WASD) == "Shift or E", "WASD dash lists both keys")
+	_check(DeviceInput.glyph(&"dash", DeviceInput.KEYBOARD_WASD) == "Shift", "WASD dash is Shift, either side")
+	_check(DeviceInput.glyph(&"dash", DeviceInput.KEYBOARD_ARROWS) == "/", "Arrows dash is one key")
 	_check(DeviceInput.glyph(&"throw", DeviceInput.KEYBOARD_ARROWS) == "Enter", "Arrows throw is Enter")
 	_check(DeviceInput.controls_line(DeviceInput.KEYBOARD_WASD).contains("Esc pause"), "the line includes pause")
 
@@ -47,19 +48,27 @@ func _ready() -> void:
 	_check(DeviceInput.button_label(&"throw", [wasd, _slot(DeviceInput.KEYBOARD_WASD, false)]) == "Space", "no repeats")
 	_check(DeviceInput.button_label(&"throw", []).contains("Space"), "before anyone joins, the keyboards are listed")
 
-	# The match HUD shows each player's own line.
+	# Controls stay off the play screen; the pause menu lists each player's own keys, bark included.
 	Game.clear_players()
 	Game.slots.append(wasd)
 	Game.slots.append(bot)
 	var hud: Node = load("res://scenes/ui/hud.tscn").instantiate()
 	add_child(hud)
-	var hint := hud._control_hint(Game.slots) as String
-	_check(hint.begins_with(wasd.label) and hint.contains("Space"), "the HUD names P1's keys")
-	_check(not hint.contains("Enter") and not hint.contains("stick"), "and nothing nobody is using")
+	hud.setup(Game.slots, "Test")
+	var words: Array[String] = []
+	for label in hud.get_node("PauseMenu").find_children("*", "Label", true, false):
+		words.append((label as Label).text.to_upper())
+	var shown := " ".join(words)
+	_check(shown.contains("SPACE") and shown.contains("BARK") and shown.contains("Q"), "the pause menu names P1's keys, bark too")
+	_check(not shown.contains("ENTER") and not shown.contains("STICK"), "and nothing nobody is using")
+	var on_cards := false
+	for node in hud.find_children("Keys", "", true, false):
+		on_cards = true
+	_check(not on_cards, "no key rows sit on the score cards")
 	hud.queue_free()
 
 	if not _failed:
-		print("[controls] PASSED: printed labels per pad family, keyboard keys, joined-only prompts, per-player HUD")
+		print("[controls] PASSED: printed labels per pad family, keyboard keys, joined-only prompts, pause-menu controls")
 	get_tree().quit(1 if _failed else 0)
 
 

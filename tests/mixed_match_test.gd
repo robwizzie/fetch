@@ -9,6 +9,9 @@ var _game_match: Node
 var _records: Array[Dictionary] = []
 var _scores_before: Array[int] = []
 var _scored_rounds := 0
+## Self-bonks this round, per seat. Played for rounds they must cost nothing.
+var _self_bonks: Array[int] = [0, 0, 0, 0]
+var _expected_total := 0
 var _draws := 0
 var _eliminations := 0
 var _opening_round := 0
@@ -20,6 +23,8 @@ func _ready() -> void:
 	# Machine settings must not decide what these assertions see.
 	Game.knockout_slowmo = true
 	Game.screen_shake = true
+	# The replay plays in its own slow motion; it has its own suite (replay_ghost_test).
+	Game.replays = false
 	# These suites assert on a normal scored round, so skip the one-off practice round.
 	Game.tutorial_shown = true
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -28,7 +33,10 @@ func _ready() -> void:
 	Game.powerups_enabled = true
 	Game.selected_mode = load("res://data/modes/01_last_dog_standing.tres")
 	Events.round_over.connect(_on_round_over)
-	Events.dog_eliminated.connect(func(_dog: Node, _toy: Node) -> void: _eliminations += 1)
+	Events.dog_eliminated.connect(func(dog: Node, toy: Node) -> void:
+		_eliminations += 1
+		if toy is Toy and (toy as Toy).thrower == dog and is_instance_valid(_game_match) and _game_match.phase == _game_match.Phase.PLAYING:
+			_self_bonks[(dog as Dog).slot.index] += 1)
 	await get_tree().process_frame
 	for arena_index in Game.arenas.size():
 		await _run_arena(arena_index)
@@ -52,6 +60,8 @@ func _run_arena(arena_index: int) -> void:
 	Game.selected_arena = Game.arenas[arena_index]
 	_records.clear()
 	_scores_before = [0, 0, 0, 0]
+	_self_bonks = [0, 0, 0, 0]
+	_expected_total = 0
 	_scored_rounds = 0
 	_draws = 0
 	_eliminations = 0
@@ -74,7 +84,7 @@ func _run_arena(arena_index: int) -> void:
 	var arena_name: String = Game.selected_arena.display_name
 	_check(_scored_rounds >= 2 and validated >= 2, "two naturally scored rounds in " + arena_name)
 	_check(_eliminations >= 6, "real combat produces six eliminations in " + arena_name)
-	_check(_sum_scores() == _scored_rounds, "one total point per scored round in " + arena_name)
+	_check(_sum_scores() == _expected_total, "the board adds up in " + arena_name)
 	print("[mixed-match] %s: %.1fs, %d scored rounds, %d draws, %d KOs, up to %d treats, buff=%s" % [arena_name, elapsed, _scored_rounds, _draws, _eliminations, _max_treat_count, _buff_seen])
 	_game_match.queue_free()
 	await get_tree().process_frame
@@ -105,9 +115,14 @@ func _on_round_over(winner: PlayerSlot) -> void:
 	var scores: Array[int] = []
 	for slot in Game.slots:
 		scores.append(slot.score)
-		var expected := 1 if slot == winner else 0
-		_check(slot.score - _scores_before[slot.index] == expected, "only round winner receives one point")
+		# Played for rounds, a self-bonk costs nothing: only the round winner scores.
+		var expected := _scores_before[slot.index] + (1 if slot == winner else 0)
+		_check(slot.score == expected, "only the round winner scores, self-bonks or not")
 	_scores_before = scores.duplicate()
+	_self_bonks = [0, 0, 0, 0]
+	_expected_total = 0
+	for score in scores:
+		_expected_total += score
 	if winner:
 		_scored_rounds += 1
 	else:

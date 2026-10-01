@@ -41,9 +41,10 @@ godot --headless --path . --import   # second pass: clean
 |---|---|---|---|
 | Join (dog select) | A / Start | Space | Enter |
 | Move | Left stick / D-pad | WASD | Arrow keys |
-| Throw / Catch / Pick up | X (or Y, RT) · LT also catches | Space | Enter |
+| Throw / Catch / Pick up | X (or RT) · LT also catches | Space | Enter |
 | Wind up a harder throw | Hold the throw button | Hold Space | Hold Enter |
-| Dash (invincible) | A or RB | Left Shift or E | Right Ctrl, `/` or Numpad 0 |
+| Dash (invincible) | A or RB | Shift (either) | `/` |
+| Bark (taunt) · next hat on Choose Your Dog | Y | Q | `.` |
 | Pause / resume | Start | Esc | Esc |
 | Confirm (menus) | A / X | Space | Enter |
 | Back / leave | B / Back | Esc | Backspace |
@@ -114,8 +115,8 @@ CI imports the project and runs the regression suites on every push (`.github/wo
 - ✅ Ten Boomerang Fu-style mystery power-ups (Telepawthy, Ghost Pup, Dig!, Squeaky Kaboom, Triple Fetch and more) with persistent belts and animated reveals, animated mouth grips, safe wall ricochets and swept projectile hits
 - ✅ Refined toy models and themed arena props, plus Sunflower Courtyard and Moonlit Rooftop
 - ✅ Hit-stop followed by KO slow motion, particles, floating text
-- ✅ Procedural soundtrack (menu / match / victory) and a synthesised effects kit, on separate mixable buses
+- ✅ Recorded CC0 soundtrack (menu / match / victory) and effects, with a bark per breed; procedural fallbacks; separate mixable buses
 - ✅ Fully 3D asset import/animation contract, validator and reference comparison studio
 - ✅ Four modes (Last Dog Standing, Hot Potato Bone, King of the Bed, Golden Ball); holes to knock rivals into, crates that break, switch-driven swing boards
-- ✅ Controller rumble and comfort settings: slow motion, screen shake, colour-blind palette, button prompts
-- ⏳ Authored furred dog meshes/rigs, real audio, online play: see `docs/ART_DIRECTION.md`
+- ✅ Controller rumble and comfort settings: slow motion, screen shake, colour-blind palette, final-bonk replay
+- ⏳ Authored furred dog meshes/rigs, online play: see `docs/ART_DIRECTION.md`

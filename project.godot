@@ -24,6 +24,7 @@ Juice="*res://autoload/juice.gd"
 Sfx="*res://autoload/sfx.gd"
 Music="*res://autoload/music.gd"
 Rumble="*res://autoload/rumble.gd"
+Progress="*res://autoload/progress.gd"
 
 [display]
 

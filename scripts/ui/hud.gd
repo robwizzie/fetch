@@ -9,6 +9,8 @@ signal banner_finished
 
 @onready var scores: HBoxContainer = %Scores
 @onready var center: Label = %Center
+var _replay_frame: Control
+var _callout: Label
 var _pause_controls: VBoxContainer
 @onready var hint: Label = %Hint
 
@@ -24,6 +26,7 @@ var _countdown_index := 0
 var _sequence_time := 0.0
 var _banner_time := 0.0
 var _board: RoundBoard
+var _effects_layer: Control
 var _awards: Dictionary = {}
 
 
@@ -75,10 +78,59 @@ func refresh_scores() -> void:
 		var chip: PanelContainer = _chips[slot]
 		var dots: HBoxContainer = chip.get_node("VBox/Dots")
 		for i in dots.get_child_count():
-			var dot: ColorRect = dots.get_child(i)
-			dot.color = UiKit.YELLOW if i < Game.score_for(slot) else Color(1, 1, 1, 0.18)
+			var dot := dots.get_child(i) as ColorRect
+			if dot != null:
+				dot.color = UiKit.YELLOW if i < Game.score_for(slot) else Color(1, 1, 1, 0.18)
+		var count := dots.get_node_or_null("Count") as Label
+		if count != null:
+			count.text = "%d / %d" % [Game.score_for(slot), Game.points_to_win]
+		(dots.get_node("Tally") as Label).text = "%d bonk%s · out %d" % [slot.knockouts, "" if slot.knockouts == 1 else "s", slot.bonked]
 		if Game.score_for(slot) > 0:
 			Juice.pop(chip, 1.15)
+
+
+## A self-bonk took a point off [param slot]: the bone it cost pops off that player's card and
+## snaps, and the card flashes red and shudders. [param was] is the score before the loss.
+func lose_bone(slot: PlayerSlot, was: int) -> void:
+	if not _chips.has(slot):
+		return
+	var chip: PanelContainer = _chips[slot]
+	var dots: HBoxContainer = chip.get_node("VBox/Dots")
+	# Off the pip that just went dark, or the running count when the goal is a number.
+	var source: Control = dots.get_node_or_null("Count")
+	if source == null and was - 1 < dots.get_child_count():
+		source = dots.get_child(maxi(was - 1, 0)) as Control
+	if source == null:
+		source = chip
+	var at := source.get_global_rect().get_center()
+	BoneBreak.play(self_layer(), at)
+	# A red wash over the card that fades: the card's own tint is reset every frame (it dims
+	# while its dog is out), so it cannot carry the flash itself.
+	var wash := Panel.new()
+	wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var red := StyleBoxFlat.new()
+	red.bg_color = Color(1.0, 0.22, 0.18, 0.7)
+	red.set_corner_radius_all(12)
+	wash.add_theme_stylebox_override("panel", red)
+	chip.add_child(wash)
+	var flash := wash.create_tween().set_ignore_time_scale(true)
+	flash.tween_property(wash, "modulate:a", 0.0, 0.8).set_delay(0.15)
+	flash.tween_callback(wash.queue_free)
+	var home := chip.position
+	var shake := chip.create_tween().set_ignore_time_scale(true)
+	for i in 6:
+		shake.tween_property(chip, "position:x", home.x + (7.0 if i % 2 == 0 else -7.0) * (1.0 - i / 6.0), 0.04)
+	shake.tween_property(chip, "position:x", home.x, 0.04)
+
+
+## A full-screen control on this layer for loose effects to live on.
+func self_layer() -> Control:
+	if not is_instance_valid(_effects_layer):
+		_effects_layer = Control.new()
+		_effects_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_effects_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_effects_layer)
+	return _effects_layer
 
 
 func countdown(round_number: int) -> void:
@@ -287,10 +339,25 @@ func _make_chip(slot: PlayerSlot) -> PanelContainer:
 	var dots := HBoxContainer.new()
 	dots.name = "Dots"
 	dots.add_theme_constant_override("separation", 6)
-	for i in Game.points_to_win:
+	# A long goal (first to 15 bonks) would be a row of pips wider than the card; it is a number.
+	var pips := Game.points_to_win <= 7
+	for i in (Game.points_to_win if pips else 0):
 		var dot := ColorRect.new()
 		dot.custom_minimum_size = Vector2(24, 10)
 		dots.add_child(dot)
+	if not pips:
+		var count := UiKit.label("", 18, UiKit.YELLOW)
+		count.name = "Count"
+		count.autowrap_mode = TextServer.AUTOWRAP_OFF
+		count.add_theme_font_override("font", UiKit.FONT_DISPLAY)
+		dots.add_child(count)
+	# This match's story so far: rivals bonked and times out.
+	var tally := UiKit.label("", 15, Color(1, 1, 1, 0.8))
+	tally.name = "Tally"
+	tally.autowrap_mode = TextServer.AUTOWRAP_OFF
+	tally.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tally.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	dots.add_child(tally)
 	vbox.add_child(dots)
 	vbox.add_child(_wind_up_bar())
 	var status := UiKit.label("FIND A TOY · DASH READY", 16, UiKit.CREAM)
@@ -298,35 +365,7 @@ func _make_chip(slot: PlayerSlot) -> PanelContainer:
 	status.autowrap_mode = TextServer.AUTOWRAP_OFF
 	status.add_theme_font_override("font", UiKit.FONT_UI)
 	vbox.add_child(status)
-	if not slot.is_bot and slot.device != DeviceInput.VIRTUAL:
-		vbox.add_child(_key_row(slot))
 	return chip
-
-
-## This player's two buttons, named for what they do right now: the throw button is CATCH with
-## empty paws and THROW with a toy, and the dash key dims while it recharges. The first thing a
-## new player looks for is their own card, so that is where their buttons are.
-func _key_row(slot: PlayerSlot) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.name = "Keys"
-	row.add_theme_constant_override("separation", 6)
-	row.add_child(UiKit.keycaps(&"throw", slot.device, 15))
-	var verb := UiKit.label("CATCH", 15, UiKit.YELLOW)
-	verb.name = "Verb"
-	verb.autowrap_mode = TextServer.AUTOWRAP_OFF
-	verb.add_theme_font_override("font", UiKit.FONT_DISPLAY)
-	verb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(verb)
-	var dash := HBoxContainer.new()
-	dash.name = "Dash"
-	dash.add_theme_constant_override("separation", 6)
-	dash.add_child(UiKit.keycaps(&"dash", slot.device, 15))
-	var word := UiKit.label("DASH", 15, UiKit.CREAM)
-	word.autowrap_mode = TextServer.AUTOWRAP_OFF
-	word.add_theme_font_override("font", UiKit.FONT_DISPLAY)
-	dash.add_child(word)
-	row.add_child(dash)
-	return row
 
 
 ## A thin power bar under the score dots. It is only there while a throw is being wound up,
@@ -354,8 +393,8 @@ func _wind_up_bar() -> Control:
 func _build_clock() -> void:
 	_clock = UiKit.label("ROUND 1  ·  0:45", 26, UiKit.CREAM)
 	_clock.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_clock.offset_left = -190
-	_clock.offset_right = 190
+	_clock.offset_left = -340
+	_clock.offset_right = 340
 	_clock.offset_top = 126
 	_clock.offset_bottom = 164
 	_clock.add_theme_font_override("font", UiKit.FONT_UI)
@@ -390,6 +429,64 @@ func _stack_under_cards() -> void:
 	_announcement.offset_bottom = top + 74.0
 
 
+## Letterbox bars and a REPLAY tag while the final bonk is shown again.
+func show_replay(on: bool) -> void:
+	if on and not is_instance_valid(_replay_frame):
+		_replay_frame = Control.new()
+		_replay_frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_replay_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_replay_frame)
+		for top in [true, false]:
+			var bar := ColorRect.new()
+			bar.color = Color(0, 0, 0, 0.88)
+			bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			bar.set_anchors_preset(Control.PRESET_TOP_WIDE if top else Control.PRESET_BOTTOM_WIDE)
+			bar.custom_minimum_size = Vector2(0, 110)
+			if not top:
+				bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+			_replay_frame.add_child(bar)
+		var tag := UiKit.title("REPLAY", 54, Color(1.0, 0.36, 0.3))
+		tag.position = Vector2(48, 24)
+		_replay_frame.add_child(tag)
+		var hint := UiKit.label("%s to skip" % DeviceInput.button_label(&"confirm", Game.slots), 20, Color(1, 1, 1, 0.7))
+		hint.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		hint.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+		hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		hint.offset_right = -40
+		hint.offset_bottom = -40
+		hint.autowrap_mode = TextServer.AUTOWRAP_OFF
+		_replay_frame.add_child(hint)
+	elif not on and is_instance_valid(_replay_frame):
+		_replay_frame.queue_free()
+		_replay_frame = null
+	scores.visible = not on
+
+
+## A great moment, called out big across the top of the arena with a sting.
+func callout(text: String, color: Color) -> void:
+	if is_instance_valid(_callout):
+		_callout.queue_free()
+	_callout = UiKit.title(text, 84, color.lightened(0.15))
+	_callout.add_theme_constant_override("outline_size", 16)
+	_callout.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_callout.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_callout.offset_top = 250
+	_callout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_callout)
+	_callout.pivot_offset = Vector2(_callout.get_minimum_size().x * 0.5, 50)
+	_callout.rotation_degrees = randf_range(-6.0, 6.0)
+	var label := _callout
+	label.scale = Vector2.ONE * 0.3
+	var show := label.create_tween()
+	show.tween_property(label, "scale", Vector2.ONE * 1.1, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	show.tween_property(label, "scale", Vector2.ONE, 0.1)
+	show.tween_interval(0.9)
+	show.tween_property(label, "modulate:a", 0.0, 0.3)
+	show.tween_callback(label.queue_free)
+	Sfx.play("fanfare", 1.5, -5.0)
+	Sfx.play("treat", 1.3, -4.0)
+
+
 func announce(text: String) -> void:
 	_announcement.text = text
 	_announcement_time = 3.0
@@ -400,6 +497,11 @@ func update_match(dogs: Array[Dog], seconds: float, round_number: int) -> void:
 	var remaining := ceili(seconds)
 	_clock.text = "ROUND %d  ·  %d:%02d" % [round_number, remaining / 60, remaining % 60]
 	_clock.add_theme_color_override("font_color", UiKit.YELLOW if remaining <= 10 else UiKit.CREAM)
+	if round_number > 0 and seconds <= 10.0:
+		# Sudden death, then overtime: the clock says so, in red, pulsing.
+		var pulse := 0.75 + 0.25 * sin(Time.get_ticks_msec() * 0.012)
+		_clock.text = "ROUND %d  ·  %s" % [round_number, "OVERTIME!" if seconds <= 0.0 else "SUDDEN DEATH  0:%02d" % remaining]
+		_clock.add_theme_color_override("font_color", Color(1.0, 0.42, 0.3, pulse))
 	# The controls line teaches the warm-up and the first round, then gets off the floor: two
 	# lines of small print over the near wall is the last thing a round two needs.
 	hint.modulate.a = move_toward(hint.modulate.a, 1.0 if round_number <= 1 else 0.0, 0.02)
@@ -415,7 +517,11 @@ func update_match(dogs: Array[Dog], seconds: float, round_number: int) -> void:
 		var fill: ColorRect = wind_up.get_node("Fill")
 		fill.offset_right = wind_up.size.x * charge
 		fill.color = Color.WHITE if charge >= 1.0 else UiKit.YELLOW
-		if not dog.alive:
+		if not dog.alive and get_tree().get_nodes_in_group(&"ghosts").any(func(g: Node) -> bool: return (g as GhostDog).slot == dog.slot):
+			status.text = "GHOST · %s BOO! · %s NUDGE A TOY" % [DeviceInput.short_glyph(&"bark", dog.slot.device).to_upper(), DeviceInput.short_glyph(&"throw", dog.slot.device).to_upper()]
+		elif not dog.alive and not get_tree().get_nodes_in_group(ReviveSpot.GROUP).filter(func(s: Node) -> bool: return (s as ReviveSpot).dog == dog).is_empty():
+			status.text = "DOWN · A PACK-MATE CAN REVIVE YOU"
+		elif not dog.alive:
 			status.text = "DOGHOUSE · BACK NEXT ROUND"
 		else:
 			var toy_status := dog.held_toy.data.display_name.to_upper() if dog.held_toy else "FIND A TOY"
@@ -425,17 +531,7 @@ func update_match(dogs: Array[Dog], seconds: float, round_number: int) -> void:
 				toy_status = "WINDING UP"
 			if dog.dizzy_time > 0.0:
 				toy_status = "SEEING STARS"
-			var keys := chip.get_node_or_null("VBox/Keys")
-			if keys == null:
-				status.text = "%s · %s" % [toy_status, "DASH READY" if dog.dash_ready() else "DASH RECHARGING"]
-			else:
-				# The key row carries the dash state, so the status line is just the toy.
-				status.text = toy_status
-				keys.visible = Game.control_hints == Game.ControlHints.ALWAYS \
-					or (Game.control_hints == Game.ControlHints.FIRST_ROUNDS and round_number <= 2)
-				var verb: Label = keys.get_node("Verb")
-				verb.text = "LET GO!" if charge > 0.0 else ("THROW (HOLD)" if dog.held_toy else "CATCH")
-				(keys.get_node("Dash") as Control).modulate.a = 1.0 if dog.dash_ready() else 0.35
+			status.text = "%s · %s" % [toy_status, "DASH READY" if dog.dash_ready() else "DASH RECHARGING"]
 		var belt := chip.get_node("VBox/Belt")
 		for i in belt.get_child_count():
 			var socket := belt.get_child(i) as Panel
@@ -446,28 +542,6 @@ func update_match(dogs: Array[Dog], seconds: float, round_number: int) -> void:
 				if held != &"":
 					socket.pivot_offset = socket.size * 0.5
 					Juice.pop(socket, 1.5, 0.3)
-
-
-## Each human's own controls, named as printed on what they are holding. Players sharing a
-## layout share a line ("P1 P3 · ..."), and bots are left out.
-func _control_hint(slots: Array[PlayerSlot]) -> String:
-	var lines: Array[String] = []
-	var owners: Array[String] = []
-	for slot in slots:
-		if slot.is_bot or slot.device == DeviceInput.VIRTUAL:
-			continue
-		var line := DeviceInput.controls_line(slot.device)
-		var at := lines.find(line)
-		if at < 0:
-			lines.append(line)
-			owners.append(slot.label)
-		else:
-			owners[at] += " " + slot.label
-	var parts: Array[String] = []
-	for i in lines.size():
-		parts.append("%s  %s" % [owners[i], lines[i]])
-	# Two layouts fit side by side; more stack, one line each, so nothing runs off the screen.
-	return ("   |   " if parts.size() <= 2 else "\n").join(parts)
 
 
 func _build_pause() -> void:
@@ -521,7 +595,7 @@ func _controls_card(slots: Array[PlayerSlot]) -> VBoxContainer:
 		for other in slots:
 			if other.device == slot.device and not other.is_bot:
 				row.add_child(UiKit.chip(other.label, other.color, 18))
-		for pair in [[&"move", "move"], [&"throw", "throw / catch"], [&"dash", "dash"]]:
+		for pair in [[&"move", "move"], [&"throw", "throw / catch"], [&"dash", "dash"], [&"bark", "bark"]]:
 			var spacer := Control.new()
 			spacer.custom_minimum_size = Vector2(8, 0)
 			row.add_child(spacer)
@@ -538,6 +612,9 @@ func _controls_card(slots: Array[PlayerSlot]) -> VBoxContainer:
 func show_pause(paused: bool) -> void:
 	_pause_overlay.visible = paused
 	if paused:
+		# Over everything else on the HUD - the round board and practice cards are added after
+		# the pause menu, so without this they drew on top of it.
+		_pause_overlay.move_to_front()
 		_resume.grab_focus()
 	else:
 		_resume.release_focus()

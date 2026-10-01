@@ -36,8 +36,10 @@ reported name; Settings can force it either way).
 Arena thumbnails in `images/arenas/` are rendered by `tools/build_arena_thumbnails.gd` and shown
 on the setup screen and in the gallery. Re-run it after changing an arena's layout.
 
-Audio is synthesised, not loaded: `Sfx` builds its one-shots at startup and `Music` sequences
-three looping tracks on a worker thread, mixed on separate `SFX` and `Music` buses. Screens ask
+Audio prefers recordings and falls back to synthesis: `Sfx` plays recorded takes where a folder
+exists and builds the rest at startup, and `Music` loops `assets/audio/music/<track>.ogg` (menu,
+match, victory), sequencing any missing track on a worker thread. Both mix on separate `SFX` and
+`Music` buses. Screens ask
 for a track by name and repeating the current one is a no-op, so the front end keeps one piece
 playing across scene changes. A knockout ducks the music briefly.
 
@@ -63,7 +65,8 @@ autoload/
   events.gd   Events         Signal bus (player_joined, round_over, dog_eliminated, toy_caught, ...)
   game.gd     Game           Session state: joined PlayerSlots, selected arena/toy/mode, content registry, goto()
   juice.gd    Juice          shake(), hitstop(), pop(), squash(), float_text(), burst()
-  sfx.gd      Sfx            play("bonk") — synthesised placeholder sounds; swap streams for real files
+  sfx.gd      Sfx            play("bonk"), bark(breed) — recorded takes first, synthesised kit as fallback
+  music.gd    Music          play("menu"), duck() — recorded loops first, sequenced render as fallback
 scripts/
   player_slot.gd             One joined player: index, device, dog, score, ready, colour
   input/device_input.gd      Per-device polling: gamepad N, keyboard WASD, keyboard arrows, VIRTUAL (bots/tests)
@@ -118,8 +121,9 @@ the camera (screen-down). Input `Vector2(x, y)` maps to `Vector3(x, 0, y)`. Dogs
 **Button prompts.** Never hard-code a button name. `DeviceInput.glyph(action, device)` returns what is
 printed on that device (pads are mapped by position, so throw is X on Xbox, Square on PlayStation, Y on
 Switch; `pad_family()` tells them apart by vendor id and name). `button_label(action, slots)` lists only
-the joined humans' buttons, without repeats; `controls_line(device)` is the full one-line summary the HUD
-shows per player. `tests/controls_test.tscn` covers it.
+the joined humans' buttons, without repeats; `controls_line(device)` is the full one-line summary. Controls are shown in
+How to Play, the practice pens (`PracticeCard`) and the pause menu - never on the play screen itself. Each
+keyboard layout has exactly one dash key (Shift, either side / "/"). `tests/controls_test.tscn` covers it.
 
 **Physics layers.** 1 walls · 2 dogs · 3 toys · 4 zones · 5 sight lines only. Dogs collide with walls and
 dogs. Toys collide with walls and with each other, and detect dogs through their `HitArea`. Dogs detect
@@ -162,7 +166,9 @@ freezes actors during the HUD countdown, then listens to `Events.dog_eliminated`
 (throws, swipes and blasts all use it) and `can_hurt()` for self/team fire. Hit tests use
 `Dog.effective_radius()`. Slows are owned by
 their source (`Dog.set_slow(source, factor)` / `clear_slow(source)`); the strongest active one wins, so
-leaving one zone never cancels another.
+leaving one zone never cancels another. Ice works the same way through `Dog.set_traction` / `clear_traction`:
+`traction` scales the dog's accel, brake and turn rates and how fast a push wears off, separately
+from `speed_scale`, so ice and a slow zone stack.
 
 **Power-ups.** Every kind changes how a dog plays (Boomerang Fu's rule), never just a stat. A belt holds
 each kind once, capped at `PowerupKinds.MAX_SLOTS`. Every grant goes through `PlayerSlot.take_powerup()`,
@@ -195,9 +201,25 @@ the impact after the bank. Good Decoy leaves a `Decoy` on each dash that pops wh
 bots believe a given decoy `BotBrain.DECOY_BELIEF` of the time. A throw's trail takes the colours of the
 powers it carries (`ToyPowerEffects.trail_colors`).
 
-**Knockouts.** `DogModel._tumble` launches every dog the same way, then finishes with a breed joke: the Lab
-flops flat, the pit bull spins like a top, the corgi rolls like a loaf, the spaniel's ears fly up
-(`DogPoseMotion.ears_up`), the golden lands legs-up. A knocked-out dog is napping, not gone: sleepy z's drift up in its colour (`_snooze`).
+**Knockouts.** `DogModel._tumble` is one calm knockdown for every breed: a short hop back along the hit, a
+tip onto the side with a slight twist (never a spin), one small bounce. A knocked-out dog is napping, not
+gone: sleepy z's drift up in its colour (`_snooze`).
+
+**Final-bonk replay.** `Replay` records the last 3 s of play: where every dog and toy was (toys by
+instance id, with their whole transform, so a toy in a mouth stays in it), plus every call made on a
+`DogModel` - throw, catch, dash, wind-up, bark, whack, hat, crown, knockdown - which the model announces on
+its `acted` signal. Playback builds stand-ins, puts them in the state they were in when the replay starts,
+and replays each call at its moment, at `Engine.time_scale = 0.4` so their animation slows too.
+Everything else under `Match.actors` - shield bubbles, power-up halos, rings, name tags, crates, mud,
+decoys and ghosts - is mirrored node by node from per-frame snapshots (bare copies, placed and shown as
+recorded), charge meters are redrawn from their recorded fill, and every `Juice` word and burst
+(`Juice.spawned`) is made again where and when it was. The crown
+and victory calls the result makes on the deciding tick are left out. The camera stands side-on to the
+throw, wide enough for thrower and victim, then pushes in on the knockdown.
+
+**Dog select.** Roster grid across the top; a seat per player underneath. A seat is a character card for
+whatever that player's cursor is on - the dog turning on a spotlight, its name and one line, and its four
+ratings (`DogData.*_rating`) - so dogs are compared by moving across the grid.
 
 **Behind walls.** Each dog checks the camera's line of sight to its body every 0.1 s (outer boundary
 colliders are ignored because the visible fence is lower). When hidden, `DogModel.set_silhouette` fades
@@ -209,10 +231,18 @@ front, nudged toward the camera so a dog never shows through itself.
 lane on a timer and knocks dogs dizzy with a null-attacker whack), `TallGrass` (Pup Beach, conceals dogs
 via `Dog.set_cover`; moving rustles, throwing or dashing reveals), `DogBed` (Living Room, an
 `AnimatableBody3D` that slides when a toy hits it). Warp Yard's gimmick is its doggy doors.
+`IceSheet` (Frozen Pond, a rounded rectangle of ice: dogs on it keep only `traction` of their grip, so
+they get going, stop and turn slowly and slide, and loose toys skid further). `Conveyor` (Kitchen, a
+belt that carries dogs through their own collider with `move_and_collide` and tops idle toys up to belt
+speed, so it can never push anyone through a wall). `ToyTrain` (Toy Room, an engine and wagons lapping a
+stadium-shaped track; every car is an `AnimatableBody3D` on the world layer, so throws bounce off
+whichever car is passing; it bumps dogs and toys off the rails to the side they are on, keeps
+`TRACK_CLEARANCE` from anything solid so it cannot pin a dog, and goes back to the start each round).
 
 **Arena mechanics.** `Pit` (Backyard's dug holes): walking in stops at the rim, but a dog moved by
 anything else - a whack, sprinkler, mower, or dizziness - falls in and is out, credited through
-`Dog.knocked_out_by()` to whoever whacked it there in the last two seconds; a dash hops over, toys that
+`Dog.knocked_out_by()` to whoever whacked it there in the last two seconds (Frozen Pond's open
+water is the same node with `look = WATER`); a dash hops over, toys that
 roll in pop out, and spawns, toy placement and bot routes all avoid holes. `Obstacle.breakable` props
 (Backyard's crates) lose a hit per toy (two for a wound-up throw), splinter at `toughness`, and are rebuilt
 by `reset_for_round()`. `SwingBoard` (Agility Park) is a pivoting wall a `SwitchPad` swings a quarter turn,
@@ -228,16 +258,18 @@ banks time for whichever side holds one golden toy (bots keep it and run). Unfin
 `data/modes/shelved/`, out of every menu.
 
 **Comfort.** `Game` keeps rumble, knockout slow motion, screen shake, a colour-blind player palette
-(`PlayerSlot.palette()`, `Game.team_color()`) and how long HUD button prompts stay, all saved to settings.
+(`PlayerSlot.palette()`, `Game.team_color()`) and the final-bonk replay, all saved to settings.
 `Rumble` (autoload) buzzes pads from `Events`.
 
 **Lighting.** `Arena._style_lighting()` sets one warm key with soft orthogonal shadows, a cool shadowless
 fill, and linear tonemapping for every map. `ArenaCamera` keeps `far` at 80 m: the default 4 km far plane
 stretched the directional shadow's depth range until nothing cast a shadow at all.
 
-**Audio.** Recorded takes live in `assets/audio/sfx/<sound>/` (Kenney CC0 packs, see
-`assets/audio/KENNEY_LICENSE.txt`); `Sfx` picks one at random per play and falls back to its synthesised
-kit for anything without a folder (barks, squeaks, boings). `Sfx.play_at(name, world_position)` pans by where the event sits on screen (capped at
+**Audio.** Recorded takes live in `assets/audio/sfx/<sound>/` (all CC0: Kenney packs plus Freesound and
+OpenGameArt takes, each listed in `assets/audio/CREDITS.md`); `Sfx` picks one at random per play and falls
+back to its synthesised kit for anything without a folder. Barks have a voice per breed:
+`Sfx.bark(breed, ...)` plays `bark_<breed>/` takes, else the shared `bark/` (or the synthesised bark) pitched
+to the dog's size, per `Sfx.BREED_VOICES`. Only add audio whose source page states CC0, and credit it. `Sfx.play_at(name, world_position)` pans by where the event sits on screen (capped at
 `MAX_PAN`), using a small panner bus per voice. The arena calls `Sfx.set_room(indoor, hard_floor)` as it
 loads, choosing padded or clicky footsteps and a touch of room reverb.
 
@@ -259,3 +291,27 @@ volume-preserving squash and stretch, and every pulse returns to `_base_scale()`
 - **Real art:** replace the `Model` child of `dog.tscn`/`toy.tscn` with a glTF scene whose script exposes the
   same methods (`setup`, `update_motion`, `set_dashing`, `set_catching`, `squash`, `play_knocked_out`);
   the gameplay code doesn't care what it looks like. Restyle all materials in `Mats`.
+
+## Scoring, teams and progress
+
+- **Scoring** (`Game.scoring`): *Rounds won* pays the last dog or pack standing a point a round;
+  *Bonks* (the Boomerang Fu way, offered for Last Dog Standing and Hot Potato) pays a point per
+  rival bonked and ends the match the moment someone reaches the goal. In Bonks, a self-bonk (hit by
+  your own toy) costs a bone (`Game.add_points`, never below nil) and `BoneBreak` snaps it off the
+  player's card; in Rounds it costs nothing - the round is just won by whoever is standing. Whoever leads wears the crown in the match (`Match._update_crowns`, ties included),
+  in place of their hat.
+- **Teams**: any split of up to four dogs into two packs, chosen by pressing dogs on the setup
+  screen; `Game.assign_teams` keeps that split while both packs have someone. A pack-mate's throw
+  is a pass (`Dog._receive_pass`). A downed dog with a pack-mate standing leaves a `ReviveSpot`;
+  standing in it for `REVIVE_TIME` brings the dog back (`Dog.revive`). Bots rescue unguarded mates.
+- **Sudden death**: the last `SUDDEN_DEATH_AT` seconds drop `SkyDrop`s on rings aimed at the dogs;
+  at zero the round goes to overtime instead of a draw (capped at `OVERTIME_LIMIT`).
+- **Callouts**: `Highlights` classifies each knockout (double, return to sender, revenge, bank shot,
+  into the hole, long shot, sky bonk); the HUD calls it out and `Progress` counts it.
+- **Hats**: `data/hats/*.tres` (`HatData`), built by `HatModel`, worn on `DogModel.head_top_anchor()`
+  with a per-style sink and each dog's `hat_offset`/`hat_scale`. `Progress` (autoload) keeps
+  lifetime stats in `user://progress.cfg` (tests use a scratch file) and unlocks hats at their
+  thresholds; new ones are shown on the results screen. Picked on the dog select seat (bark cycles).
+- **CPU difficulty**: `PlayerSlot.cpu_level`, set on the CPU's seat; `BotBrain` scales reaction,
+  pause between throws, aim error and pace by it.
+

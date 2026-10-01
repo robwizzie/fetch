@@ -39,21 +39,25 @@ func _frisbee() -> void:
 
 func _bone() -> void:
 	var r := data.radius
-	# A single rounded dog-bone shape avoids the old visible pile of intersecting balls.
-	var contour: Array[Vector2] = [
-		Vector2(-1.00, 0), Vector2(-1.09, -0.20), Vector2(-1.05, -0.43),
-		Vector2(-0.88, -0.57), Vector2(-0.68, -0.55), Vector2(-0.48, -0.36),
-		Vector2(-0.24, -0.27), Vector2(0.24, -0.27), Vector2(0.48, -0.36),
-		Vector2(0.68, -0.55), Vector2(0.88, -0.57), Vector2(1.05, -0.43),
-		Vector2(1.09, -0.20), Vector2(1.00, 0), Vector2(1.09, 0.20),
-		Vector2(1.05, 0.43), Vector2(0.88, 0.57), Vector2(0.68, 0.55),
-		Vector2(0.48, 0.36), Vector2(0.24, 0.27), Vector2(-0.24, 0.27),
-		Vector2(-0.48, 0.36), Vector2(-0.68, 0.55), Vector2(-0.88, 0.57),
-		Vector2(-1.05, 0.43), Vector2(-1.09, 0.20),
-	]
-	_rim(_part(_pillow(contour, r, r * 0.43), Color("dfcea9"), Vector3.ZERO, Vector3.ONE, 0.7))
-	# Subtle stamped maker's mark, instead of a ring that made it look jointed.
-	_paw_stamp(Vector3(0, r * 0.433, 0), r * 0.31, Color("ae8758"))
+	var bone := Color("efe3c6")
+	# The cartoon bone: a slim round shaft with two fat knobs at each end. The knobs carry the
+	# silhouette - with the shaft as wide as they were, the old single pillow shape read as a
+	# cushion from the game camera.
+	var shaft := CapsuleMesh.new()
+	shaft.radius = r * 0.2
+	shaft.height = r * 1.7
+	shaft.radial_segments = 24
+	shaft.rings = 6
+	var bar := _part(shaft, bone, Vector3.ZERO, Vector3.ONE, 0.6)
+	bar.rotation.z = PI * 0.5
+	_rim(bar)
+	for end in [-1.0, 1.0]:
+		for side in [-1.0, 1.0]:
+			# A touch flattened and splayed outwards, the way a drawn bone flares.
+			var knob := _part(_sphere(r * 0.3), bone, Vector3(end * r * 0.8, 0, side * r * 0.24), Vector3(1.0, 0.9, 1.0), 0.6)
+			_rim(knob)
+	# A soft shade down the shaft so it reads as round, not a flat stick.
+	_part(_sphere(r * 0.06), Color("d8c8a3"), Vector3(0, r * 0.17, 0), Vector3(9.0, 0.4, 1.4), 0.7)
 
 
 func _rope() -> void:

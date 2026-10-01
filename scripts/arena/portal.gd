@@ -104,7 +104,7 @@ func _physics_process(_delta: float) -> void:
 	# the doorway and pushing into it. Toys ask on impact instead (see [method catch_toy]).
 	for node in get_tree().get_nodes_in_group("dogs"):
 		var dog := node as Dog
-		if dog == null or not dog.alive or dog.round_locked or _blocked.has(dog):
+		if dog == null or not dog.alive or dog.round_locked or _blocked.has(dog) or dog.is_burrowed():
 			continue
 		var push := dog.push_velocity
 		push.y = 0.0

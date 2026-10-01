@@ -53,6 +53,10 @@ func _ready() -> void:
 		add_child(card)
 		_cards.append(card)
 
+	if not Progress.fresh_unlocks.is_empty():
+		add_child(_new_hats(Progress.fresh_unlocks.duplicate()))
+		Progress.fresh_unlocks.clear()
+
 	var actions := HBoxContainer.new()
 	actions.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	actions.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -67,13 +71,16 @@ func _ready() -> void:
 		Game.goto(Game.SCENE_MATCH))
 	# Three separate exits, because "again" and "change something" are different wants and a
 	# cabinet should not make you walk back through the whole menu to reach either.
-	var settings := UiKit.button("Change Settings", 300)
+	var settings := UiKit.wood_button("Change Settings", 280, true)
 	settings.pressed.connect(func() -> void: Game.goto(Game.SCENE_MATCH_SETUP))
-	var change := UiKit.button("Change Dogs", 260)
+	var change := UiKit.wood_button("Change Dogs", 240, true)
 	change.pressed.connect(func() -> void: Game.goto(Game.SCENE_DOG_SELECT))
-	var menu := UiKit.button("Back to Menu", 260)
+	var menu := UiKit.wood_button("Back to Menu", 240, true)
 	menu.pressed.connect(func() -> void: Game.goto(Game.SCENE_MAIN_MENU))
+	again.add_theme_font_size_override("font_size", 34)
 	var buttons: Array[Button] = [again, settings, change, menu]
+	for button in [settings, change, menu]:
+		button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	for button in buttons:
 		actions.add_child(button)
 	for i in buttons.size():
@@ -181,3 +188,41 @@ func _card(entry: Dictionary, award: String) -> Control:
 	story.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(story)
 	return card
+
+
+## Hats this match earned, shown off in the corner: the hat turning, its name, and where to wear
+## it. A reason to play one more.
+func _new_hats(hats: Array[HatData]) -> Control:
+	var card := PanelContainer.new()
+	card.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	card.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	card.offset_top = 40
+	card.offset_right = -40
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_theme_stylebox_override("panel", UiKit.panel_style(UiKit.YELLOW, Color(0.08, 0.12, 0.09, 0.94)))
+	var column := VBoxContainer.new()
+	column.alignment = BoxContainer.ALIGNMENT_CENTER
+	column.add_theme_constant_override("separation", 4)
+	card.add_child(column)
+	column.add_child(UiKit.title("NEW HAT!" if hats.size() == 1 else "%d NEW HATS!" % hats.size(), 40, UiKit.YELLOW))
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 10)
+	column.add_child(row)
+	for hat in hats.slice(0, 3):
+		var cell := VBoxContainer.new()
+		var preview := ModelPreview.new(Vector2i(220, 170))
+		preview.custom_minimum_size = Vector2(180, 140)
+		preview.show_hat(hat)
+		cell.add_child(preview)
+		cell.add_child(UiKit.title(hat.display_name.to_upper(), 22, UiKit.CREAM))
+		row.add_child(cell)
+	column.add_child(UiKit.label("Wear it from Choose Your Dog", 18, Color(1, 1, 1, 0.7)))
+	card.pivot_offset = Vector2(200, 120)
+	card.scale = Vector2.ZERO
+	var reveal := card.create_tween()
+	reveal.tween_interval(1.0)
+	reveal.tween_property(card, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	reveal.tween_callback(func() -> void: Sfx.play("fanfare", 1.2, -4.0))
+	return card
+

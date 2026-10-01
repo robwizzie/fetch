@@ -106,10 +106,11 @@ func _match_card() -> void:
 
 ## Puts a dog's authored model on the turntable, falling back to the procedural one when a
 ## dog has no model yet, so a card is never empty.
-func show_dog(data: DogData) -> void:
+func show_dog(data: DogData, hat: HatData = null) -> void:
 	_clear()
 	var model := DogModel.new()
 	model.setup(data, Color.WHITE)
+	model.set_hat(hat)
 	_pivot.add_child(model)
 	# Face the camera rather than away from it: the models are authored facing +Z.
 	model.rotation_degrees = Vector3(0, 180, 0)
@@ -129,6 +130,17 @@ func show_toy(data: ToyData) -> void:
 	_pivot.add_child(model)
 	# A toy is modelled around its middle rather than standing on its base, and it keeps
 	# turning, so what is framed is the box it sweeps.
+	_swept = true
+	_frame(_subject_bounds())
+
+
+## A hat on its own, turning, for the hat cupboard and the new-hat reveal.
+func show_hat(hat: HatData) -> void:
+	_clear()
+	var model := HatModel.new()
+	model.build(hat)
+	_pivot.add_child(model)
+	model.scale = Vector3.ONE * 2.2
 	_swept = true
 	_frame(_subject_bounds())
 

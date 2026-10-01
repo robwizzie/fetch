@@ -56,6 +56,11 @@ enum Breed { LABRADOR, PITBULL, CORGI, DACHSHUND, GOLDEN, SPANIEL }
 	"dash": &"dash", "ko": &"ko", "win": &"win",
 }
 ## Technical validity cannot certify likeness. Mark true only after visual reference review.
+## Hat fit for this dog's head: a nudge from the top of the skull (x left, y up, z back, metres
+## before model_scale) and a size multiplier. Broad, fluffy heads take a hat a little lower and
+## bigger; neat ones smaller.
+@export var hat_offset := Vector3.ZERO
+@export_range(0.5, 1.5) var hat_scale := 1.0
 @export var likeness_reviewed: bool = false
 @export_multiline var model_review_notes: String = "Awaiting authored mesh, textures, rig and animation."
 

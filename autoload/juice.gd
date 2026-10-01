@@ -2,6 +2,10 @@ extends Node
 ## "Game feel" helpers: camera shake, hit-stop, pop/squash tweens, floating text, particle bursts.
 ## Everything is one call so gameplay code stays readable: Juice.shake(0.2), Juice.hitstop().
 
+## Every floating word and particle burst, with its world position, as it is made. The
+## final-bonk replay records these and makes them again at the same moment.
+signal spawned(kind: StringName, args: Array)
+
 var _shake_amount := 0.0
 var _shake_decay := 10.0
 var _hitstop_until := 0.0
@@ -136,7 +140,10 @@ func pop(node: Node, amount: float = 1.3, time: float = 0.18) -> void:
 func float_text(parent: Node, pos: Vector3, text: String, color: Color = Color.WHITE, size: float = 1.0) -> void:
 	if not is_instance_valid(parent):
 		return
+	spawned.emit(&"float_text", [_world(parent, pos), text, color, size])
 	var l := Label3D.new()
+	# The replay records the call itself (above) rather than mirroring the label.
+	l.set_meta(&"juice", true)
 	l.text = text
 	l.font = UiKit.FONT_DISPLAY
 	l.font_size = int(72 * size)
@@ -158,7 +165,9 @@ func float_text(parent: Node, pos: Vector3, text: String, color: Color = Color.W
 func burst(parent: Node, pos: Vector3, color: Color, count: int = 16, speed: float = 5.0) -> void:
 	if not is_instance_valid(parent):
 		return
+	spawned.emit(&"burst", [_world(parent, pos), color, count, speed])
 	var p := CPUParticles3D.new()
+	p.set_meta(&"juice", true)
 	p.position = pos
 	p.amount = count
 	p.one_shot = true
@@ -181,3 +190,8 @@ func burst(parent: Node, pos: Vector3, color: Color, count: int = 16, speed: flo
 	p.emitting = true
 	parent.add_child(p)
 	get_tree().create_timer(1.2, false).timeout.connect(p.queue_free)
+
+
+## Where [param pos], given in [param parent]'s space, is in the world.
+func _world(parent: Node, pos: Vector3) -> Vector3:
+	return (parent as Node3D).to_global(pos) if parent is Node3D and (parent as Node3D).is_inside_tree() else pos

@@ -18,6 +18,8 @@ var data: ToyData
 var state := State.IDLE
 var holder: Dog = null
 var thrower: Dog = null
+## Who threw this toy before it was caught, when it was caught rather than picked up.
+var caught_from: Dog = null
 var bounces := 0
 var _owner_immune := false
 var _owner_cleared := false
@@ -103,6 +105,8 @@ func can_be_caught_by(dog: Dog) -> bool:
 
 
 func pick_up(dog: Dog) -> void:
+	# Caught out of the air: remember who threw it, for "return to sender".
+	caught_from = thrower if state == State.FLYING and is_instance_valid(thrower) and thrower != dog else null
 	power_effects.reset()
 	model.visible = not dog.concealed
 	if is_instance_valid(holder) and holder != dog and holder.held_toy == self:
@@ -421,7 +425,7 @@ func _trace_dogs(from: Vector3, to: Vector3) -> void:
 	var contacts: Array[Dictionary] = []
 	for node in get_tree().get_nodes_in_group("dogs"):
 		var dog := node as Dog
-		if not dog.alive or (dog == thrower and _owner_immune) or _hit_dogs.has(dog.get_instance_id()):
+		if not dog.alive or dog.is_burrowed() or (dog == thrower and _owner_immune) or _hit_dogs.has(dog.get_instance_id()):
 			continue
 		var offset := start - Vector2(dog.global_position.x, dog.global_position.z)
 		var radius := dog.effective_radius() + data.radius

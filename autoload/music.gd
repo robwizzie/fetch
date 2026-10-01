@@ -1,6 +1,9 @@
 extends Node
-## Procedural soundtrack. There are no audio assets in the project, so the tracks are
-## sequenced and rendered at startup the same way [Sfx] synthesises its one-shots.
+## The soundtrack. A recording in res://assets/audio/music/ named after a track (menu.ogg,
+## match.ogg, victory.ogg) is that track, looped. Any track without one is sequenced and
+## rendered at startup the same way [Sfx] synthesises its one-shots, so dropping a file in or
+## taking one out never leaves a screen silent. The recordings are CC0 - see
+## assets/audio/CREDITS.md.
 ##
 ## Rendering happens on a worker thread: a track is ~17 s of audio and building it on the
 ## main thread would stall the first frame. Calls to [method play] before the render lands
@@ -10,6 +13,13 @@ const RATE := 44100
 const BUS := "Music"
 ## Sequencer resolution: one step is a sixteenth note.
 const STEPS_PER_BAR := 16
+const TRACK_DIR := "res://assets/audio/music/"
+const TRACKS: Array[String] = ["menu", "match", "victory"]
+## The procedural render is normalised hot (about -15 dB RMS) while the mastered recordings sit
+## near -23 dB, so each gets its own resting level to land at the same loudness. Both share
+## the bus and the ducking.
+const RECORDED_LEVEL := -2.0
+const RENDERED_LEVEL := -9.0
 
 var enabled := true:
 	set(value):
@@ -29,6 +39,8 @@ var _ducked := false
 ## One fade at a time: a second play() inside a crossfade must not let the first fade stop the
 ## track that is now coming in.
 var _fade: Tween
+## Track names that came from a file rather than the sequencer.
+var _recorded: Dictionary = {}
 
 
 func _ready() -> void:
@@ -40,12 +52,38 @@ func _ready() -> void:
 		player.volume_db = -60.0
 		add_child(player)
 		_players.append(player)
+	_load_recorded()
 	# Headless runs (the test suites) never need a soundtrack, and skipping the render keeps
 	# the suites fast.
-	if DisplayServer.get_name() == "headless":
+	var missing := TRACKS.filter(func(track: String) -> bool: return not _tracks.has(track))
+	if DisplayServer.get_name() == "headless" or missing.is_empty():
 		return
 	_thread = Thread.new()
-	_thread.start(_render_all)
+	_thread.start(_render_all.bind(missing))
+
+
+func _load_recorded() -> void:
+	for track in TRACKS:
+		var path := TRACK_DIR + track + ".ogg"
+		if not ResourceLoader.exists(path):
+			continue
+		var stream := load(path) as AudioStream
+		if stream == null:
+			continue
+		# Every track is a loop; the files are cut on the bar so the join is seamless.
+		if "loop" in stream:
+			stream.set("loop", true)
+		_tracks[track] = stream
+		_recorded[track] = true
+
+
+## The stream a track plays, recorded or rendered; null until a render lands.
+func stream_for(track: String) -> AudioStream:
+	return _tracks.get(track)
+
+
+func is_recorded(track: String) -> bool:
+	return _recorded.has(track)
 
 
 func _exit_tree() -> void:
@@ -68,7 +106,8 @@ func _process(_delta: float) -> void:
 	var rendered: Dictionary = _thread.wait_to_finish()
 	_thread = null
 	for key in rendered:
-		_tracks[key] = _to_stream(rendered[key])
+		if not _tracks.has(key):
+			_tracks[key] = _to_stream(rendered[key])
 	if not _wanted.is_empty():
 		play(_wanted, 1.4)
 
@@ -132,17 +171,18 @@ func _kill_fade() -> void:
 
 
 func _level() -> float:
-	return -9.0
+	return RECORDED_LEVEL if _recorded.has(_current) else RENDERED_LEVEL
 
 
 # ---------------------------------------------------------------- rendering
 
-func _render_all() -> Dictionary:
-	return {
-		"menu": _render(_menu_spec()),
-		"match": _render(_match_spec()),
-		"victory": _render(_victory_spec()),
-	}
+## Renders the named tracks: only the ones no recording covers.
+func _render_all(tracks: Array) -> Dictionary:
+	var specs := {"menu": _menu_spec(), "match": _match_spec(), "victory": _victory_spec()}
+	var rendered := {}
+	for track: String in tracks:
+		rendered[track] = _render(specs[track])
+	return rendered
 
 
 ## A track is a bar-by-bar chord chart plus a handful of pattern flags. Every voice writes

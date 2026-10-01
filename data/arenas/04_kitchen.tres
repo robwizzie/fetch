@@ -8,7 +8,7 @@
 script = ExtResource("1")
 id = &"kitchen"
 display_name = "Kitchen"
-description = "Counters box in the middle. Tight corners and a spilled water bowl."
+description = "Two conveyor belts run opposite ways across the floor, carrying dogs and loose toys - ride one into a throw, or slog against it."
 scene = ExtResource("2")
 swatch = Color(0.88, 0.78, 0.55, 1)
 thumbnail = ExtResource("3")

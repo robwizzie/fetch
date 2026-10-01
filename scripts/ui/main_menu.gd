@@ -36,37 +36,48 @@ func _input(event: InputEvent) -> void:
 
 
 func _build_menu() -> void:
+	# The two ways to play get full-width boards; everything you browse sits in a grid of
+	# smaller ones beneath, so eight choices fit the column without crowding the footer.
 	var menu := VBoxContainer.new()
 	menu.position = Vector2(CoverStage.COLUMN_X, CoverStage.COLUMN_TOP)
 	menu.size = Vector2(560, 482)
-	menu.add_theme_constant_override("separation", 8)
+	menu.add_theme_constant_override("separation", 10)
 	_canvas.add_child(menu)
-	var play := _add(menu, "PARTY PLAY", func() -> void: Game.goto(Game.SCENE_DOG_SELECT))
+	var play := _add(menu, "PARTY PLAY", func() -> void: Game.goto(Game.SCENE_DOG_SELECT), 560, 76)
+	play.add_theme_font_size_override("font_size", 36)
 	play.tooltip_text = "2–4 friends. Join with gamepads or share a keyboard."
 	var solo := _add(menu, "SOLO PRACTICE", func() -> void: Game.start_practice(_activation_device))
 	solo.tooltip_text = "Pick your dog, then take on three computer-controlled dogs."
-	_add(menu, "MEET THE PACK", func() -> void: _gallery("dogs"))
-	_add(menu, "TOYS", func() -> void: _gallery("toys"))
-	_add(menu, "ARENAS", func() -> void: _gallery("arenas"))
-	_add(menu, "POWER-UPS", func() -> void: _gallery("powerups"))
-	_add(menu, "SETTINGS", _show_settings)
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 10)
+	menu.add_child(grid)
+	for entry in [["MEET THE PACK", func() -> void: _gallery("dogs")], ["TOYS", func() -> void: _gallery("toys")],
+			["ARENAS", func() -> void: _gallery("arenas")], ["POWER-UPS", func() -> void: _gallery("powerups")],
+			["HATS  %d/%d" % [Progress.unlocked_hats().size(), Game.hats.size()], func() -> void: _gallery("hats")],
+			["SETTINGS", _show_settings]]:
+		var item := _add(grid, entry[0], entry[1], 274, 60)
+		item.add_theme_font_size_override("font_size", 25)
 
 	var footer := HBoxContainer.new()
-	footer.position = Vector2(CoverStage.COLUMN_X, 902)
-	footer.size = Vector2(560, 60)
 	footer.add_theme_constant_override("separation", 12)
-	_canvas.add_child(footer)
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(0, 8)
+	menu.add_child(gap)
+	menu.add_child(footer)
 	_small_button(footer, "HOW TO PLAY", _show_controls, 336)
 	_small_button(footer, "QUIT", func() -> void: get_tree().quit(), 208)
 
 	var blurb := CoverStage.copy("1–4 players   •   local multiplayer   •   gamepads + keyboard", 21, Color(0.92, 0.95, 0.86))
-	blurb.position = Vector2(CoverStage.COLUMN_X + 2, 980)
+	blurb.position = Vector2(CoverStage.COLUMN_X + 2, 870)
 	blurb.size = Vector2(700, 32)
 	_canvas.add_child(blurb)
 
 	_build_session_chip()
 	_build_button_hints()
-	_wire_focus(_menu_buttons)
+	# Directional focus by position: the grid wants left/right between its columns and up/down
+	# between its rows, which Godot's own neighbour search already gives.
 	play.grab_focus()
 
 
@@ -156,18 +167,8 @@ func _add(parent: Control, text: String, on_pressed: Callable, width: float = 56
 
 
 func _small_button(parent: Control, text: String, action: Callable, width: float) -> Button:
-	var button := UiKit.button(text, width)
-	button.custom_minimum_size.y = 62
-	button.add_theme_font_size_override("font_size", 23)
-	for state in ["normal", "hover", "focus", "pressed"]:
-		var fill := Color("e6e6c7") if state == "normal" else Color("d1daa6")
-		var style := CoverStage.paper_style(fill, Color("a0ac72"), 13)
-		style.shadow_size = 0
-		button.add_theme_stylebox_override(state, style)
-	button.add_theme_color_override("font_color", CoverStage.FOREST)
-	button.add_theme_color_override("font_hover_color", CoverStage.FOREST)
-	button.add_theme_color_override("font_focus_color", CoverStage.FOREST)
-	button.add_theme_color_override("font_pressed_color", CoverStage.FOREST)
+	# The same boards as the menu above, a size down, so the two read as one set.
+	var button := UiKit.wood_button(text, width, true)
 	button.pressed.connect(action)
 	parent.add_child(button)
 	_menu_buttons.append(button)
@@ -181,95 +182,235 @@ func _gallery(kind: String) -> void:
 
 func _show_controls() -> void:
 	var body := _open_modal("A LITTLE FRIENDLY RIVALRY")
-	body.add_child(_modal_copy("Start empty-handed. Run over a toy to pick it up, then aim and throw.\nPress throw with empty paws to catch. Dash through danger.\nGrab mystery treats for power-ups: carry three, and a fourth swaps out your oldest.\nLast dog standing scores!", 27))
-	body.add_child(HSeparator.new())
-	body.add_child(_modal_copy(_controls_table(), 25))
-	body.add_child(_modal_copy(("Party play: press %s to join.\nChoose a dog, ready up, then confirm again to set up the match.\nSolo practice: pick your dog, then take on three computer-controlled dogs." \
-		% DeviceInput.button_label(&"confirm", [])), 24))
+	# The whole game in a handful of moves, as cards rather than a paragraph.
+	var tips := GridContainer.new()
+	tips.columns = 2
+	tips.add_theme_constant_override("h_separation", 14)
+	tips.add_theme_constant_override("v_separation", 14)
+	for tip in [
+		["GRAB", "Start empty-handed. Run over a toy to pick it up."],
+		["THROW", "Aim and throw. Hold the button for a harder throw."],
+		["CATCH", "Press throw with empty paws as a toy flies at you."],
+		["DASH", "Tap dash to dart out of the way of a flying toy."],
+		["BARK", "Bark at your rivals. Purely for morale."],
+		["TREATS", "Grab mystery treats for power-ups. Carry up to three."],
+	]:
+		tips.add_child(_tip_card(tip[0], tip[1]))
+	body.add_child(tips)
+	var goal := _modal_copy("One hit from a flying toy and you're out. Last dog standing scores!", 25)
+	goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_child(goal)
+	body.add_child(_section("CONTROLS"))
+	body.add_child(_controls_grid())
+	body.add_child(_section("GETTING STARTED"))
+	body.add_child(_modal_copy(("Party play: press %s to join, choose a dog, then confirm again to set up the match.\nSolo practice: pick your dog and take on three computer-controlled dogs.\nForgot a button mid-match? Pause - the controls are there too." \
+		% DeviceInput.button_label(&"confirm", [])), 23))
 	_modal_close_button(body)
 
 
-## One row per kind of controller actually plugged in, plus both keyboard layouts, each in the
-## words printed on it. With no pad connected, an Xbox-style row shows what a pad would do.
-func _controls_table() -> String:
-	var rows: Array[String] = []
+func _tip_card(heading: String, text: String) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("f6e6c4")
+	style.border_color = Color("dcc08f")
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(16)
+	style.content_margin_left = 18
+	style.content_margin_right = 18
+	style.content_margin_top = 10
+	style.content_margin_bottom = 12
+	card.add_theme_stylebox_override("panel", style)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 2)
+	card.add_child(column)
+	var title := UiKit.title(heading, 28, UiKit.PAW_ORANGE)
+	title.add_theme_color_override("font_outline_color", UiKit.PLANK_INK)
+	title.add_theme_constant_override("outline_size", 6)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	column.add_child(title)
+	column.add_child(_modal_copy(text, 21))
+	return card
+
+
+## Every way to play, as the keys and buttons themselves: one row per kind of controller
+## plugged in (an Xbox-style row when none is), then both keyboard layouts.
+func _controls_grid() -> GridContainer:
+	var grid := GridContainer.new()
+	var actions := [[&"move", "Move"], [&"throw", "Throw / catch"], [&"dash", "Dash"], [&"bark", "Bark"], [&"pause", "Pause"]]
+	grid.columns = actions.size() + 1
+	grid.add_theme_constant_override("h_separation", 18)
+	grid.add_theme_constant_override("v_separation", 12)
+	grid.add_child(Control.new())
+	for action in actions:
+		var head := _modal_copy(action[1], 19)
+		head.modulate = Color(1, 1, 1, 0.7)
+		head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		head.autowrap_mode = TextServer.AUTOWRAP_OFF
+		grid.add_child(head)
+	var rows: Array = []
 	var seen: Array[String] = []
-	var pads := Input.get_connected_joypads()
-	if pads.is_empty():
-		pads = [0]
-	for device in pads:
-		var family := DeviceInput.family_name(device).to_upper()
-		if seen.has(family):
-			continue
-		seen.append(family)
-		rows.append("%s   %s" % [family, DeviceInput.controls_line(device)])
+	for device in Input.get_connected_joypads():
+		var family := DeviceInput.family_name(device)
+		if not seen.has(family):
+			seen.append(family)
+			rows.append([family, device, -1])
+	if rows.is_empty():
+		rows.append([DeviceInput.family_name(0), 0, DeviceInput.PadFamily.XBOX])
 	for device in [DeviceInput.KEYBOARD_WASD, DeviceInput.KEYBOARD_ARROWS]:
-		rows.append("%s   %s" % [DeviceInput.family_name(device).to_upper(), DeviceInput.controls_line(device)])
-	return "\n".join(rows)
+		rows.append([DeviceInput.family_name(device), device, -1])
+	for row in rows:
+		var name_label := _modal_copy(str(row[0]), 21)
+		name_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+		name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		grid.add_child(name_label)
+		for action in actions:
+			var cell := CenterContainer.new()
+			cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			cell.add_child(UiKit.keycaps(action[0], row[1], 17, row[2]))
+			grid.add_child(cell)
+	return grid
 
 
 func _show_settings() -> void:
 	var body := _open_modal("MAKE YOURSELF AT HOME")
-	var sound := UiKit.wood_button("SOUND EFFECTS: ON" if Sfx.enabled else "SOUND EFFECTS: OFF", 770)
-	sound.pressed.connect(func() -> void:
-		Sfx.enabled = not Sfx.enabled
-		Game.save_settings()
-		sound.text = "SOUND EFFECTS: ON" if Sfx.enabled else "SOUND EFFECTS: OFF")
+	body.add_child(_section("SOUND"))
+	var sound := _setting("Sound effects", func() -> Variant: return Sfx.enabled,
+		func() -> void: Sfx.enabled = not Sfx.enabled)
 	body.add_child(sound)
-	var music := UiKit.wood_button("MUSIC: ON" if Music.enabled else "MUSIC: OFF", 770)
-	music.pressed.connect(func() -> void:
-		Music.enabled = not Music.enabled
-		Game.save_settings()
-		music.text = "MUSIC: ON" if Music.enabled else "MUSIC: OFF")
-	body.add_child(music)
+	body.add_child(_setting("Music", func() -> Variant: return Music.enabled,
+		func() -> void: Music.enabled = not Music.enabled))
+	body.add_child(_volume_row("Master volume", "Master"))
+	body.add_child(_volume_row("Music volume", "Music"))
+	body.add_child(_volume_row("Effects volume", "SFX"))
+
+	body.add_child(_section("GAME FEEL"))
+	body.add_child(_flag("Controller rumble", "rumble"))
+	body.add_child(_flag("Knockout slow motion", "knockout_slowmo"))
+	body.add_child(_flag("Final-bonk replay", "replays"))
+	body.add_child(_flag("Screen shake", "screen_shake"))
+
+	body.add_child(_section("SCREEN"))
+	body.add_child(_flag("Colour-blind friendly colours", "colorblind_colors"))
+	# Remembered, so a cabinet comes back up filling its screen. F11 or Start+Select also works.
+	body.add_child(_setting("Fullscreen", func() -> Variant: return _is_fullscreen(),
+		func() -> void: Game.set_fullscreen(not _is_fullscreen())))
+
+	body.add_child(_section("CONTROLLERS"))
 	# Cabinets report their encoder name, but the override is here because they vary.
-	var tester := UiKit.wood_button("CONTROLLER TEST", 770)
-	tester.pressed.connect(func() -> void: Game.goto("res://scenes/ui/controller_test.tscn"))
-	body.add_child(tester)
-	var arcade_names := ["ARCADE CONTROLS: AUTO", "ARCADE CONTROLS: ALWAYS", "ARCADE CONTROLS: NEVER"]
-	var arcade := UiKit.wood_button(arcade_names[int(Game.arcade_hints)], 770)
-	arcade.pressed.connect(func() -> void:
-		Game.arcade_hints = ((int(Game.arcade_hints) + 1) % 3) as Game.ArcadeHints
-		Game.save_settings()
-		arcade.text = arcade_names[int(Game.arcade_hints)])
-	body.add_child(arcade)
-	body.add_child(_volume_row("MASTER VOLUME", "Master"))
-	body.add_child(_volume_row("MUSIC VOLUME", "Music"))
-	body.add_child(_volume_row("EFFECTS VOLUME", "SFX"))
-	body.add_child(_toggle("CONTROLLER RUMBLE", func() -> bool: return Game.rumble,
-		func(on: bool) -> void: Game.rumble = on))
-	body.add_child(_toggle("KNOCKOUT SLOW MOTION", func() -> bool: return Game.knockout_slowmo,
-		func(on: bool) -> void: Game.knockout_slowmo = on))
-	body.add_child(_toggle("SCREEN SHAKE", func() -> bool: return Game.screen_shake,
-		func(on: bool) -> void: Game.screen_shake = on))
-	body.add_child(_toggle("COLOUR-BLIND FRIENDLY COLOURS", func() -> bool: return Game.colorblind_colors,
-		func(on: bool) -> void: Game.colorblind_colors = on))
-	var prompt_names := ["BUTTON PROMPTS: ALWAYS", "BUTTON PROMPTS: FIRST ROUNDS", "BUTTON PROMPTS: OFF"]
-	var prompts := UiKit.wood_button(prompt_names[int(Game.control_hints)], 770)
-	prompts.pressed.connect(func() -> void:
-		Game.control_hints = ((int(Game.control_hints) + 1) % 3) as Game.ControlHints
-		Game.save_settings()
-		prompts.text = prompt_names[int(Game.control_hints)])
-	body.add_child(prompts)
-	var fullscreen := UiKit.wood_button("FULLSCREEN: ON" if _is_fullscreen() else "FULLSCREEN: OFF", 770)
-	fullscreen.pressed.connect(func() -> void:
-		# Remembered, so a cabinet comes back up filling its screen. F11 or Start+Select also works.
-		Game.set_fullscreen(not _is_fullscreen())
-		fullscreen.text = "FULLSCREEN: ON" if _is_fullscreen() else "FULLSCREEN: OFF")
-	body.add_child(fullscreen)
-	body.add_child(_modal_copy("Sound, display and controls are remembered on this machine.", 21))
+	var arcade_names := ["Auto", "Always", "Never"]
+	body.add_child(_setting("Arcade button labels", func() -> Variant: return arcade_names[int(Game.arcade_hints)],
+		func() -> void: Game.arcade_hints = ((int(Game.arcade_hints) + 1) % 3) as Game.ArcadeHints))
+	body.add_child(_setting("Controller test", func() -> Variant: return "Open",
+		func() -> void: Game.goto("res://scenes/ui/controller_test.tscn")))
+	var note := _modal_copy("Everything here is remembered on this machine.", 20)
+	note.modulate = Color(1, 1, 1, 0.7)
+	body.add_child(note)
 	_modal_close_button(body)
 	sound.grab_focus()
 
 
-## An ON/OFF settings button that saves as it flips.
-func _toggle(title: String, read: Callable, write: Callable) -> Button:
-	var button := UiKit.wood_button("%s: %s" % [title, "ON" if read.call() else "OFF"], 770)
-	button.pressed.connect(func() -> void:
-		write.call(not read.call())
+## An on/off setting kept in a Game property.
+func _flag(title: String, property: String) -> Button:
+	return _setting(title, func() -> Variant: return Game.get(property),
+		func() -> void: Game.set(property, not Game.get(property)))
+
+
+## A small heading that splits the paper into groups.
+func _section(text: String) -> Label:
+	var label := UiKit.title(text, 24, Color("b0602a"))
+	label.add_theme_constant_override("outline_size", 0)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	return label
+
+
+## A setting on the paper: what it is on the left, its state on the right - a switch for on/off
+## (when [param read] returns a bool), a wooden tag for anything else. Pressing it, or left and
+## right on it, moves to the next state, and the change is saved straight away.
+func _setting(title: String, read: Callable, advance: Callable) -> Button:
+	var row := Button.new()
+	row.set_meta("setting", title)
+	row.custom_minimum_size = Vector2(0, 54)
+	row.add_theme_stylebox_override("normal", _row_style(Color(0, 0, 0, 0), Color(0, 0, 0, 0)))
+	var lit := _row_style(Color(UiKit.WOOD, 0.14), UiKit.PAW_ORANGE)
+	for state_name in ["hover", "focus", "pressed", "hover_pressed"]:
+		row.add_theme_stylebox_override(state_name, lit)
+	var line := HBoxContainer.new()
+	line.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	line.offset_left = 16
+	line.offset_right = -12
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(line)
+	var caption := _modal_copy(title, 25)
+	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	caption.autowrap_mode = TextServer.AUTOWRAP_OFF
+	line.add_child(caption)
+	var state := Control.new()
+	state.custom_minimum_size = Vector2(220, 0)
+	state.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	state.draw.connect(func() -> void: _draw_state(state, read.call(), row.has_focus() or row.is_hovered()))
+	line.add_child(state)
+	row.pressed.connect(func() -> void:
+		advance.call()
 		Game.save_settings()
-		button.text = "%s: %s" % [title, "ON" if read.call() else "OFF"])
-	return button
+		Sfx.play("ui_move", 1.0, -4.0)
+		state.queue_redraw())
+	row.gui_input.connect(func(event: InputEvent) -> void:
+		if event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right"):
+			row.pressed.emit()
+			row.accept_event())
+	for changed: Signal in [row.focus_entered, row.focus_exited, row.mouse_entered, row.mouse_exited]:
+		changed.connect(state.queue_redraw)
+	return row
+
+
+func _row_style(fill: Color, edge: Color) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill
+	style.border_color = edge
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(14)
+	return style
+
+
+## The right-hand end of a setting row: a switch, or the current choice on a wooden tag.
+func _draw_state(canvas: Control, value: Variant, lit: bool) -> void:
+	var font := UiKit.FONT_DISPLAY
+	var mid := canvas.size.y * 0.5
+	if value is bool:
+		var on: bool = value
+		var track := Rect2(canvas.size.x - 78.0, mid - 19.0, 78.0, 38.0)
+		var groove := StyleBoxFlat.new()
+		groove.bg_color = UiKit.SELECT_GREEN if on else Color("d6c39d")
+		groove.border_color = UiKit.SELECT_GREEN_DARK if on else Color("b39c70")
+		groove.set_border_width_all(3)
+		groove.set_corner_radius_all(19)
+		canvas.draw_style_box(groove, track)
+		var knob := Vector2(track.end.x - 19.0 if on else track.position.x + 19.0, mid)
+		canvas.draw_circle(knob + Vector2(0, 2), 14.0, Color(0, 0, 0, 0.18))
+		canvas.draw_circle(knob, 14.0, Color.WHITE)
+		var word := "ON" if on else "OFF"
+		var width := font.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x
+		canvas.draw_string(font, Vector2(track.position.x - 14.0 - width, mid + 9.0), word, HORIZONTAL_ALIGNMENT_LEFT, -1, 22,
+			UiKit.SELECT_GREEN_DARK if on else Color(CoverStage.BROWN, 0.55))
+		return
+	var text := str(value).to_upper()
+	var text_width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 21).x
+	var tag := Rect2(canvas.size.x - text_width - 60.0, mid - 19.0, text_width + 60.0, 38.0)
+	var board := StyleBoxFlat.new()
+	board.bg_color = UiKit.WOOD_LIGHT if lit else UiKit.WOOD
+	board.border_color = UiKit.PLANK_INK
+	board.set_border_width_all(3)
+	board.set_corner_radius_all(12)
+	canvas.draw_style_box(board, tag)
+	var baseline := Vector2(tag.position.x + 30.0, mid + 9.0)
+	canvas.draw_string_outline(font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 21, 6, UiKit.PLANK_INK)
+	canvas.draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 21, UiKit.CREAM)
+	for side in [-1.0, 1.0]:
+		var x: float = tag.position.x + 15.0 if side < 0.0 else tag.end.x - 15.0
+		canvas.draw_colored_polygon(PackedVector2Array([Vector2(x + 4.0 * side, mid), Vector2(x - 3.0 * side, mid - 6.0),
+			Vector2(x - 3.0 * side, mid + 6.0)]), Color(UiKit.CREAM, 0.85))
 
 
 ## Text on the modal's paper. The cover's cream reads over photography and vanishes over this,
@@ -384,9 +525,12 @@ func _open_modal(title: String) -> VBoxContainer:
 
 
 func _modal_close_button(body: VBoxContainer) -> void:
-	var close := UiKit.wood_button("BACK TO THE PACK", 770)
+	var close := UiKit.wood_button("BACK TO THE PACK", 440)
+	close.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	close.pressed.connect(_close_modal)
-	body.add_child(close)
+	var centre := CenterContainer.new()
+	centre.add_child(close)
+	body.add_child(centre)
 	close.grab_focus()
 	# Recursive: the volume sliders sit inside label rows, and a controller has to reach them.
 	var controls: Array[Control] = []

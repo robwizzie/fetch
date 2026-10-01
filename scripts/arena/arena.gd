@@ -5,7 +5,8 @@ extends Node3D
 ## are child nodes of the arena scene so each arena can have its own mood.
 ## To make a new arena: duplicate scenes/arenas/backyard.tscn, move things around, add an ArenaData.
 
-enum WallStyle { FENCE, BASEBOARD, NONE }
+## SNOWBANK is heaped snow round a frozen pond, with pines beyond it.
+enum WallStyle { FENCE, BASEBOARD, NONE, SNOWBANK }
 ## AUTO keeps the historical behaviour: boards indoors, grass patches outdoors.
 enum GroundStyle { AUTO, PATCHES, BOARDS, TILES }
 
@@ -23,12 +24,16 @@ enum GroundStyle { AUTO, PATCHES, BOARDS, TILES }
 @export var flowers := true
 @export var pattern_seed := 7
 ## Visual dressing is independent from the collision and floor styles.
-@export_enum("Garden", "Agility", "Living Room", "Kitchen", "Beach", "Warp", "Courtyard", "Rooftop") var decor_theme := "Garden"
+@export_enum("Garden", "Agility", "Living Room", "Kitchen", "Beach", "Warp", "Courtyard", "Rooftop", "Pond", "Toy Room") var decor_theme := "Garden"
 ## Name burned into the welcome sign behind the back fence. Empty hides the sign.
 @export var sign_text := "THE DOG PARK"
 
 ## Edge of one square of the mown lawn, in metres (rounded to fit the arena exactly).
 const LAWN_SQUARE := 2.6
+## Themes lit and dressed as rooms rather than gardens.
+const INDOOR := ["Living Room", "Kitchen", "Toy Room"]
+## Foam play-mat colours for the Toy Room floor.
+const PLAY_MATS := [Color("8dbfdb"), Color("f2cf82"), Color("a9d49a"), Color("f0ab98")]
 
 @onready var spawn_points: Node3D = $SpawnPoints
 @onready var toy_spawns: Node3D = $ToySpawns
@@ -38,13 +43,15 @@ func _ready() -> void:
 	add_to_group("arenas")
 	var hard := ground_style in [GroundStyle.BOARDS, GroundStyle.TILES] or wall_style == WallStyle.BASEBOARD \
 		or decor_theme in ["Rooftop", "Courtyard"]
-	Sfx.set_room(decor_theme in ["Living Room", "Kitchen"], hard)
+	Sfx.set_room(decor_theme in INDOOR, hard)
 	_style_lighting()
 	_build_ground()
 	_build_walls()
 	if wall_style == WallStyle.FENCE:
 		_build_garden()
-	elif decor_theme == "Living Room" or decor_theme == "Kitchen":
+	elif wall_style == WallStyle.SNOWBANK:
+		_build_winter()
+	elif decor_theme in INDOOR:
 		_build_room_details()
 
 
@@ -54,7 +61,7 @@ func _ready() -> void:
 ## the camera. Linear tonemapping keeps the palette saturated; the key is kept low enough
 ## that sunlit floors do not clip, which is what lets the cast shadows actually read.
 func _style_lighting() -> void:
-	var indoor := decor_theme in ["Living Room", "Kitchen"]
+	var indoor := decor_theme in INDOOR
 	var night := decor_theme == "Rooftop"
 	for child in get_children():
 		if child is DirectionalLight3D and child.name != "Fill":
@@ -135,6 +142,8 @@ func _build_ground() -> void:
 		_build_boards(root, rng)
 	elif decor_theme == "Beach":
 		_build_sand(root, rng)
+	elif decor_theme == "Pond":
+		_build_snow(root, rng)
 	else:
 		_build_lawn(root)
 		_build_lawn_border(root, rng)
@@ -175,6 +184,9 @@ func _build_tiles(parent: Node3D, rng: RandomNumberGenerator, tile: float = 1.65
 			var tint := ground_color if (row + col) % 2 == 0 else ground_accent
 			if decor_theme == "Warp":
 				tint = ground_color.lerp(ground_accent, rng.randf_range(0.1, 0.8))
+			elif decor_theme == "Toy Room":
+				# Interlocking foam mats in four soft colours, never two the same side by side.
+				tint = PLAY_MATS[(col + row * 2) % PLAY_MATS.size()]
 			else:
 				tint = tint.lightened(rng.randf_range(0.0, 0.025))
 			_floor_strip(parent, Vector3(width - 0.028, 0.018, depth - 0.028), tint,
@@ -211,6 +223,29 @@ func _build_lawn_border(parent: Node3D, rng: RandomNumberGenerator) -> void:
 				for blade in 2:
 					var leaf := Mats.mesh(parent, Mats.cone(0.038, 0.18), ground_accent.lightened(0.16), p + Vector3(blade * 0.08, 0.07, 0))
 					leaf.rotation_degrees.z = -18.0 + blade * 36.0
+
+
+## Fresh snow: soft wind-blown waves and a scatter of glittering crystals, so the white floor
+## still has a grain to judge distance against.
+func _build_snow(parent: Node3D, rng: RandomNumberGenerator) -> void:
+	var shade := ground_accent
+	for i in 26:
+		var at := Vector3(rng.randf_range(-size.x * 0.5 + 0.8, size.x * 0.5 - 0.8), 0.016, rng.randf_range(-size.y * 0.5 + 0.6, size.y * 0.5 - 0.6))
+		var wave := Mats.mesh_plain(parent, Mats.cylinder(rng.randf_range(0.5, 1.1), 0.008), shade.lerp(ground_color, rng.randf_range(0.2, 0.6)), at)
+		wave.scale = Vector3(rng.randf_range(1.8, 3.0), 1, rng.randf_range(0.35, 0.6))
+		wave.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for i in 70:
+		var at := Vector3(rng.randf_range(-size.x * 0.5 + 0.4, size.x * 0.5 - 0.4), 0.03, rng.randf_range(-size.y * 0.5 + 0.4, size.y * 0.5 - 0.4))
+		var glint := MeshInstance3D.new()
+		glint.mesh = Mats.box(Vector3(0.06, 0.006, 0.06))
+		glint.material_override = Mats.unlit(Color("ffffff"))
+		glint.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		glint.position = at
+		glint.rotation.y = PI * 0.25
+		parent.add_child(glint)
+	for side in [-1.0, 1.0]:
+		_floor_strip(parent, Vector3(size.x, 0.012, 0.4), shade, Vector3(0, 0.02, side * (size.y * 0.5 - 0.2)))
+		_floor_strip(parent, Vector3(0.4, 0.012, size.y), shade, Vector3(side * (size.x * 0.5 - 0.2), 0.02, 0))
 
 
 func _build_sand(parent: Node3D, rng: RandomNumberGenerator) -> void:
@@ -338,6 +373,58 @@ func _build_fairy_lights(parent: Node3D, hx: float, hz: float) -> void:
 				ArenaArt.rod(parent, at, Vector3(lerpf(x0, x1, t2), 2.3 - sin(t2 * PI) * 0.45, z), 0.012, Color("3b3440"))
 
 
+## Heaped snow all round the pond: soft lumpy mounds where a fence would be, lower along the
+## front so the camera still sees over them.
+func _build_snowbank(parent: Node3D, hx: float, hz: float) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = pattern_seed + 3
+	for side: float in [-1.0, 1.0]:
+		var height := wall_height * (0.45 if side > 0.0 else 0.75)
+		var count := int(ceil(size.x / 1.1)) + 2
+		for i in count:
+			var x := lerpf(-hx - 0.4, hx + 0.4, float(i) / float(count - 1))
+			_snow_mound(parent, Vector3(x, 0, side * (hz + 0.45 + rng.randf_range(-0.08, 0.12))), height * rng.randf_range(0.8, 1.1), rng)
+	for side: float in [-1.0, 1.0]:
+		var count := int(ceil(size.y / 1.1)) + 1
+		for i in count:
+			var z := lerpf(-hz, hz, float(i) / float(count - 1))
+			_snow_mound(parent, Vector3(side * (hx + 0.45 + rng.randf_range(-0.08, 0.12)), 0, z), wall_height * lerpf(0.75, 0.5, (z + hz) / size.y) * rng.randf_range(0.85, 1.1), rng)
+
+
+func _snow_mound(parent: Node3D, at: Vector3, height: float, rng: RandomNumberGenerator) -> void:
+	var mound := Mats.mesh(parent, Mats.sphere(0.5), wall_color.lerp(wall_accent, rng.randf_range(0.0, 0.12)), at + Vector3(0, height * 0.18, 0))
+	mound.scale = Vector3(rng.randf_range(1.3, 1.7), height * 1.4, rng.randf_range(1.0, 1.3))
+	mound.rotation.y = rng.randf_range(0.0, PI)
+
+
+## Snowy pines and a few drifts beyond the banks, instead of the garden's hedges.
+func _build_winter() -> void:
+	var winter := Node3D.new()
+	winter.name = "Winter"
+	add_child(winter)
+	var hx := size.x * 0.5
+	var hz := size.y * 0.5
+	var pines := [Color("3f6b5a"), Color("4c7a63"), Color("36604f")]
+	for i in 7:
+		var x := -hx - 0.5 + float(i) * (size.x + 1.0) / 6.0
+		_pine(winter, Vector3(x, 0, -hz - 2.3 - sin(float(i) * 2.3) * 0.5), 2.6 + 0.4 * float(i % 3), pines[i % 3])
+	for side: float in [-1.0, 1.0]:
+		for i in 4:
+			_pine(winter, Vector3(side * (hx + 1.9 + 0.3 * float(i % 2)), 0, -hz + 0.8 + float(i) * (size.y - 1.6) / 3.0), 1.7 + 0.3 * float(i % 2), pines[(i + 1) % 3])
+	_build_sign(winter, hz + 0.6)
+
+
+func _pine(parent: Node3D, at: Vector3, height: float, needles: Color) -> void:
+	Mats.mesh(parent, Mats.cylinder(0.12, height * 0.3), Color("6b4a2f"), at + Vector3(0, height * 0.15, 0))
+	for tier in 3:
+		var r := height * (0.38 - tier * 0.09)
+		var y := height * (0.3 + tier * 0.22)
+		Mats.mesh(parent, Mats.cone(r, height * 0.36), needles.lightened(tier * 0.04), at + Vector3(0, y + height * 0.18, 0))
+		# Snow lying on each tier.
+		var cap := Mats.mesh(parent, Mats.cone(r * 0.62, height * 0.12), Color("f4f8fb"), at + Vector3(0, y + height * 0.3, 0))
+		cap.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
 func _build_room_details() -> void:
 	var decor := Node3D.new()
 	decor.name = "RoomDetails"
@@ -380,6 +467,8 @@ func _build_walls() -> void:
 			_build_fence(walls, hx, hz)
 		WallStyle.BASEBOARD:
 			_build_baseboard(walls, hx, hz)
+		WallStyle.SNOWBANK:
+			_build_snowbank(walls, hx, hz)
 
 
 func _build_fence(parent: Node3D, hx: float, hz: float) -> void:

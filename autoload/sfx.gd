@@ -4,7 +4,11 @@ extends Node
 ## it plays. Anything without a folder falls back to a sound synthesised at startup, so the dog
 ## voices and comic sounds (bark, squeak, boing) still work. Adding a take is dropping in a file.
 ##
-## The recorded sounds are Kenney's CC0 packs (assets/audio/KENNEY_LICENSE.txt).
+## Every recorded sound is CC0: Kenney's packs (assets/audio/KENNEY_LICENSE.txt) plus single
+## takes from Freesound and OpenGameArt. assets/audio/CREDITS.md lists where each file came from.
+##
+## Barks have a voice per breed: bark_<breed>/ holds that dog's own takes, bark/ is the shared
+## fallback, and with neither the synthesised bark is pitched to the dog's size. See [method bark].
 ##
 ## Sounds are layered rather than single tones: an impact gets a transient AND a body, a
 ## whoosh gets filtered noise, so they read as events instead of beeps.
@@ -17,11 +21,30 @@ const BUS := "SFX"
 ## sounds read as coming from one speaker rather than from one side of the arena.
 const MAX_PAN := 0.6
 const ASSET_DIR := "res://assets/audio/sfx/"
-## Level trims for recorded takes, in dB. Kenney's files are mastered hot compared with the
-## synthesised kit, and footsteps in particular must sit under everything else.
+## Level trims for recorded takes, in dB. Most files are mastered hot compared with the
+## synthesised kit, and footsteps in particular must sit under everything else. The SFX bus
+## limiter catches what a boosted take and a loud call add up to.
 const ASSET_GAIN := {
 	"paw": -9.0, "paw_hard": -9.0, "splat": -4.0, "dash": -2.0, "charge": -8.0, "tick": -2.0,
 	"bounce": -3.0, "bounce_bone": -3.0, "bounce_disc": -3.0, "ui": -6.0, "ui_back": -6.0,
+	# The barks are matched to one loudness when cut; the yappy ones sit a hair lower.
+	"bark": -4.0, "bark_labrador": -4.0, "bark_pitbull": -4.0, "bark_corgi": -5.0,
+	"bark_dachshund": -5.0, "bark_golden": -4.0, "bark_spaniel": -4.0,
+	# The glove-smack catch and the jingle are mastered quiet; a catch has to land as loud as a hit.
+	"catch": 3.0, "fanfare": 8.0,
+	"bonk": -5.0, "whistle": -9.0, "squeak": -7.0, "throw": -6.0, "blast": -3.0,
+}
+## Each breed's bark: [its folder suffix, pitch on its own takes, pitch on the shared bark].
+## A breed with its own takes is only nudged - the recording already is that dog - so the big
+## dogs sit a touch lower and the little ones a touch higher. Borrowing the shared bark (or the
+## synthesised one), the size has to come from pitch alone, so the spread is much wider.
+const BREED_VOICES := {
+	DogData.Breed.LABRADOR: ["labrador", 1.0, 0.95],
+	DogData.Breed.PITBULL: ["pitbull", 0.92, 0.82],
+	DogData.Breed.CORGI: ["corgi", 1.06, 1.35],
+	DogData.Breed.DACHSHUND: ["dachshund", 1.04, 1.3],
+	DogData.Breed.GOLDEN: ["golden", 0.94, 1.0],
+	DogData.Breed.SPANIEL: ["spaniel", 1.0, 1.15],
 }
 
 var _streams: Dictionary = {}
@@ -159,6 +182,26 @@ func play(sound_name: String, pitch: float = 1.0, volume_db: float = 0.0, pan: f
 	chosen.set_meta("priority", priority)
 	chosen.set_meta("started", now)
 	chosen.play()
+
+
+## The sound a breed barks with: its own recorded takes when it has them, else the shared bark
+## (recorded if bark/ has takes, synthesised if not).
+func bark_sound(breed: int) -> String:
+	var voice: Array = BREED_VOICES.get(breed, ["", 1.0, 1.0])
+	var own := "bark_%s" % voice[0]
+	return own if _pools.has(own) else "bark"
+
+
+## A dog's bark in its breed's voice. [param pitch] is the mood on top of the voice: up for a
+## happy revive, down for a dazed yelp. Pass [param world] to pan it like [method play_at].
+func bark(breed: int, pitch: float = 1.0, volume_db: float = 0.0, world: Vector3 = Vector3.INF) -> void:
+	var voice: Array = BREED_VOICES.get(breed, ["", 1.0, 1.0])
+	var sound := bark_sound(breed)
+	var base: float = voice[2] if sound == "bark" else voice[1]
+	if world == Vector3.INF:
+		play(sound, base * pitch, volume_db)
+	else:
+		play_at(sound, world, base * pitch, volume_db)
 
 
 func toy_impact(id: StringName, speed: float, world: Vector3 = Vector3.INF) -> void:

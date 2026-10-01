@@ -63,9 +63,6 @@ func card_anchor(rank: int) -> Vector3:
 
 
 func _process(delta: float) -> void:
-	if is_instance_valid(_crown):
-		_crown.rotation.y += delta * 1.3
-		_crown.position.y += sin(Time.get_ticks_msec() * 0.003) * delta * 0.12
 	# Keeps the idle dogs breathing and their stars turning; the winner's celebration runs itself.
 	for model in _models:
 		if is_instance_valid(model):
@@ -146,6 +143,9 @@ func _dog(slot: PlayerSlot, at: Vector3, x: float, winner: bool, last: bool) -> 
 	var model := DogModel.new()
 	add_child(model)
 	model.setup(slot.dog, slot.color)
+	# Everyone keeps their hat on the podium; the winner trades theirs for the crown.
+	if not winner:
+		model.set_hat(Game.hat(slot.hat))
 	model.position = at
 	# Turned a little in towards the winner, the way people stand on a podium.
 	var facing := Vector3(-x * 0.06, 0, 1).normalized()
@@ -167,11 +167,24 @@ func _dog(slot: PlayerSlot, at: Vector3, x: float, winner: bool, last: bool) -> 
 		_models.append(model)
 
 
-## A gold crown floating over the winner's head, turning slowly.
-func _crown_on(model: DogModel, at: Vector3, data: DogData) -> void:
+## A gold crown on the winner's head - on it, riding the head bone through every hop of the
+## celebration, set at a slight angle. The placeholder model has no head bone, so it floats
+## just above that one instead.
+func _crown_on(model: DogModel, at: Vector3, _data: DogData) -> void:
 	_crown = Node3D.new()
-	_crown.position = at + Vector3(0, model.height() + 0.05, 0)
-	add_child(_crown)
+	_crown.name = "Crown"
+	var head := model.head_top_anchor()
+	if head != null:
+		head.add_child(_crown)
+		# Sunk a little so the band sits in the fur rather than balancing on top of it.
+		# Set back a touch from the very top - the top of a dog's head is just behind the brow -
+		# so the band clears the eyes.
+		_crown.position = Vector3(0, -0.06, 0.05)
+		_crown.rotation_degrees = Vector3(-10, 0, 8)
+		_crown.scale = Vector3.ONE * 0.72
+	else:
+		_crown.position = at + Vector3(0, model.height() + 0.05, 0)
+		add_child(_crown)
 	var gold := Palette.GOLD.lightened(0.1)
 	Mats.mesh(_crown, Mats.cylinder(0.3, 0.16, 0.32), gold, Vector3(0, 0.08, 0))
 	for i in 5:
@@ -179,6 +192,12 @@ func _crown_on(model: DogModel, at: Vector3, data: DogData) -> void:
 		var tip := Vector3(cos(angle) * 0.27, 0.27, sin(angle) * 0.27)
 		Mats.mesh(_crown, Mats.cone(0.085, 0.24), gold, tip)
 		Mats.mesh(_crown, Mats.sphere(0.05), Color("e94b5a") if i % 2 == 0 else Color("4fb3e8"), tip + Vector3(0, 0.14, 0))
+	# The crown arrives: dropped onto the head with a bounce once the screen is up.
+	var settle := _crown.position
+	_crown.position = settle + Vector3(0, 1.2, 0)
+	var drop := _crown.create_tween()
+	drop.tween_interval(0.45)
+	drop.tween_property(_crown, "position", settle, 0.4).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 
 
 ## Confetti in the players' colours, already falling when the screen appears.

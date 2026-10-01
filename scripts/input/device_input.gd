@@ -7,8 +7,8 @@ extends RefCounted
 
 ## Gamepad (from the design board): stick/d-pad move, X = throw / catch (LT also catches), A = dash,
 ## A / X / Start = confirm in menus, B = back.
-const KEYBOARD_WASD := -1    ## WASD, Space = throw/catch, Left Shift or E = dash, Esc = back
-const KEYBOARD_ARROWS := -2  ## Arrows, Enter = throw/catch, Right Ctrl or "/" = dash, Backspace = back
+const KEYBOARD_WASD := -1    ## WASD, Space = throw/catch, Shift (either) = dash, Esc = back
+const KEYBOARD_ARROWS := -2  ## Arrows, Enter = throw/catch, "/" = dash, Backspace = back
 const VIRTUAL := -100        ## Scripted input for bots and automated tests
 const NONE := -999
 
@@ -20,26 +20,10 @@ var virtual_buttons: Dictionary = {}
 var _prev: Dictionary = {}
 ## Release edges keep their own history so a frame can ask for both edges of one button.
 var _prev_release: Dictionary = {}
-## Shift and Ctrl sit on both sides of the keyboard, one for each layout, but polling cannot tell
-## left from right. Game feeds key events here so each layout only answers to its own side.
-static var _sided_keys: Dictionary = {}
 
 
 func _init(p_device: int) -> void:
 	device = p_device
-
-
-static func note_key(event: InputEventKey) -> void:
-	if event.echo or (event.physical_keycode != KEY_SHIFT and event.physical_keycode != KEY_CTRL):
-		return
-	_sided_keys[Vector2i(event.physical_keycode, event.location)] = event.pressed
-
-
-## A platform that does not report the side counts the key for both layouts, as it used to.
-static func _sided_pressed(key: Key, location: KeyLocation) -> bool:
-	if not Input.is_physical_key_pressed(key):
-		return false
-	return _sided_keys.get(Vector2i(key, location), false) or _sided_keys.get(Vector2i(key, KEY_LOCATION_UNSPECIFIED), false)
 
 
 func move_vector() -> Vector2:
@@ -81,27 +65,37 @@ func is_pressed(action: StringName) -> bool:
 				&"throw", &"confirm":
 					return Input.is_physical_key_pressed(KEY_SPACE)
 				&"dash":
-					return _sided_pressed(KEY_SHIFT, KEY_LOCATION_LEFT) or Input.is_physical_key_pressed(KEY_E)
+					# Either Shift: whichever one the hand finds. One key name on the prompt, though -
+					# "Shift or E" read as a two-key chord.
+					return Input.is_physical_key_pressed(KEY_SHIFT)
 				&"back", &"pause":
 					return Input.is_physical_key_pressed(KEY_ESCAPE)
+				&"bark":
+					return Input.is_physical_key_pressed(KEY_Q)
 		KEYBOARD_ARROWS:
 			match action:
 				&"throw", &"confirm":
 					return Input.is_physical_key_pressed(KEY_ENTER) or Input.is_physical_key_pressed(KEY_KP_ENTER)
 				&"dash":
-					return _sided_pressed(KEY_CTRL, KEY_LOCATION_RIGHT) or Input.is_physical_key_pressed(KEY_SLASH) or Input.is_physical_key_pressed(KEY_KP_0)
+					# "/" sits under the right hand beside Enter and "." (bark), and is not a Shift,
+					# which the WASD player now owns on both sides.
+					return Input.is_physical_key_pressed(KEY_SLASH)
 				&"back":
 					return Input.is_physical_key_pressed(KEY_BACKSPACE)
 				&"pause":
 					return Input.is_physical_key_pressed(KEY_ESCAPE)
+				&"bark":
+					return Input.is_physical_key_pressed(KEY_PERIOD)
 		VIRTUAL:
 			return virtual_buttons.get(action, false)
 		_:
 			match action:
 				&"throw":
-					return Input.is_joy_button_pressed(device, JOY_BUTTON_X) or Input.is_joy_button_pressed(device, JOY_BUTTON_Y) \
+					return Input.is_joy_button_pressed(device, JOY_BUTTON_X) \
 						or Input.get_joy_axis(device, JOY_AXIS_TRIGGER_LEFT) > 0.5 \
 						or Input.get_joy_axis(device, JOY_AXIS_TRIGGER_RIGHT) > 0.5
+				&"bark":
+					return Input.is_joy_button_pressed(device, JOY_BUTTON_Y)
 				&"dash":
 					return Input.is_joy_button_pressed(device, JOY_BUTTON_A) or Input.is_joy_button_pressed(device, JOY_BUTTON_RIGHT_SHOULDER)
 				&"confirm":
@@ -225,11 +219,11 @@ static func pad_family(p_device: int) -> PadFamily:
 static func glyph(action: StringName, p_device: int) -> String:
 	match p_device:
 		KEYBOARD_WASD:
-			return {&"move": "WASD", &"throw": "Space", &"dash": "Shift or E", &"confirm": "Space",
-				&"back": "Esc", &"pause": "Esc"}.get(action, "")
+			return {&"move": "WASD", &"throw": "Space", &"dash": "Shift", &"confirm": "Space",
+				&"back": "Esc", &"pause": "Esc", &"bark": "Q"}.get(action, "")
 		KEYBOARD_ARROWS:
-			return {&"move": "Arrow keys", &"throw": "Enter", &"dash": "Ctrl or /", &"confirm": "Enter",
-				&"back": "Backspace", &"pause": "Esc"}.get(action, "")
+			return {&"move": "Arrow keys", &"throw": "Enter", &"dash": "/", &"confirm": "Enter",
+				&"back": "Backspace", &"pause": "Esc", &"bark": "."}.get(action, "")
 		VIRTUAL, NONE:
 			return ""
 	return pad_glyph(action, pad_family(p_device))
@@ -243,15 +237,15 @@ static func pad_glyph(action: StringName, family: PadFamily) -> String:
 			# An unmapped encoder numbers its buttons however its firmware chose, so confirm is
 			# "any button" rather than a number that might name nothing.
 			return {&"move": "Joystick", &"throw": "Button 1", &"dash": "Button 2", &"confirm": "any button",
-				&"back": "Button 2", &"pause": "Start"}.get(action, "")
+				&"back": "Button 2", &"pause": "Start", &"bark": "Button 4"}.get(action, "")
 		PadFamily.PLAYSTATION:
-			return {&"move": "Left stick", &"throw": "Square or Triangle/L2/R2", &"dash": "Cross or R1", &"confirm": "Cross",
-				&"back": "Circle", &"pause": "Options"}.get(action, "")
+			return {&"move": "Left stick", &"throw": "Square or L2/R2", &"dash": "Cross or R1", &"confirm": "Cross",
+				&"back": "Circle", &"pause": "Options", &"bark": "Triangle"}.get(action, "")
 		PadFamily.NINTENDO:
-			return {&"move": "Left stick", &"throw": "Y or X/ZL/ZR", &"dash": "B or R", &"confirm": "B",
-				&"back": "A", &"pause": "+"}.get(action, "")
-	return {&"move": "Left stick", &"throw": "X or Y/LT/RT", &"dash": "A or RB", &"confirm": "A",
-		&"back": "B", &"pause": "Menu"}.get(action, "")
+			return {&"move": "Left stick", &"throw": "Y or ZL/ZR", &"dash": "B or R", &"confirm": "B",
+				&"back": "A", &"pause": "+", &"bark": "X"}.get(action, "")
+	return {&"move": "Left stick", &"throw": "X or LT/RT", &"dash": "A or RB", &"confirm": "A",
+		&"back": "B", &"pause": "Menu", &"bark": "Y"}.get(action, "")
 
 
 ## Just the main button, for short prompts: "X", not "X or LT/RT".
@@ -278,8 +272,8 @@ static func family_name(p_device: int) -> String:
 
 ## One line describing how to play on this device, for the HUD and menus.
 static func controls_line(p_device: int) -> String:
-	return "%s move · %s throw / catch (hold for power) · %s dash · %s pause" % [
-		glyph(&"move", p_device), glyph(&"throw", p_device), glyph(&"dash", p_device), glyph(&"pause", p_device)]
+	return "%s move · %s throw / catch (hold for power) · %s dash · %s bark · %s pause" % [
+		glyph(&"move", p_device), glyph(&"throw", p_device), glyph(&"dash", p_device), glyph(&"bark", p_device), glyph(&"pause", p_device)]
 
 
 ## The devices prompts should speak to: the humans who have joined, or before anyone has,

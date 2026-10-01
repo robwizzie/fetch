@@ -34,6 +34,14 @@ func _ready() -> void:
 	Game.gallery_kind = "dogs"
 	await _shoot("res://scenes/ui/gallery.tscn", "04_gallery_dogs")
 	await _shoot("res://scenes/ui/model_review.tscn", "06_model_studio")
+	Game.gallery_kind = "powerups"
+	await _shoot("res://scenes/ui/gallery.tscn", "07_gallery_powerups")
+	Game.gallery_kind = "toys"
+	await _shoot("res://scenes/ui/gallery.tscn", "08_gallery_toys")
+	Game.gallery_kind = "arenas"
+	await _shoot("res://scenes/ui/gallery.tscn", "09_gallery_arenas")
+	Game.gallery_kind = "hats"
+	await _shoot("res://scenes/ui/gallery.tscn", "09b_gallery_hats")
 	Game.last_match_winner = Game.slots[1]
 	Game.slots[1].score = 5
 	Game.slots[0].score = 3
@@ -87,7 +95,10 @@ func _shoot(path: String, name_: String, settle: float = 0.4) -> void:
 
 
 func _capture(name_: String) -> void:
-	await RenderingServer.frame_post_draw
+	# Forced rather than awaited: a window the OS considers hidden stops drawing, and waiting for
+	# frame_post_draw then hangs the capture.
+	await get_tree().process_frame
+	RenderingServer.force_draw(false)
 	var img := get_viewport().get_texture().get_image()
 	var file := out_dir.path_join(name_ + ".png")
 	var err := img.save_png(file)

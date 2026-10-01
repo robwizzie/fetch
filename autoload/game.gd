@@ -24,6 +24,7 @@ var dogs: Array[DogData] = []
 var toys: Array[ToyData] = []
 var arenas: Array[ArenaData] = []
 var modes: Array[GameModeData] = []
+var hats: Array[HatData] = []
 
 var slots: Array[PlayerSlot] = []
 var selected_arena: ArenaData
@@ -46,11 +47,13 @@ var rumble := true
 ## The slow-motion beat on a knockout. Some players find it disorienting; hit-stop stays.
 var knockout_slowmo := true
 var screen_shake := true
+## The slow, close replay of the knockout that decided a round.
+var replays := true
+## Free-for-all: knocked-out players float around as ghosts until the next round. A match
+## option, off unless chosen on the setup screen.
+var ghosts := false
 ## A player palette chosen to stay distinct for the common kinds of colour blindness.
 var colorblind_colors := false
-## Each player's button row on their HUD card: always, only for the first rounds, or never.
-enum ControlHints { ALWAYS, FIRST_ROUNDS, OFF }
-var control_hints: ControlHints = ControlHints.ALWAYS
 var selected_toy: ToyData
 var selected_mode: GameModeData
 ## Two packs instead of a free-for-all. Teams are assigned by seat: odd seats against even.
@@ -79,6 +82,11 @@ func first_treat_round() -> int:
 		return treats_from_round
 	return 1 if matches_played > 0 else AUTO_FIRST_MATCH_ROUND
 var points_to_win: int = 5
+## How a match is won. ROUNDS: the last dog (or pack) standing takes the round, first to
+## points_to_win rounds wins. BONKS (the Boomerang Fu way): every rival bonked is a point,
+## bonking yourself loses one, first to points_to_win bonks wins.
+enum Scoring { ROUNDS, BONKS }
+var scoring: Scoring = Scoring.ROUNDS
 var last_match_winner: PlayerSlot
 
 ## Which content list the gallery scene shows ("dogs", "toys", "arenas", "modes").
@@ -163,7 +171,6 @@ func _input(event: InputEvent) -> void:
 	var toggle := false
 	if event is InputEventKey:
 		var key := event as InputEventKey
-		DeviceInput.note_key(key)
 		toggle = key.pressed and not key.echo and key.keycode == KEY_F11
 	elif event is InputEventJoypadButton:
 		var pad := event as InputEventJoypadButton
@@ -197,8 +204,8 @@ func _load_settings() -> void:
 		rumble = config.get_value("comfort", "rumble", rumble)
 		knockout_slowmo = config.get_value("comfort", "knockout_slowmo", knockout_slowmo)
 		screen_shake = config.get_value("comfort", "screen_shake", screen_shake)
+		replays = config.get_value("comfort", "replays", replays)
 		colorblind_colors = config.get_value("comfort", "colorblind_colors", colorblind_colors)
-		control_hints = config.get_value("comfort", "control_hints", int(control_hints)) as ControlHints
 	elif _has_unmapped_pad():
 		# First run on a cabinet. Nobody plays an arcade machine in a window.
 		fullscreen = true
@@ -243,8 +250,8 @@ func save_settings() -> void:
 	config.set_value("comfort", "rumble", rumble)
 	config.set_value("comfort", "knockout_slowmo", knockout_slowmo)
 	config.set_value("comfort", "screen_shake", screen_shake)
+	config.set_value("comfort", "replays", replays)
 	config.set_value("comfort", "colorblind_colors", colorblind_colors)
-	config.set_value("comfort", "control_hints", int(control_hints))
 	config.save(SETTINGS_PATH)
 
 
@@ -257,6 +264,8 @@ func _load_content() -> void:
 		arenas.append(r)
 	for r in _load_dir("res://data/modes"):
 		modes.append(r)
+	for r in _load_dir("res://data/hats"):
+		hats.append(r)
 	print("FETCH content: %d dogs, %d toys, %d arenas, %d modes" % [dogs.size(), toys.size(), arenas.size(), modes.size()])
 
 
@@ -302,6 +311,11 @@ func add_player(device: int) -> PlayerSlot:
 	slot.index = _first_free_index()
 	slot.device = device
 	slot.dog = dogs[slot.index % dogs.size()] if not dogs.is_empty() else null
+	# Two players are never the same dog: a new seat starts on one nobody has.
+	for dog in dogs:
+		if not slots.any(func(s: PlayerSlot) -> bool: return s.dog == dog):
+			slot.dog = dog
+			break
 	slots.append(slot)
 	slots.sort_custom(func(a: PlayerSlot, b: PlayerSlot) -> bool: return a.index < b.index)
 	Events.player_joined.emit(slot)
@@ -339,13 +353,57 @@ func reset_scores() -> void:
 ## four-player cabinet splits two against two without anybody choosing. Goes by position in the
 ## list rather than seat number: seats keep their number when someone leaves, and two dogs on
 ## seats 0 and 2 would otherwise both land on the same pack.
+##
+## Packs chosen on the setup screen (1v1, 2v1, 3v1, 2v2 - any split) are kept, as long as both
+## packs still have somebody in them; otherwise seats alternate again.
 func assign_teams() -> void:
+	if not team_mode:
+		for s in slots:
+			s.team = -1
+		return
+	var counts := [0, 0]
+	var chosen := true
+	for s in slots:
+		if s.team < 0 or s.team >= TEAM_NAMES.size():
+			chosen = false
+		else:
+			counts[s.team] += 1
+	if chosen and counts[0] > 0 and counts[1] > 0:
+		return
 	for i in slots.size():
-		slots[i].team = (i % TEAM_NAMES.size()) if team_mode else -1
+		slots[i].team = i % TEAM_NAMES.size()
+
+
+## True when every pack has at least one dog, so a team match can start.
+func teams_valid() -> bool:
+	if not team_mode:
+		return true
+	var counts := [0, 0]
+	for s in slots:
+		if s.team >= 0 and s.team < counts.size():
+			counts[s.team] += 1
+	return counts[0] > 0 and counts[1] > 0
+
+
+## Adds (or, negative, takes away) points for whichever side [param slot] is on. Never below nil.
+func add_points(slot: PlayerSlot, amount: int) -> void:
+	if slot == null:
+		return
+	if team_mode and slot.team >= 0:
+		team_scores[slot.team] = maxi(0, team_scores[slot.team] + amount)
+	else:
+		slot.score = maxi(0, slot.score + amount)
 
 
 ## What a side is called, and what colour it flies. Falls back to the player's own colour in a
 ## free-for-all, where the "team" is one dog.
+func hat(id: StringName) -> HatData:
+	for h in hats:
+		if h.id == id:
+			return h
+	return null
+
+
 func team_name(team: int) -> String:
 	return TEAM_NAMES[team] if team >= 0 and team < TEAM_NAMES.size() else ""
 

@@ -75,14 +75,17 @@ stamps. The super ball has curved coloured panels. Loose toys have thin ground m
 the mystery tin has its own gold double ring. Held and thrown toys retain their existing gameplay
 sizes, grips, collision shapes and behavior.
 
-Five arenas, each about one idea, share softly bevelled furniture, quieter playing surfaces and
+Eight arenas, each about one idea, share softly bevelled furniture, quieter playing surfaces and
 deliberate perimeter detail. **Backyard** is a pool you cross the slow way or go round, with two
 tables reaching out either side of it to split the yard into lanes. **Living Room** is the same
 shape indoors: the rug is the tempting middle, couch and telly close off the end lanes, armchairs
 are the only cover on the flanks. **Pup Beach** is wide open sand where the two rocks matter
 because there is nothing else. **Agility Park** is about the route you take — the tunnel and the
 A-frame are the two ways through, with weave poles screening each lane. **Warp Yard** is portals
-and switch-gates. Decorative geometry does not add hidden collision.
+and switch-gates. **Frozen Pond** is a glossy blue sheet of ice in a snowy bowl - grip on the snow,
+none on the ice - with two dark holes of open water. **Kitchen** is two conveyor belts with
+scrolling yellow chevrons running opposite ways past the island. **Toy Room** is foam play-mats and
+a wooden train track; the train is the moving cover. Decorative geometry does not add hidden collision.
 
 Every layout follows the same rules, and `tests/arena_layout_test.tscn` holds all of them to it:
 four safe starts, the same run to a toy from each, every start and pickup joined to the rest of

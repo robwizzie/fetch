@@ -135,7 +135,8 @@ func show_board(headline: String, sides: Array, target: int, prompt: String) -> 
 
 
 func _process(delta: float) -> void:
-	if not visible or _done:
+	# Paused means paused: the board waits under the pause menu instead of timing out behind it.
+	if not visible or _done or get_tree().paused:
 		return
 	_time += delta
 	if _auto:
@@ -148,7 +149,7 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not visible or _done or _time < SKIP_AFTER:
+	if not visible or _done or _time < SKIP_AFTER or get_tree().paused:
 		return
 	# ui_accept is the only action bound in the InputMap; DeviceInput polls gameplay buttons
 	# itself, and Game binds every pad button to ui_accept on a cabinet.
