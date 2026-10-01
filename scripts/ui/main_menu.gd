@@ -25,7 +25,10 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventJoypadButton and event.pressed:
 		_activation_device = event.device
 	elif event is InputEventKey and event.pressed:
-		_activation_device = DeviceInput.KEYBOARD_WASD
+		# Whoever drives the menu with the arrows and Enter plays on the arrows layout.
+		var key := (event as InputEventKey).physical_keycode
+		var arrows := [KEY_ENTER, KEY_KP_ENTER, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_BACKSPACE]
+		_activation_device = DeviceInput.KEYBOARD_ARROWS if key in arrows else DeviceInput.KEYBOARD_WASD
 	if event.is_action_pressed("ui_cancel") and is_instance_valid(_modal):
 		_close_modal()
 		get_viewport().set_input_as_handled()
@@ -233,6 +236,21 @@ func _show_settings() -> void:
 	body.add_child(_volume_row("MASTER VOLUME", "Master"))
 	body.add_child(_volume_row("MUSIC VOLUME", "Music"))
 	body.add_child(_volume_row("EFFECTS VOLUME", "SFX"))
+	body.add_child(_toggle("CONTROLLER RUMBLE", func() -> bool: return Game.rumble,
+		func(on: bool) -> void: Game.rumble = on))
+	body.add_child(_toggle("KNOCKOUT SLOW MOTION", func() -> bool: return Game.knockout_slowmo,
+		func(on: bool) -> void: Game.knockout_slowmo = on))
+	body.add_child(_toggle("SCREEN SHAKE", func() -> bool: return Game.screen_shake,
+		func(on: bool) -> void: Game.screen_shake = on))
+	body.add_child(_toggle("COLOUR-BLIND FRIENDLY COLOURS", func() -> bool: return Game.colorblind_colors,
+		func(on: bool) -> void: Game.colorblind_colors = on))
+	var prompt_names := ["BUTTON PROMPTS: ALWAYS", "BUTTON PROMPTS: FIRST ROUNDS", "BUTTON PROMPTS: OFF"]
+	var prompts := UiKit.wood_button(prompt_names[int(Game.control_hints)], 770)
+	prompts.pressed.connect(func() -> void:
+		Game.control_hints = ((int(Game.control_hints) + 1) % 3) as Game.ControlHints
+		Game.save_settings()
+		prompts.text = prompt_names[int(Game.control_hints)])
+	body.add_child(prompts)
 	var fullscreen := UiKit.wood_button("FULLSCREEN: ON" if _is_fullscreen() else "FULLSCREEN: OFF", 770)
 	fullscreen.pressed.connect(func() -> void:
 		# Remembered, so a cabinet comes back up filling its screen. F11 or Start+Select also works.
@@ -242,6 +260,16 @@ func _show_settings() -> void:
 	body.add_child(_modal_copy("Sound, display and controls are remembered on this machine.", 21))
 	_modal_close_button(body)
 	sound.grab_focus()
+
+
+## An ON/OFF settings button that saves as it flips.
+func _toggle(title: String, read: Callable, write: Callable) -> Button:
+	var button := UiKit.wood_button("%s: %s" % [title, "ON" if read.call() else "OFF"], 770)
+	button.pressed.connect(func() -> void:
+		write.call(not read.call())
+		Game.save_settings()
+		button.text = "%s: %s" % [title, "ON" if read.call() else "OFF"])
+	return button
 
 
 ## Text on the modal's paper. The cover's cream reads over photography and vanishes over this,
@@ -360,9 +388,10 @@ func _modal_close_button(body: VBoxContainer) -> void:
 	close.pressed.connect(_close_modal)
 	body.add_child(close)
 	close.grab_focus()
+	# Recursive: the volume sliders sit inside label rows, and a controller has to reach them.
 	var controls: Array[Control] = []
-	for child in body.get_children():
-		if child is Control and child.focus_mode == Control.FOCUS_ALL:
+	for child in body.find_children("*", "Control", true, false):
+		if child.focus_mode == Control.FOCUS_ALL and child.is_visible_in_tree():
 			controls.append(child)
 	for i in controls.size():
 		controls[i].focus_neighbor_top = controls[i].get_path_to(controls[wrapi(i - 1, 0, controls.size())])

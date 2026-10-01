@@ -15,8 +15,12 @@ func _ready() -> void:
 	await _grass()
 	await _dog_bed()
 	await _every_arena_has_one()
+	await _holes()
+	await _breakable_crate()
+	await _swing_board()
+	await _stranded_toy()
 	if not _failed:
-		print("[gimmicks] PASSED: sprinkler shoves, mower knocks dizzy, grass hides, dog beds slide, one per arena")
+		print("[gimmicks] PASSED: sprinkler shoves, mower knocks dizzy, grass hides, dog beds slide, one per arena, holes, crates that break, swing boards, stranded toys come back")
 	get_tree().quit(1 if _failed else 0)
 
 
@@ -141,6 +145,100 @@ func _every_arena_has_one() -> void:
 		_check(found, "%s has its gimmick" % data.display_name)
 		arena.queue_free()
 		await get_tree().process_frame
+
+
+## Walk up to a hole and you stop at the rim; get whacked in and you are out, credited to the
+## whacker; dash and you hop it.
+func _holes() -> void:
+	await _new_arena()
+	var hole := Pit.new()
+	_arena.add_child(hole)
+	var walker := _dog(Vector3(hole.radius - 0.2, 0, 0))
+	walker.set_physics_process(false)
+	hole._handle_dog(walker)
+	_check(walker.alive, "walking into a hole stops at the rim")
+	_check(Vector2(walker.global_position.x, walker.global_position.z).length() >= hole.radius - 0.01, "and puts you back on the edge")
+	var whacker := _dog(Vector3(4, 0, 0), 1)
+	whacker.set_physics_process(false)
+	walker.receive_whack(Vector3(-1, 0, 0), whacker)
+	walker.global_position = Vector3(0.3, 0, 0)
+	hole._handle_dog(walker)
+	_check(not walker.alive, "knocked into a hole is a knockout")
+	_check(walker.knocked_out_by(null) == whacker, "credited to whoever knocked you in")
+	var dasher := _dog(Vector3(0.2, 0, 0.1), 2)
+	dasher.set_physics_process(false)
+	dasher._dash_timer = 0.2
+	hole._handle_dog(dasher)
+	_check(dasher.alive, "a dash hops over a hole")
+
+
+## Toys wear a crate down and it splinters - a charged throw counts double - and it is back
+## for the next round.
+func _breakable_crate() -> void:
+	await _new_arena()
+	var crate := Obstacle.new()
+	crate.kind = Obstacle.Kind.CRATE
+	crate.breakable = true
+	crate.toughness = 3
+	_arena.add_child(crate)
+	await get_tree().physics_frame
+	crate.take_hit(Vector3(8, 0, 0))
+	_check(not crate._broken, "one soft hit dents a crate")
+	crate.take_hit(Vector3(18, 0, 0))
+	_check(crate._broken, "a wound-up hit counts double and finishes it")
+	await get_tree().physics_frame
+	var solid := false
+	for shape in crate._shapes:
+		solid = solid or not shape.disabled
+	_check(not solid, "a broken crate is open ground")
+	crate.reset_for_round()
+	await get_tree().physics_frame
+	solid = false
+	for shape in crate._shapes:
+		solid = solid or not shape.disabled
+	_check(not crate._broken and solid, "and it is whole again next round")
+
+
+func _swing_board() -> void:
+	await _new_arena()
+	var board := SwingBoard.new()
+	_arena.add_child(board)
+	var before := board.rotation_degrees.y
+	board.toggle()
+	await get_tree().create_timer(SwingBoard.TURN_TIME + 0.15).timeout
+	_check(absf(board.rotation_degrees.y - before - board.swing) < 1.0, "a switch swings the board a quarter turn")
+	board.reset_for_round()
+	_check(is_equal_approx(board.rotation_degrees.y, before), "and it starts each round where it was built")
+
+
+## Backyard's hedge leaves a gap to the fence narrower than a dog. A toy that settles in it comes
+## back out rather than being lost to the round.
+func _stranded_toy() -> void:
+	if is_instance_valid(_arena):
+		_arena.queue_free()
+		_arena = null
+	Game.tutorial_shown = true
+	Game.random_arena_each_round = false
+	for arena_data in Game.arenas:
+		if arena_data.id == &"backyard":
+			Game.selected_arena = arena_data
+	Game.debug_fill_players(2)
+	var game_match: Node = load("res://scenes/match/match.tscn").instantiate()
+	add_child(game_match)
+	while game_match.phase != game_match.Phase.PLAYING:
+		await get_tree().process_frame
+	var toy: Toy = game_match.toys[0]
+	toy.set_physics_process(false)
+	toy.state = Toy.State.IDLE
+	toy.velocity = Vector3.ZERO
+	toy.global_position = Vector3(12.4, toy.global_position.y, -0.9)
+	await get_tree().create_timer(0.8).timeout
+	var biggest := 0.0
+	for dog in game_match.dogs:
+		biggest = maxf(biggest, dog.effective_radius())
+	_check(game_match._reachable(toy.global_position, biggest, biggest + toy.data.radius + 0.1), "a toy wedged behind the hedge comes back out where dogs can reach it")
+	game_match.queue_free()
+	await get_tree().process_frame
 
 
 func _check(ok: bool, message: String) -> void:

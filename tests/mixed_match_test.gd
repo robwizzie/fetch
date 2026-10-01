@@ -17,6 +17,9 @@ var _buff_seen := false
 
 
 func _ready() -> void:
+	# Machine settings must not decide what these assertions see.
+	Game.knockout_slowmo = true
+	Game.screen_shake = true
 	# These suites assert on a normal scored round, so skip the one-off practice round.
 	Game.tutorial_shown = true
 	process_mode = Node.PROCESS_MODE_ALWAYS

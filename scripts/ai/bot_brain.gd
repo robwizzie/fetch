@@ -61,16 +61,17 @@ func _physics_process(delta: float) -> void:
 	_route_clock -= delta
 	_target_time -= delta
 	var rival := _committed_rival(dog)
-	if rival == null:
-		dog.input.virtual_move = Vector2.ZERO
-		return
-	# A squeaking toy about to burst: grab it if it is right here, otherwise get clear.
+	# A squeaking toy about to burst: grab it if it is right here, otherwise get clear. A side
+	# toy can never be picked up, so that one is always a run.
 	var fused := _armed_blast_near(dog)
 	if fused != null:
 		var away := Vector2(dog.global_position.x - fused.global_position.x, dog.global_position.z - fused.global_position.z)
-		if away.length() > dog.effective_radius() + fused.data.radius + 0.6 or dog.held_toy != null:
+		if away.length() > dog.effective_radius() + fused.data.radius + 0.6 or dog.held_toy != null or fused.ephemeral:
 			dog.input.virtual_move = _steer(dog, away.normalized(), delta)
 			return
+	if rival == null:
+		_search(dog, delta)
+		return
 	var aim_at := _aim_point(dog, rival)
 	var goal := aim_at
 	if dog.held_toy == null:
@@ -98,7 +99,8 @@ func _physics_process(delta: float) -> void:
 	var urgent := dog.held_toy != null and GameMode.current != null and GameMode.current.bot_should_throw_now(dog, dog.held_toy)
 	if urgent:
 		_attack_wait = minf(_attack_wait, 0.0)
-	if dog.held_toy and distance < (16.0 if urgent else 11.0) and _clear_path(dog, aim_at):
+	var keeps := dog.held_toy != null and GameMode.current != null and GameMode.current.bot_keeps(dog, dog.held_toy)
+	if dog.held_toy and not keeps and distance < (16.0 if urgent else 11.0) and _clear_path(dog, aim_at):
 		if _attack_wait <= 0.0:
 			# Briefly face the opponent before releasing. Players get a visible tell.
 			_aim_time += delta
@@ -128,6 +130,28 @@ func _physics_process(delta: float) -> void:
 		_aim_time = 0.0
 		_charge_goal = -1.0
 	dog.input.virtual_move = _move_along_route(dog, goal, delta) * 0.92
+	_react(dog)
+
+
+## Nobody in sight (every rival hidden in grass or ghosted): no shot to line up, but a bot
+## standing still is a free target. Arm up, take treats, chase the mode's goal, and drift to the
+## middle where a hiding dog is most likely to be flushed out.
+func _search(dog: Dog, delta: float) -> void:
+	_aim_time = 0.0
+	_charge_goal = -1.0
+	var goal := Vector3.ZERO
+	if dog.held_toy == null:
+		var loose := _nearest_toy(dog)
+		if loose:
+			goal = loose.global_position
+	var treat := _nearby_treat(dog)
+	if treat:
+		goal = treat.global_position
+	var mode_goal := GameMode.current.bot_goal(dog) if GameMode.current != null else Vector3.INF
+	if mode_goal != Vector3.INF and (goal == Vector3.ZERO or dog.global_position.distance_to(mode_goal) < dog.global_position.distance_to(goal)):
+		goal = mode_goal
+	var flat := Vector2(goal.x - dog.global_position.x, goal.z - dog.global_position.z)
+	dog.input.virtual_move = _move_along_route(dog, goal, delta) * 0.92 if flat.length() > 1.0 else Vector2.ZERO
 	_react(dog)
 
 
@@ -200,7 +224,7 @@ func _nearest_toy(dog: Dog) -> Toy:
 	var nearest: Toy = null
 	var best := INF
 	for candidate in get_tree().get_nodes_in_group("toys"):
-		if candidate.state != Toy.State.IDLE:
+		if candidate.state != Toy.State.IDLE or candidate.ephemeral:
 			continue
 		var distance := dog.global_position.distance_squared_to(candidate.global_position)
 		if distance < best:

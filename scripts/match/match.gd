@@ -31,7 +31,10 @@ const MIN_TOY_SPAWN_DISTANCE := 5.0
 
 var arena: Arena
 var arena_data: ArenaData
-var _coach: TutorialCoach
+## Seconds to the next check for toys stranded out of every dog's reach.
+var _reach_clock := 0.5
+## One lesson card per human in the practice pens.
+var _cards: Array[PracticeCard] = []
 var _pens: Array[ReadyPen] = []
 var dogs: Array[Dog] = []
 var toys: Array[Toy] = []
@@ -76,7 +79,9 @@ func _ready() -> void:
 	hud.quit_requested.connect(_return_to_menu)
 	hud.countdown_finished.connect(_begin_play)
 	hud.banner_finished.connect(_finish_round)
+	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	Events.dog_eliminated.connect(_on_dog_eliminated)
+	Events.toy_caught.connect(_on_toy_caught)
 	Music.play("match")
 	# A brand new session gets a practice round first. It is not a round: nothing is scored,
 	# the round counter does not move, and nobody can be knocked out behind the walls.
@@ -94,6 +99,10 @@ func _physics_process(delta: float) -> void:
 	for toy in toys:
 		if toy.state != Toy.State.HELD and arena.is_outside(toy.global_position):
 			toy.drop(arena.get_toy_spawn_position(0))
+	_reach_clock -= delta
+	if _reach_clock <= 0.0:
+		_reach_clock = 0.5
+		_rescue_stranded_toys()
 	if Game.powerups_enabled and round_number >= Game.first_treat_round():
 		_treat_clock -= delta
 		if _treat_clock <= 0.0 and _treat_count < treats_per_round():
@@ -103,13 +112,14 @@ func _physics_process(delta: float) -> void:
 	hud.update_match(dogs, round_time_left, round_number)
 	if practice_round:
 		hud.practice_clock()
-	else:
-		mode.tick(delta, dogs)
-		# A mode can decide a round on its own clock (a bed held long enough), not just on a KO.
-		if phase == Phase.PLAYING and mode.is_round_over(dogs):
-			phase = Phase.ROUND_OVER
-			_end_round(mode.round_winner(dogs))
-			return
+	# The warm-up runs the mode's rules too (a fuse that burns, a bed that banks time) - it just
+	# scores nothing, which _end_round takes care of.
+	mode.tick(delta, dogs)
+	# A mode can decide a round on its own clock (a bed held long enough), not just on a KO.
+	if phase == Phase.PLAYING and mode.is_round_over(dogs):
+		phase = Phase.ROUND_OVER
+		_end_round(mode.round_winner(dogs))
+		return
 	if round_time_left <= 0.0:
 		phase = Phase.ROUND_OVER
 		var decided := mode.timeout_winner(dogs) if not practice_round else null
@@ -146,6 +156,17 @@ func set_paused(paused: bool) -> void:
 	hud.show_pause(paused)
 
 
+## A player's pad dropping out leaves their dog frozen for everyone to hit: stop the game until
+## it is back.
+func _on_joy_connection_changed(device: int, connected: bool) -> void:
+	if connected or get_tree().paused:
+		return
+	for slot in Game.slots:
+		if not slot.is_bot and slot.device == device:
+			set_paused(true)
+			return
+
+
 func _return_to_menu() -> void:
 	get_tree().paused = false
 	Game.goto(Game.SCENE_MAIN_MENU)
@@ -177,6 +198,11 @@ func start_round() -> void:
 		_install_arena(_chosen_arena())
 	elif Game.random_arena_each_round and round_number > 1 and not practice_round:
 		_install_arena(Game.random_arena(arena_data))
+	else:
+		# Same arena as last round: put back anything the last round moved.
+		for node in arena.find_children("*", "", true, false):
+			if node.has_method("reset_for_round"):
+				node.call("reset_for_round")
 	_clear_actors()
 	actors.process_mode = Node.PROCESS_MODE_DISABLED
 	for i in Game.slots.size():
@@ -234,7 +260,6 @@ func _begin_play() -> void:
 	if phase != Phase.COUNTDOWN:
 		return
 	phase = Phase.PLAYING
-	_maybe_coach()
 	actors.process_mode = Node.PROCESS_MODE_PAUSABLE
 	for dog in dogs:
 		if is_instance_valid(dog):
@@ -420,12 +445,16 @@ func _start_tutorial() -> void:
 
 	hud.update_match(dogs, ROUND_SECONDS, 1)
 	hud.practice_clock()
-	hud.announce("PRACTICE — nothing is scored")
-	_coach = TutorialCoach.new()
-	_coach.setup(dogs)
-	hud.add_child(_coach)
-	_coach.watch_events()
-	_coach.finished.connect(func() -> void: _coach = null)
+	hud.announce("Try each move, then stand on your pad")
+	var camera := arena.get_node_or_null("Camera") as Camera3D
+	for i in _pens.size():
+		var slot := Game.slots[i]
+		if slot.is_bot:
+			continue
+		var card := PracticeCard.new()
+		card.setup(slot, dogs[i], _pens[i], camera)
+		hud.add_child(card)
+		_cards.append(card)
 
 
 ## Booths sit apart with clear ground between them and an open middle, so nobody can reach a
@@ -527,10 +556,6 @@ func _set_furniture_active(active: bool) -> void:
 			area.visible = active
 
 
-func _maybe_coach() -> void:
-	pass
-
-
 ## Whatever the setup screen settled on for this match.
 func _chosen_arena() -> ArenaData:
 	return Game.random_arena() if Game.random_arena_each_round else Game.selected_arena
@@ -564,9 +589,10 @@ func _install_arena(data: ArenaData) -> void:
 
 
 func _dismiss_coach() -> void:
-	if is_instance_valid(_coach):
-		_coach.dismiss()
-		_coach = null
+	for card in _cards:
+		if is_instance_valid(card):
+			card.dismiss()
+	_cards.clear()
 
 
 func _clear_actors() -> void:
@@ -576,13 +602,61 @@ func _clear_actors() -> void:
 		c.queue_free()
 
 
-func _on_dog_eliminated(dog: Node, _by: Node) -> void:
+func _on_dog_eliminated(dog: Node, by: Node) -> void:
 	if phase != Phase.PLAYING:
 		return
+	if not practice_round and dog is Dog:
+		var victim := dog as Dog
+		victim.slot.bonked += 1
+		# Whoever threw it - or whacked them down a hole - gets the bonk, unless it was their own
+		# toy or a pack-mate's.
+		var credited := victim.knocked_out_by(by)
+		if credited != null and not credited.slot.allied_with(victim.slot):
+			credited.slot.knockouts += 1
 	mode.on_dog_eliminated(dog)
 	hud.update_match(dogs, round_time_left, round_number)
 	# Finish the collision batch first: a blast can eliminate several dogs simultaneously.
 	call_deferred("_check_round_end")
+
+
+func _on_toy_caught(_toy: Node, by: Node) -> void:
+	if phase == Phase.PLAYING and not practice_round and by is Dog:
+		(by as Dog).slot.catches += 1
+
+
+## A toy that has come to rest where no dog can get to it - wedged between a prop and the fence,
+## in a gap narrower than a dog - is lost to the round, and a round with its toys lost can only
+## time out. It hops back out to the nearest spot a dog can reach.
+func _rescue_stranded_toys() -> void:
+	# Judged by the biggest dog in the match: a toy only the corgi can squeeze in for is still
+	# lost to everyone else.
+	var biggest := 0.0
+	for dog in dogs:
+		if is_instance_valid(dog):
+			biggest = maxf(biggest, dog.effective_radius())
+	if biggest <= 0.0:
+		return
+	for toy in toys:
+		if not is_instance_valid(toy) or toy.state != Toy.State.IDLE or toy.ephemeral or toy.velocity.length() > 0.3:
+			continue
+		if _reachable(toy.global_position, biggest, biggest + toy.data.radius + 0.1):
+			continue
+		var spot := arena.clear_pickup_position(toy.global_position, biggest + 0.3)
+		Juice.burst(actors, toy.global_position + Vector3.UP * 0.3, Color(1, 1, 1, 0.8), 8, 2.0)
+		toy.global_position = Vector3(spot.x, toy.global_position.y, spot.z)
+		toy.velocity = Vector3.ZERO
+
+
+## True when a dog of [param body] radius can stand somewhere within [param reach] of [param at].
+func _reachable(at: Vector3, body: float, reach: float) -> bool:
+	if arena.is_clear_position(at, body):
+		return true
+	for ring in [reach * 0.5, reach]:
+		for step in 12:
+			var angle := TAU * float(step) / 12.0
+			if arena.is_clear_position(at + Vector3(cos(angle), 0, sin(angle)) * ring, body):
+				return true
+	return false
 
 
 func _check_round_end() -> void:
@@ -598,7 +672,7 @@ func _end_round(winner: PlayerSlot, message: String = "") -> void:
 	# Lock the result immediately: collision changes must wait until callbacks finish.
 	for dog in dogs:
 		dog.round_locked = true
-		if winner and dog.slot == winner:
+		if winner and dog.slot.allied_with(winner):
 			dog.model.play_victory()
 	for toy in toys:
 		toy.call_deferred("set_physics_process", false)
@@ -619,10 +693,10 @@ func _end_round(winner: PlayerSlot, message: String = "") -> void:
 	var text := DogTalk.round_win(winner.dog.display_name) if winner else DogTalk.draw()
 	if winner and Game.team_mode and winner.team >= 0:
 		text = DogTalk.round_win(Game.team_name(winner.team))
-	if practice_round:
-		text = "Warm-up over - no points. Here we go!"
 	if not message.is_empty():
 		text = message
+	if practice_round:
+		text = "Warm-up over - no points. Here we go!"
 	var color := winner.color if winner else UiKit.CREAM
 	if winner and Game.team_mode and winner.team >= 0:
 		color = Game.team_color(winner.team)

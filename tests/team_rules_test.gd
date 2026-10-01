@@ -27,6 +27,14 @@ func _ready() -> void:
 	_check(Game.slots[0].allied_with(Game.slots[2]), "seats 1 and 3 share a pack")
 	_check(Game.slots[1].allied_with(Game.slots[3]), "seats 2 and 4 share a pack")
 	_check(not Game.slots[0].allied_with(Game.slots[1]), "neighbouring seats are opponents")
+	# Seats keep their number when someone leaves. Two dogs left on seats 1 and 3 must still
+	# end up on opposite packs, or every round is over on its first frame.
+	Game.slots.remove_at(3)
+	Game.slots.remove_at(1)
+	Game.assign_teams()
+	_check(not Game.slots[0].allied_with(Game.slots[1]), "a gap in the seats does not put everyone on one pack")
+	_seat_four()
+	Game.assign_teams()
 
 	await _fire_rules()
 	await _team_round_and_scoring()
@@ -125,6 +133,8 @@ func _team_round_and_scoring() -> void:
 	_check(Game.team_scores[1] == 1, "the point goes on the pack's board")
 	_check(winner.score == 0, "a team point is not also an individual point")
 	_check(Game.score_for(winner) == 1, "the pack's score is what counts towards the win")
+	var dots: HBoxContainer = game_match.hud._chips[winner].get_node("VBox/Dots")
+	_check((dots.get_child(0) as ColorRect).color == UiKit.YELLOW, "the HUD pips show the pack's points")
 	game_match.queue_free()
 	await get_tree().process_frame
 	Game.team_mode = false

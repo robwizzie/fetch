@@ -10,7 +10,7 @@ extends Node3D
 ## How far a running dog tips into its own direction, in degrees at full speed. A dog standing
 ## bolt upright while it slides across the floor is what makes top-down movement look weightless.
 const RUN_LEAN := 9.0
-const DASH_LEAN := 17.0
+const DASH_LEAN := 10.0
 ## How sharply the body swings round to a new heading. Higher is snappier.
 const TURN_RATE := 26.0
 ## Roll into a turn, in degrees per radian-per-second of turning, and the cap on it. A dog that
@@ -49,6 +49,14 @@ var _fallback: ProceduralDogModel
 var _imported: Node3D
 var _socket: Node3D
 var _player: AnimationPlayer
+## Plays the clips. Legs and body come from a locomotion layer that blends idle into run by
+## speed; throws and catches play over it on the head, chest and front legs only, so a dog that
+## throws on the move keeps running instead of freezing mid-stride and skating; dash, KO and win
+## take over the whole body.
+var _tree: AnimationTree
+var _run_weight := 0.0
+## Empty until the first request: the transition node has no current state of its own.
+var _body_state := ""
 var _target_basis := Basis.IDENTITY
 ## Where the dog is pointing, kept apart from the rendered rotation so the lean is applied
 ## fresh each frame instead of winding up on itself.
@@ -89,6 +97,9 @@ func setup(p_data: DogData, p_color: Color) -> void:
 	_imported = null
 	_socket = null
 	_player = null
+	_tree = null
+	_run_weight = 0.0
+	_body_state = ""
 	uses_authored_model = false
 	_dashing = false
 	_catching = false
@@ -136,16 +147,17 @@ func setup(p_data: DogData, p_color: Color) -> void:
 		for state in DogAssetValidator.STATES:
 			var animation := _player.get_animation(_clip(state))
 			animation.loop_mode = Animation.LOOP_LINEAR if state in ["idle", "run", "dash", "win"] else Animation.LOOP_NONE
-		_player.animation_finished.connect(_animation_finished)
 		_install_release_animation()
+		_build_tree()
 		var skeletons := DogAssetValidator.find_skeletons(_imported)
 		if not skeletons.is_empty():
 			_pose = DogPoseMotion.new()
 			_pose.phase = float(data.breed) * 1.7
 			_pose.breed = data.breed
+			_pose.to_skeleton = _rig_frame(skeletons[0]).basis.orthonormalized().inverse()
 			skeletons[0].add_child(_pose)
 		uses_authored_model = true
-		_set_animation("idle")
+		_update_animation()
 	else:
 		if candidate != null:
 			candidate.free()
@@ -175,6 +187,17 @@ func _anchor_grip() -> void:
 	var grip := Transform3D(Basis(Vector3.RIGHT, deg_to_rad(-12.0)), data.mouth_grip)
 	# The inverse also cancels the armature's export scale, so the grip is true size.
 	_socket.transform = bone_rest.affine_inverse() * grip
+
+
+## The skeleton's transform inside the imported scene, before this renderer turns and scales it.
+func _rig_frame(skeleton: Node3D) -> Transform3D:
+	var result := Transform3D.IDENTITY
+	var at: Node = skeleton
+	while at != null and at != _imported:
+		if at is Node3D:
+			result = (at as Node3D).transform * result
+		at = at.get_parent()
+	return result
 
 
 ## [param node]'s transform in this model's own space, walked up the parent chain so it works
@@ -259,11 +282,8 @@ func update_motion(facing: Vector3, speed01: float, delta: float = 1.0 / 60.0) -
 		_target_basis = Basis.looking_at(facing, Vector3.UP)
 	_turn_toward(delta)
 	_shape_body(was, delta)
+	_blend_locomotion(delta)
 	_update_animation()
-	if _active_state == "run":
-		# Tied to how fast the dog is actually travelling. The cycle used to run at full tilt
-		# from half speed upward, which is what made the paws look detached from the ground.
-		_player.speed_scale = clampf(_speed01 * STRIDE_SCALE, 0.22, 2.0)
 
 
 ## Swing round to the heading, lean into the run and bank into the turn.
@@ -271,7 +291,9 @@ func _turn_toward(delta: float) -> void:
 	var before := _facing_quat.get_euler().y
 	_facing_quat = _facing_quat.slerp(_target_basis.get_rotation_quaternion(), 1.0 - exp(-TURN_RATE * delta))
 	var turning := wrapf(_facing_quat.get_euler().y - before, -PI, PI) / maxf(delta, 0.0001)
-	var want_lean := deg_to_rad(DASH_LEAN if _dashing else RUN_LEAN) * _speed01
+	# Capped at full-speed strength: a dash runs at 1.5x and used to tip the dog nose-first
+	# into the floor rather than into a lunge.
+	var want_lean := deg_to_rad(DASH_LEAN if _dashing else RUN_LEAN) * minf(_speed01, 1.0)
 	if _charging:
 		# Rocked back and loading up; eased so a quick tap barely moves and a full hold sits deep.
 		want_lean -= deg_to_rad(CHARGE_LEAN) * smoothstep(0.0, 1.0, _charge_amount)
@@ -310,8 +332,6 @@ func set_dashing(value: bool) -> void:
 	if _fallback != null:
 		_fallback.set_dashing(value)
 	else:
-		if value:
-			_one_shot = ""
 		_update_animation()
 	if landing and not _knocked_out:
 		# Paws hit the floor: the short squash is the tell that the dash is spent and the dog
@@ -324,10 +344,7 @@ func set_catching(value: bool) -> void:
 	if _fallback != null:
 		_fallback.set_catching(value)
 	elif value:
-		_one_shot = "catch"
-		_set_animation("catch", true)
-	else:
-		_update_animation()
+		_fire_action("catch")
 
 
 func squash() -> void:
@@ -347,12 +364,7 @@ func play_throw() -> void:
 	# shot and the lean eases home on its own.
 	_lean = deg_to_rad(THROW_KICK)
 	_pulse(Vector3(0.94, 0.95, 1.12))
-	_one_shot = "throw"
-	_set_animation("throw", true)
-	_player.advance(0.0)
-	if _dashing:
-		_one_shot = ""
-		_set_animation("dash", true)
+	_fire_action("throw")
 
 
 func play_knocked_out(direction: Vector3) -> void:
@@ -361,13 +373,35 @@ func play_knocked_out(direction: Vector3) -> void:
 		# Only the ears keep moving after a knockout (see DogPoseMotion.ears_up).
 		_pose.knocked_out = true
 	_catching = false
-	_one_shot = ""
 	set_dizzy(false)
 	if _fallback != null:
 		_fallback.play_knocked_out(direction)
 		return
-	_set_animation("ko", true)
+	_abort_action()
+	_set_body("ko")
 	_tumble(direction)
+
+
+## Down a hole: the body slides to the middle, drops out of sight spinning, and is gone.
+## [param into] is the hole's centre in this model's parent's space.
+func play_fall(into: Vector3) -> void:
+	_knocked_out = true
+	if is_instance_valid(_pose):
+		_pose.knocked_out = true
+	_catching = false
+	set_dizzy(false)
+	if _fallback == null:
+		_abort_action()
+		_set_body("ko")
+	if _impact_tween != null:
+		_impact_tween.kill()
+	var base := _base_scale()
+	var drop := create_tween().set_parallel(true)
+	drop.tween_property(self, "position", Vector3(into.x, 0.15, into.z), 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	drop.tween_property(self, "position:y", -1.6, 0.42).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN).set_delay(0.14)
+	drop.tween_property(self, "rotation:y", rotation.y + TAU * 1.5, 0.56)
+	drop.tween_property(self, "scale", base * 0.55, 0.42).set_delay(0.14)
+	drop.chain().tween_callback(func() -> void: visible = false)
 
 
 ## A bonk should throw you. The rig's ko clip plays underneath; this is the launch that sells
@@ -490,9 +524,9 @@ func play_victory() -> void:
 	_victory = true
 	if is_instance_valid(_pose):
 		_pose.celebrating = true
-	_one_shot = ""
 	if _fallback == null:
-		_set_animation("win", true)
+		_abort_action()
+		_set_body("win")
 
 
 func _clip(state: String) -> StringName:
@@ -501,26 +535,126 @@ func _clip(state: String) -> StringName:
 	return StringName(data.model_animations.get(state, state))
 
 
-func _set_animation(state: String, restart: bool = false) -> void:
-	if _player == null or (state == _active_state and not restart):
+## Bones the throw and catch clips own while they play. Everything else - hips and back legs
+## especially - stays with locomotion. Ears and tail belong to DogPoseMotion.
+const ACTION_BONES := ["chest", "head", "headend",
+	"frontleg", "frontleg0", "frontleg1", "frontleg2", "R_frontleg", "R_frontleg0", "R_frontleg1", "R_frontleg2"]
+## Cross-fades into each whole-body state: a dash and a bonk land at once, the rest ease.
+const BODY_FADE := {"move": 0.14, "dash": 0.05, "ko": 0.04, "win": 0.2}
+const BODY_STATES := ["move", "dash", "ko", "win"]
+const ACTION_FADE_IN := 0.03
+const ACTION_FADE_OUT := 0.14
+
+
+func _build_tree() -> void:
+	var root := AnimationNodeBlendTree.new()
+	for state in ["idle", "run", "dash", "ko", "win"]:
+		var clip := AnimationNodeAnimation.new()
+		clip.animation = _clip(state)
+		root.add_node(StringName(state), clip)
+	root.add_node(&"stride", AnimationNodeTimeScale.new())
+	root.connect_node(&"stride", 0, &"run")
+	root.add_node(&"move", AnimationNodeBlend2.new())
+	root.connect_node(&"move", 0, &"idle")
+	root.connect_node(&"move", 1, &"stride")
+	var body := AnimationNodeTransition.new()
+	for state in BODY_STATES:
+		body.add_input(state)
+	root.add_node(&"body", body)
+	for i in BODY_STATES.size():
+		root.connect_node(&"body", i, StringName(BODY_STATES[i]))
+	var shot := AnimationNodeAnimation.new()
+	shot.animation = _clip("throw")
+	root.add_node(&"shot", shot)
+	var action := AnimationNodeOneShot.new()
+	action.fadein_time = ACTION_FADE_IN
+	action.fadeout_time = ACTION_FADE_OUT
+	action.filter_enabled = true
+	var skeletons := DogAssetValidator.find_skeletons(_imported)
+	var animated_root := _player.get_node_or_null(_player.root_node)
+	if not skeletons.is_empty() and animated_root != null:
+		var skeleton_path := String(animated_root.get_path_to(skeletons[0]))
+		for bone in ACTION_BONES:
+			action.set_filter_path(NodePath("%s:%s" % [skeleton_path, bone]), true)
+	root.add_node(&"action", action)
+	root.connect_node(&"action", 0, &"body")
+	root.connect_node(&"action", 1, &"shot")
+	root.connect_node(&"output", 0, &"action")
+	_tree = AnimationTree.new()
+	_tree.name = "DogAnimationTree"
+	_player.get_parent().add_child(_tree)
+	_tree.anim_player = NodePath("../" + String(_player.name))
+	_tree.root_node = _player.root_node
+	_tree.tree_root = root
+	_player.stop()
+	_tree.active = true
+
+
+## The whole-body layer: locomotion, dash, KO or celebration.
+func _set_body(state: String) -> void:
+	if _tree == null:
 		return
-	_active_state = state
-	_player.speed_scale = 1.0
-	# Actions cut in almost immediately so a press reads as instant; idle and run cross-fade
-	# over longer, because that is the transition you spend the whole round looking at.
-	_player.play(_clip(state), 0.025 if state in ["throw", "catch", "dash", "ko"] else 0.12)
+	if state != _body_state or state in ["ko", "win"]:
+		var body := (_tree.tree_root as AnimationNodeBlendTree).get_node(&"body") as AnimationNodeTransition
+		body.xfade_time = BODY_FADE.get(state, 0.12)
+		_body_state = state
+		_tree.set("parameters/body/transition_request", state)
+	_refresh_state()
+
+
+## Throw or catch over the top of whatever the legs are doing.
+func _fire_action(state: String) -> void:
+	if _tree == null:
+		return
+	_one_shot = state
+	var shot := (_tree.tree_root as AnimationNodeBlendTree).get_node(&"shot") as AnimationNodeAnimation
+	shot.animation = _clip(state)
+	_tree.set("parameters/action/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
+	_refresh_state()
+
+
+func _abort_action() -> void:
+	_one_shot = ""
+	if _tree != null:
+		_tree.set("parameters/action/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FADE_OUT)
+
+
+## Idle eases into run with speed rather than snapping at a threshold, and the stride is played
+## in proportion to how fast the dog is really travelling so the paws stop skating.
+func _blend_locomotion(delta: float) -> void:
+	if _tree == null:
+		return
+	var want := smoothstep(0.03, 0.3, _speed01)
+	_run_weight = lerpf(_run_weight, want, 1.0 - exp(-14.0 * delta))
+	_tree.set("parameters/move/blend_amount", _run_weight)
+	_tree.set("parameters/stride/scale", clampf(_speed01 * STRIDE_SCALE, 0.35, 2.0))
 
 
 func _update_animation() -> void:
-	if _player == null or _knocked_out or _victory or not _one_shot.is_empty():
+	if _tree == null or _knocked_out or _victory:
 		return
-	_set_animation("dash" if _dashing else ("run" if _speed01 > 0.08 else "idle"))
+	_set_body("dash" if _dashing else "move")
 
 
-func _animation_finished(clip: StringName) -> void:
-	if not _one_shot.is_empty() and clip == _clip(_one_shot):
+## What the dog is visibly doing, for tests and tools: the action on top while one plays,
+## otherwise the body state.
+func _refresh_state() -> void:
+	if not _one_shot.is_empty():
+		_active_state = _one_shot
+	elif _body_state == "move":
+		_active_state = "run" if _speed01 > 0.08 else "idle"
+	else:
+		_active_state = _body_state
+
+
+func _process(_delta: float) -> void:
+	if _tree == null or _one_shot.is_empty():
+		return
+	# Done once the request has been taken and the shot is no longer playing.
+	if int(_tree.get("parameters/action/request")) == AnimationNodeOneShot.ONE_SHOT_REQUEST_NONE \
+			and not bool(_tree.get("parameters/action/active")):
 		_one_shot = ""
-		_update_animation()
+		_refresh_state()
 
 
 func set_size_multiplier(value: float) -> void:
@@ -551,7 +685,7 @@ func play_whack() -> void:
 func play_stagger() -> void:
 	if _knocked_out:
 		return
-	_one_shot = ""
+	_abort_action()
 	_catching = false
 	_lean = deg_to_rad(-20.0)
 	_bank = deg_to_rad(14.0)

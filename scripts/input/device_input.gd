@@ -20,10 +20,26 @@ var virtual_buttons: Dictionary = {}
 var _prev: Dictionary = {}
 ## Release edges keep their own history so a frame can ask for both edges of one button.
 var _prev_release: Dictionary = {}
+## Shift and Ctrl sit on both sides of the keyboard, one for each layout, but polling cannot tell
+## left from right. Game feeds key events here so each layout only answers to its own side.
+static var _sided_keys: Dictionary = {}
 
 
 func _init(p_device: int) -> void:
 	device = p_device
+
+
+static func note_key(event: InputEventKey) -> void:
+	if event.echo or (event.physical_keycode != KEY_SHIFT and event.physical_keycode != KEY_CTRL):
+		return
+	_sided_keys[Vector2i(event.physical_keycode, event.location)] = event.pressed
+
+
+## A platform that does not report the side counts the key for both layouts, as it used to.
+static func _sided_pressed(key: Key, location: KeyLocation) -> bool:
+	if not Input.is_physical_key_pressed(key):
+		return false
+	return _sided_keys.get(Vector2i(key, location), false) or _sided_keys.get(Vector2i(key, KEY_LOCATION_UNSPECIFIED), false)
 
 
 func move_vector() -> Vector2:
@@ -65,7 +81,7 @@ func is_pressed(action: StringName) -> bool:
 				&"throw", &"confirm":
 					return Input.is_physical_key_pressed(KEY_SPACE)
 				&"dash":
-					return Input.is_physical_key_pressed(KEY_SHIFT) or Input.is_physical_key_pressed(KEY_E)
+					return _sided_pressed(KEY_SHIFT, KEY_LOCATION_LEFT) or Input.is_physical_key_pressed(KEY_E)
 				&"back", &"pause":
 					return Input.is_physical_key_pressed(KEY_ESCAPE)
 		KEYBOARD_ARROWS:
@@ -73,7 +89,7 @@ func is_pressed(action: StringName) -> bool:
 				&"throw", &"confirm":
 					return Input.is_physical_key_pressed(KEY_ENTER) or Input.is_physical_key_pressed(KEY_KP_ENTER)
 				&"dash":
-					return Input.is_physical_key_pressed(KEY_CTRL) or Input.is_physical_key_pressed(KEY_SLASH) or Input.is_physical_key_pressed(KEY_KP_0)
+					return _sided_pressed(KEY_CTRL, KEY_LOCATION_RIGHT) or Input.is_physical_key_pressed(KEY_SLASH) or Input.is_physical_key_pressed(KEY_KP_0)
 				&"back":
 					return Input.is_physical_key_pressed(KEY_BACKSPACE)
 				&"pause":
@@ -89,12 +105,28 @@ func is_pressed(action: StringName) -> bool:
 				&"dash":
 					return Input.is_joy_button_pressed(device, JOY_BUTTON_A) or Input.is_joy_button_pressed(device, JOY_BUTTON_RIGHT_SHOULDER)
 				&"confirm":
+					if not Input.is_joy_known(device):
+						return _any_arcade_button(device)
 					return Input.is_joy_button_pressed(device, JOY_BUTTON_A) or Input.is_joy_button_pressed(device, JOY_BUTTON_X) \
 						or Input.is_joy_button_pressed(device, JOY_BUTTON_START)
 				&"pause":
 					return Input.is_joy_button_pressed(device, JOY_BUTTON_START)
 				&"back":
 					return Input.is_joy_button_pressed(device, JOY_BUTTON_B) or Input.is_joy_button_pressed(device, JOY_BUTTON_BACK)
+	return false
+
+
+## Godot reports a hat switch as the four d-pad buttons; those move, they never select.
+static func is_dpad_button(index: int) -> bool:
+	return index >= JOY_BUTTON_DPAD_UP and index <= JOY_BUTTON_DPAD_RIGHT
+
+
+## An unmapped arcade encoder confirms the way it joins: any action button but the back one, so
+## the button that sat a player down can also ready them up.
+static func _any_arcade_button(pad: int) -> bool:
+	for index in range(0, 16):
+		if index != JOY_BUTTON_B and index != JOY_BUTTON_BACK and not is_dpad_button(index) and Input.is_joy_button_pressed(pad, index):
+			return true
 	return false
 
 
@@ -125,7 +157,7 @@ static func join_device_from_event(event: InputEvent) -> int:
 		# An arcade encoder carries no SDL mapping, so Godot reports raw hardware indices and
 		# "button A" names nothing in particular. On a cabinet any action button should sit you
 		# down; index 1 is left alone because that is what backing out uses.
-		if not Input.is_joy_known(pad.device) and pad.button_index != JOY_BUTTON_B:
+		if not Input.is_joy_known(pad.device) and pad.button_index != JOY_BUTTON_B and not is_dpad_button(pad.button_index):
 			return pad.device
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_SPACE:

@@ -87,3 +87,8 @@ func set_open(open: bool) -> void:
 
 func toggle() -> void:
 	set_open(not is_open)
+
+
+## Every round starts on the arena as authored, whatever the last one left thrown.
+func reset_for_round() -> void:
+	set_open(starts_open)

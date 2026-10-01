@@ -46,9 +46,14 @@ func _rebuild() -> void:
 				continue
 			var world := _arena.to_global(point)
 			var clear := true
+			# Holes are not solid, but a route across one only ever ends at the rim.
+			for pit in _arena.find_children("*", "Pit", true, false):
+				if (pit as Pit).covers(world, CLEARANCE):
+					clear = false
 			for node in shapes:
 				var shape := node as CollisionShape3D
-				if shape.disabled or not shape.get_parent() is StaticBody3D or not shape.shape is BoxShape3D:
+				# Beds slide about, so the fixed graph leaves them to the bot's own steering.
+				if shape.disabled or not shape.get_parent() is StaticBody3D or not Arena.is_solid_shape(shape) or not shape.shape is BoxShape3D:
 					continue
 				var extent := (shape.shape as BoxShape3D).size * 0.5
 				var p := shape.to_local(world)

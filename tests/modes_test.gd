@@ -18,13 +18,16 @@ func _ready() -> void:
 	Events.round_over.connect(func(winner: PlayerSlot) -> void:
 		_rounds += 1
 		_last_winner = winner)
-	_check(_mode(&"hot_potato") != null and _mode(&"king_of_the_bed") != null, "both modes are registered")
+	_check(_mode(&"hot_potato") != null and _mode(&"king_of_the_bed") != null and _mode(&"golden_ball") != null, "the modes are registered")
+	for mode in Game.modes:
+		_check(mode.fully_implemented and mode.mode_script != null, "%s is playable - unfinished modes stay shelved" % mode.id)
 	await _hot_potato_rules()
 	await _bed_rules()
-	for id in [&"hot_potato", &"king_of_the_bed"]:
+	await _golden_rules()
+	for id in [&"hot_potato", &"king_of_the_bed", &"golden_ball"]:
 		await _bots_finish(id)
 	if not _failed:
-		print("[modes] PASSED: hot bone pops its holder, bed counts only alone, timeout goes to the king, bots finish both")
+		print("[modes] PASSED: hot bone pops its holder, bed counts only alone, golden ball banks for its holder, bots finish all three")
 	get_tree().quit(1 if _failed else 0)
 
 
@@ -95,6 +98,25 @@ func _bed_rules() -> void:
 	_check(mode.timeout_winner(dogs) == dogs[0].slot, "at time-up, the most bed time wins")
 	mode.tick(KingOfTheBed.CLAIM_TIME, dogs)
 	_check(mode.is_round_over(dogs) and mode.round_winner(dogs) == dogs[0].slot, "holding it long enough takes the round")
+	game_match.queue_free()
+	await get_tree().process_frame
+
+
+func _golden_rules() -> void:
+	var game_match := _start(&"golden_ball", false)
+	await _until_playing(game_match)
+	var mode := game_match.mode as GoldenBall
+	var dogs: Array[Dog] = game_match.dogs
+	_check(is_instance_valid(mode.golden), "a golden ball is chosen")
+	_check(mode.holder() == null, "nobody holds it at the whistle")
+	dogs[2]._spawn_grace = 0.0
+	mode.golden.pick_up(dogs[2])
+	_check(mode.holder() == dogs[2].slot, "picking it up makes you the holder")
+	mode.tick(3.0, dogs)
+	_check(mode.timeout_winner(dogs) == dogs[2].slot, "at time-up, the most golden time wins")
+	_check(mode.bot_keeps(dogs[2], mode.golden), "a bot hangs on to the golden ball")
+	mode.tick(GoldenBall.CLAIM_TIME, dogs)
+	_check(mode.is_round_over(dogs) and mode.round_winner(dogs) == dogs[2].slot, "holding it long enough takes the round")
 	game_match.queue_free()
 	await get_tree().process_frame
 

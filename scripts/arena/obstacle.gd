@@ -29,6 +29,13 @@ enum Kind { BOX, CRATE, DOGHOUSE, TABLE, BUSH, COUCH, ARMCHAIR, TV, PLANT, TIRE,
 		accent = v
 		_rebuild()
 
+## Cover that does not last: thrown toys wear it down and it splinters, then it is back next
+## round. A charged throw counts double.
+@export var breakable := false
+@export_range(1, 8) var toughness := 3
+## Hits that count double: anything thrown at least this fast (a wound-up throw).
+const HARD_HIT_SPEED := 14.0
+
 const OCCLUDED_OPACITY := 0.22
 const OCCLUSION_CHECK_INTERVAL := 0.075
 ## Side walls and rails on the props you can cross.
@@ -51,11 +58,15 @@ var _fade_meshes: Array[MeshInstance3D] = []
 var _base_shadows: Array[int] = []
 var _shadow_proxies: Array[MeshInstance3D] = []
 var _ground_shade: MeshInstance3D
+var _hits_left := 0
+var _broken := false
+var _rubble: Node3D
 
 
 func _ready() -> void:
 	collision_layer = 1
 	collision_mask = 0
+	_hits_left = toughness
 	_rebuild()
 	set_physics_process(not Engine.is_editor_hint())
 
@@ -469,6 +480,67 @@ func _rock() -> void:
 			Vector3((i - 1) * s.x * 0.22, s.y * (0.45 if i == 1 else 0.30), (0.08 if i == 1 else -0.08) * s.z))
 		rock.scale = Vector3(s.x * (0.61 if i == 1 else 0.49), s.y * (1.05 if i == 1 else 0.68), s.z * 0.89)
 		rock.rotation_degrees.y = i * 31.0
+
+
+## A thrown toy struck this prop. Only breakable props care: each hit darkens and jolts it, and
+## the last one splinters it into planks and opens the way.
+func take_hit(toy_velocity: Vector3) -> void:
+	if not breakable or _broken:
+		return
+	_hits_left -= 2 if toy_velocity.length() >= HARD_HIT_SPEED else 1
+	var chips := accent if accent != Color.BLACK else color
+	Juice.burst(get_parent(), global_position + Vector3(0, size.y * 0.6, 0), chips.lightened(0.15), 8, 3.0)
+	if _hits_left <= 0:
+		_splinter(toy_velocity)
+		return
+	Sfx.play_at("land", global_position, 0.75, -4.0)
+	# Each hit leaves it a little darker and a little more battered, so you can see it is going.
+	for i in _base_colors.size():
+		_base_colors[i] = _base_colors[i].darkened(0.12)
+		_fade_materials[i].albedo_color = Color(_base_colors[i], _fade_materials[i].albedo_color.a)
+	var jolt := _visual.create_tween()
+	var lean := Vector3(0, 0, 6.0 if _hits_left % 2 == 0 else -6.0)
+	jolt.tween_property(_visual, "rotation_degrees", lean, 0.05)
+	jolt.tween_property(_visual, "rotation_degrees", lean * 0.3, 0.2).set_trans(Tween.TRANS_BACK)
+
+
+func _splinter(toy_velocity: Vector3) -> void:
+	_broken = true
+	for shape in _shapes:
+		shape.set_deferred("disabled", true)
+	_visual.visible = false
+	if is_instance_valid(_ground_shade):
+		_ground_shade.visible = false
+	Sfx.play_at("whack", global_position, 0.7, -2.0)
+	Juice.shake(0.18)
+	Juice.burst(get_parent(), global_position + Vector3(0, size.y * 0.5, 0), color.lightened(0.2), 22, 6.0)
+	# Planks fly off along the throw and settle as rubble you can run over.
+	_rubble = Node3D.new()
+	_rubble.name = "Rubble"
+	add_child(_rubble)
+	var push := Vector3(toy_velocity.x, 0, toy_velocity.z).normalized()
+	for i in 6:
+		var plank := ArenaArt.block(_rubble, Vector3(size.x * 0.55, 0.08, 0.22), color.darkened(0.1 * float(i % 3)),
+			Vector3(0, size.y * 0.5, 0), Vector3(0, randf() * 180.0, 0), 0.02)
+		plank.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var land := (push * randf_range(0.3, 1.2) + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)) * 0.6) * size.x * 0.5
+		var fly := plank.create_tween().set_parallel(true)
+		fly.tween_property(plank, "position", Vector3(land.x, 0.05, land.z), 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		fly.tween_property(plank, "rotation_degrees", Vector3(randf_range(-8, 8), randf() * 360.0, randf_range(-8, 8)), 0.45)
+
+
+func reset_for_round() -> void:
+	if not breakable:
+		return
+	_hits_left = toughness
+	if not _broken:
+		# Dents from last round are forgiven too.
+		_rebuild()
+		return
+	_broken = false
+	if is_instance_valid(_rubble):
+		_rubble.queue_free()
+	_rebuild()
 
 
 ## Alpha is applied to instance-owned materials: GeometryInstance transparency

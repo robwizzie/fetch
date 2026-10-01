@@ -26,6 +26,9 @@ var _current := ""
 var _wanted := ""
 var _thread: Thread
 var _ducked := false
+## One fade at a time: a second play() inside a crossfade must not let the first fade stop the
+## track that is now coming in.
+var _fade: Tween
 
 
 func _ready() -> void:
@@ -84,36 +87,48 @@ func play(track: String, fade: float = 1.1) -> void:
 	target.volume_db = -60.0
 	target.play()
 	_active = incoming
-	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(target, "volume_db", _level(), fade)
-	tween.tween_property(outgoing, "volume_db", -60.0, fade)
-	tween.chain().tween_callback(outgoing.stop)
+	_kill_fade()
+	_fade = create_tween()
+	_fade.set_parallel(true)
+	_fade.tween_property(target, "volume_db", _level(), fade)
+	_fade.tween_property(outgoing, "volume_db", -60.0, fade)
+	_fade.chain().tween_callback(outgoing.stop)
 
 
 func stop(fade: float = 0.8) -> void:
 	_current = ""
+	_kill_fade()
+	if not _players.any(func(player: AudioStreamPlayer) -> bool: return player.playing):
+		return
+	_fade = create_tween()
+	_fade.set_parallel(true)
 	for player in _players:
 		if not player.playing:
 			continue
-		var tween := create_tween()
-		tween.tween_property(player, "volume_db", -60.0, fade)
-		tween.tween_callback(player.stop)
+		_fade.tween_property(player, "volume_db", -60.0, fade)
+		_fade.tween_callback(player.stop).set_delay(fade)
 
 
 ## Pulls the music back for a moment so a knockout or a result lands in the clear.
 func duck(seconds: float = 1.1, amount: float = 9.0) -> void:
-	if _ducked or not enabled:
+	if _ducked or not enabled or (_fade != null and _fade.is_running()):
 		return
 	var player := _players[_active]
 	if not player.playing:
 		return
 	_ducked = true
-	var tween := create_tween()
-	tween.tween_property(player, "volume_db", _level() - amount, 0.12)
-	tween.tween_interval(seconds)
-	tween.tween_property(player, "volume_db", _level(), 0.5)
-	tween.tween_callback(func() -> void: _ducked = false)
+	_kill_fade()
+	_fade = create_tween()
+	_fade.tween_property(player, "volume_db", _level() - amount, 0.12)
+	_fade.tween_interval(seconds)
+	_fade.tween_property(player, "volume_db", _level(), 0.5)
+	_fade.tween_callback(func() -> void: _ducked = false)
+
+
+func _kill_fade() -> void:
+	if _fade != null and _fade.is_valid():
+		_fade.kill()
+	_ducked = false
 
 
 func _level() -> float:

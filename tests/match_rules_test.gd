@@ -222,6 +222,16 @@ func _practice_round_is_free() -> void:
 			var apart := Vector2(a.global_position.x - b.global_position.x, a.global_position.z - b.global_position.z).length()
 			tightest = minf(tightest, apart - 5.0)
 	_check(tightest > 0.5, "practice booths are separated by open ground")
+	# Every human has their own lesson card, and it only ticks for what that player did.
+	var cards: Array = game_match.get("_cards")
+	var humans := Game.slots.filter(func(s: PlayerSlot) -> bool: return not s.is_bot)
+	_check(cards.size() == humans.size(), "every human gets their own controls card")
+	if cards.size() >= 2:
+		var first: PracticeCard = cards[0]
+		var second: PracticeCard = cards[1]
+		Events.toy_thrown.emit(game_match.toys[0], first.dog)
+		_check(first._done.throw, "a throw ticks the thrower's own card")
+		_check(not second._done.throw, "and nobody else's")
 	# Nothing in a booth can put a dog out, not even a point-blank lethal throw.
 	var victim: Dog = game_match.dogs[0]
 	var practice_toy: Toy = game_match.toys[0]

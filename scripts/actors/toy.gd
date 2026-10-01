@@ -271,6 +271,11 @@ func vanish() -> void:
 		return
 	Juice.burst(get_parent(), global_position, data.color.lightened(0.4), 6, 2.0)
 	remove_from_group("toys")
+	# queue_free waits for the end of the frame; until then a flying toy would still hit dogs,
+	# including the one that just caught it.
+	state = State.IDLE
+	velocity = Vector3.ZERO
+	set_physics_process(false)
 	queue_free()
 
 
@@ -321,8 +326,9 @@ func _slide(delta: float) -> void:
 		if state == State.FLYING and Portal.catch_toy(self, collision.get_position()):
 			remaining *= collision.get_remainder().length() / maxf(motion.length(), 0.001)
 			continue
-		if state == State.FLYING and collision.get_collider() is DogBed:
-			(collision.get_collider() as DogBed).take_hit(velocity)
+		# Beds slide, crates splinter: anything that reacts to being hit gets told.
+		if state == State.FLYING and collision.get_collider().has_method("take_hit"):
+			collision.get_collider().call("take_hit", velocity)
 		bounces += 1
 		var banking := state == State.FLYING and power_effects.bank and not power_effects._banked
 		if state == State.FLYING and not banking:

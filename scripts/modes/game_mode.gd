@@ -28,6 +28,11 @@ func bot_goal(_dog: Dog) -> Vector3:
 	return Vector3.INF
 
 
+## True when a bot holding [param toy] should hang on to it rather than throw (Golden Ball).
+func bot_keeps(_dog: Dog, _toy: Toy) -> bool:
+	return false
+
+
 ## True when a bot holding [param toy] should get rid of it right away.
 func bot_should_throw_now(_dog: Dog, _toy: Toy) -> bool:
 	return false

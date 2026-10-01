@@ -13,7 +13,7 @@ enum Mode {
 	HOLD,
 }
 
-## The gates this switch drives.
+## The gates (or swing boards) this switch drives.
 @export var gates: Array[NodePath] = []
 @export var mode := Mode.TOGGLE
 @export var radius := 0.9:
@@ -113,7 +113,7 @@ func _fire() -> void:
 		return
 	_cooldown = REARM
 	for gate in _gate_nodes():
-		gate.toggle()
+		gate.call("toggle")
 	Sfx.play("treat", 0.9, -5.0)
 	Juice.burst(get_parent(), global_position + Vector3.UP * 0.4, color, 14, 2.6)
 	thrown.emit(self)
@@ -121,13 +121,14 @@ func _fire() -> void:
 
 func _set_gates(open: bool) -> void:
 	for gate in _gate_nodes():
-		gate.set_open(open)
+		gate.call("set_open", open)
 
 
-func _gate_nodes() -> Array[Gate]:
-	var out: Array[Gate] = []
+## Gates, swing boards, anything that knows how to toggle.
+func _gate_nodes() -> Array[Node]:
+	var out: Array[Node] = []
 	for path in gates:
-		var node := get_node_or_null(path) as Gate
-		if node != null:
+		var node := get_node_or_null(path)
+		if node != null and node.has_method("toggle") and node.has_method("set_open"):
 			out.append(node)
 	return out
