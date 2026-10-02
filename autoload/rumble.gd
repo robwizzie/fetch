@@ -17,6 +17,7 @@ func _ready() -> void:
 	Events.dog_eliminated.connect(_on_eliminated)
 	Events.toy_caught.connect(func(_toy: Node, by: Node) -> void: buzz(by, CAUGHT))
 	Events.dog_whacked.connect(func(dog: Node, _by: Node) -> void: buzz(dog, WHACKED))
+	Events.toy_blocked.connect(func(dog: Node, _toy: Node) -> void: buzz(dog, WHACKED))
 	Events.throw_charged.connect(func(dog: Node) -> void: buzz(dog, CHARGED))
 	# Nothing should still be shaking behind a pause menu or a scene change.
 	Events.round_over.connect(func(_winner: PlayerSlot) -> void: stop_all())

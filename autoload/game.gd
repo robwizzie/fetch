@@ -162,6 +162,19 @@ func _ready() -> void:
 	_load_content()
 	_apply_defaults()
 	_load_settings()
+	# Tests and capture scenes are always silent, whatever the saved settings say. The Master
+	# bus is muted rather than Sfx/Music switched off, so a test that saves settings can never
+	# write "sound off" into the player's real profile.
+	if is_test_run():
+		AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), true)
+
+
+## True when a scene under res://tests/ is what is running.
+static func is_test_run() -> bool:
+	for argument in OS.get_cmdline_args():
+		if argument.begins_with("res://tests/"):
+			return true
+	return false
 
 
 ## A cabinet has no keyboard and nobody wants to dig through a menu on every boot, so the

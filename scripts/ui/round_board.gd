@@ -8,10 +8,11 @@ extends Control
 
 signal dismissed
 
-## The board waits to be dismissed: rounds should not run away from a table still arguing
-## about what just happened. Only an all-bot lobby, with nobody there to press anything,
-## moves on by itself after this long.
+## The board moves on by itself, the way Boomerang Fu's does - a party game keeps rolling -
+## after this long with nobody but bots, and a little longer with people at the table, who can
+## also press to go on sooner. A bar under the prompt drains so nobody is caught out.
 const DWELL := 3.2
+const HUMAN_DWELL := 5.0
 ## Below this a press is ignored, so whatever button someone was mashing when the round ended
 ## does not skip the board before the bones have landed.
 const SKIP_AFTER := 0.6
@@ -31,6 +32,8 @@ var _stage_view: SubViewport
 var _stage_rect: TextureRect
 var _headline: Label
 var _continue: Label
+var _timer_bar: ColorRect
+const TIMER_WIDTH := 360.0
 var _done := false
 
 
@@ -92,6 +95,14 @@ func _ready() -> void:
 	_continue.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_continue.autowrap_mode = TextServer.AUTOWRAP_OFF
 	column.add_child(_continue)
+	var track := CenterContainer.new()
+	track.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(track)
+	_timer_bar = ColorRect.new()
+	_timer_bar.color = Color(1, 1, 1, 0.75)
+	_timer_bar.custom_minimum_size = Vector2(TIMER_WIDTH, 6)
+	_timer_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	track.add_child(_timer_bar)
 
 	_fit()
 	get_viewport().size_changed.connect(_fit)
@@ -139,10 +150,12 @@ func _process(delta: float) -> void:
 	if not visible or _done or get_tree().paused:
 		return
 	_time += delta
-	if _auto:
-		if _time >= DWELL:
-			_finish()
-	elif _time > SKIP_AFTER:
+	var dwell := DWELL if _auto else HUMAN_DWELL
+	_timer_bar.custom_minimum_size.x = TIMER_WIDTH * clampf(1.0 - _time / dwell, 0.0, 1.0)
+	if _time >= dwell:
+		_finish()
+		return
+	if not _auto and _time > SKIP_AFTER:
 		# The prompt breathes once the board can be dismissed, so it reads as a button waiting
 		# on you rather than a caption that happens to be there.
 		_continue.modulate.a = 0.70 + sin(_time * 4.2) * 0.30

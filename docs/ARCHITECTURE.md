@@ -182,8 +182,9 @@ everywhere, with paw prints on each step) and **Dig!** (a longer dash that goes 
 its whole length, surfacing with a reveal). Behaviour powers live on the throw: `ToyPowerEffects` snapshots the belt at launch, so
 a later swap never rewrites a toy in flight, and a pickup or catch resets it. **Squeaky Blast** arms a fuse on
 the toy's first impact and stops it dead, then bursts in `BLAST_RADIUS`; cover blocks it, shields absorb it,
-and grabbing the squeaking toy defuses it. **Mud Track** drops a `MudPatch` every `MUD_SPACING` metres of
-flight; patches slow whoever stands in them, dry up after `LIFETIME` and are capped at `LIMIT`.
+and grabbing the squeaking toy defuses it. **Hot Dog** drops a `HotPatch` every `HOT_SPACING` metres of
+flight; a rival who steps in one is bonked (`Dog.burn`, credited to the thrower); the thrower, pack-mates,
+dashing and burrowed dogs are safe, a shield takes the burn, and patches burn out after `LIFETIME`, capped at `LIMIT`.
 **Telepawthy** bends a flying toy toward the thrower's stick (`steer_toward`) at `STEER_RATE`, with a total
 `STEER_BUDGET` short of a U-turn: it can curl round cover but can never come back to the thrower.
 
@@ -196,9 +197,16 @@ a door off for the practice round.
 
 **More power-ups.** Scatter Fetch fires two `Toy.ephemeral` side toys that vanish rather than become
 pickups; every toy of one press shares `ToyPowerEffects.volley`, and `Dog` lets one volley land once.
-Bank Shot speeds a throw up on its first wall bounce (`bank_bounce`); with Squeaky Blast the fuse arms on
-the impact after the bank. Good Decoy leaves a `Decoy` on each dash that pops when a toy passes through it;
-bots believe a given decoy `BotBrain.DECOY_BELIEF` of the time. A throw's trail takes the colours of the
+**Here, Boy!** turns the dash, while the dog's own throw is flying, into a zap to just behind the toy
+(`Dog._here_boy`); the toy flies on - a throw is never called back. **Good Boy Decoy** sends out one `Decoy`
+a round (`Dog._maybe_send_decoy`): a look-alike that roams by `BotNavigation` routes, dashes, and mirrors its
+dog's hat, crown, shield glow, held toy and throws; it cannot hurt anyone, a rival's toy pops it, and it goes
+when its dog does. Bots believe a given decoy `BotBrain.DECOY_BELIEF` of the time.
+
+**Mouth block.** A throw that reaches a dog holding a toy and facing it (within `Dog.MOUTH_BLOCK_ANGLE`)
+knocks the held toy loose and glances off instead of bonking (`Dog._mouth_block`, `Events.toy_blocked`).
+A shield comes first: the toy in the mouth is inside the shield, so a shielded dog's shield takes the
+hit and the toy stays put. A throw's trail takes the colours of the
 powers it carries (`ToyPowerEffects.trail_colors`).
 
 **Knockouts.** `DogModel._tumble` is one calm knockdown for every breed: a short hop back along the hit, a
@@ -209,7 +217,7 @@ gone: sleepy z's drift up in its colour (`_snooze`).
 instance id, with their whole transform, so a toy in a mouth stays in it), plus every call made on a
 `DogModel` - throw, catch, dash, wind-up, bark, whack, hat, crown, knockdown - which the model announces on
 its `acted` signal. Playback builds stand-ins, puts them in the state they were in when the replay starts,
-and replays each call at its moment, at `Engine.time_scale = 0.4` so their animation slows too.
+and replays each call at its moment, at `Engine.time_scale = 0.5` (about five seconds in all) so their animation slows too.
 Everything else under `Match.actors` - shield bubbles, power-up halos, rings, name tags, crates, mud,
 decoys and ghosts - is mirrored node by node from per-frame snapshots (bare copies, placed and shown as
 recorded), charge meters are redrawn from their recorded fill, and every `Juice` word and burst

@@ -23,4 +23,6 @@ signal dog_whacked(dog: Node, by: Node)
 ## A crate was opened; the kind was a mystery until this moment.
 signal powerup_collected(dog: Node, kind: StringName)
 signal toy_caught(toy: Node, by: Node)
+## A throw knocked away by the toy in a dog's mouth: the dog is still in, its toy is loose.
+signal toy_blocked(dog: Node, toy: Node)
 signal dog_eliminated(dog: Node, by_toy: Node)

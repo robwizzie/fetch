@@ -19,11 +19,12 @@ extends Node3D
 signal finished
 
 const KEEP_SECONDS := 3.0
-## How much of the recording the replay shows, and how slowly.
-const SHOW_SECONDS := 2.0
-const SPEED := 0.4
+## How much of the recording the replay shows, and how slowly: about five seconds on screen,
+## so it is a highlight between rounds rather than a wait.
+const SHOW_SECONDS := 1.6
+const SPEED := 0.5
 ## Played on past the knockout, so the knockdown lands on screen.
-const AFTER_KNOCKOUT := 1.0
+const AFTER_KNOCKOUT := 0.8
 ## Model calls that set how a dog looks until told otherwise, rather than play a moment. The
 ## latest of each before the replay starts is put on the stand-in before playback.
 ## Calls the round's result makes, which the replay leaves out.

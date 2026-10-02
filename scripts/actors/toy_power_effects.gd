@@ -3,39 +3,33 @@ extends Node3D
 ## One launch snapshot. A belt swap never rewrites a flying shot. Catch/pickup defuses it.
 ##
 ## How the throw powers combine:
-##   Blast + Bank     the fuse arms on the impact AFTER the bank, so the banked shot is the threat.
 ##   Blast + Scatter  every toy in the volley carries a fuse; the volley still counts as one hit.
-##   Mud + Scatter    three trails, all inside MudPatch.LIMIT.
-##   Bank + Scatter   the side toys bank too.
-##   Mud + Bank       mud all the way, round the corner.
+##   Hot + Scatter    three trails, all inside HotPatch.LIMIT.
+##   Hot + Blast      the burst leaves a wide patch of fire where it went off.
+##   Hot + Steer      a trail you can curl round a couch.
 ##   Steer + anything the thrower bends the main toy; Scatter's side toys fly straight.
 
 const FUSE := 0.48
 const BLAST_RADIUS := 2.4
-const MUD_SPACING := 1.15
+const HOT_SPACING := 0.45
 ## Speed kept by a toy the moment its blast arms.
 const ARM_DAMPING := 0.12
-## Speed multiplier on a Bank Shot's first wall bounce, and the most it may reach.
-const BANK_BOOST := 1.45
-const BANK_MAX_SPEED := 42.0
 ## Telepawthy: how fast the thrower's stick can bend a throw, and the most it can bend it in
 ## total. The budget stays well short of a U-turn - a steered toy can curl round a couch, but
 ## it can never be brought back to the dog that threw it.
 const STEER_RATE := 4.2
 const STEER_BUDGET := 1.75
 var blast := false
-var mud := false
+var hot := false
 var scatter := false
-var bank := false
 var steer := false
 var _steered := 0.0
 ## Every toy launched by one press shares this id, so one volley is one hit on any dog.
 var volley := 0
-var _banked := false
 static var _next_volley := 1
 var fuse_left := -1.0
 var _spent := false
-var _mud_distance := 0.0
+var _hot_distance := 0.0
 var _warning: MeshInstance3D
 var _toy: Toy
 
@@ -51,9 +45,8 @@ func _ready() -> void:
 func launch(dog: Dog) -> void:
 	reset()
 	blast = dog.slot.has_powerup(PowerupKinds.SQUEAKY_BLAST)
-	mud = dog.slot.has_powerup(PowerupKinds.MUD_TRACK)
+	hot = dog.slot.has_powerup(PowerupKinds.HOT_DOG)
 	scatter = dog.slot.has_powerup(PowerupKinds.SCATTER_FETCH)
-	bank = dog.slot.has_powerup(PowerupKinds.BANK_SHOT)
 	steer = dog.slot.has_powerup(PowerupKinds.TELEPAWTHY)
 	volley = _next_volley
 	_next_volley += 1
@@ -63,8 +56,7 @@ func launch(dog: Dog) -> void:
 func copy_from(other: ToyPowerEffects) -> void:
 	reset()
 	blast = other.blast
-	mud = other.mud
-	bank = other.bank
+	hot = other.hot
 	volley = other.volley
 
 
@@ -72,39 +64,31 @@ func copy_from(other: ToyPowerEffects) -> void:
 func trail_colors() -> Array[Color]:
 	var colors: Array[Color] = []
 	for kind in PowerupKinds.THROW_POWERS:
-		var on := (kind == PowerupKinds.SQUEAKY_BLAST and blast) or (kind == PowerupKinds.MUD_TRACK and mud) \
-			or (kind == PowerupKinds.SCATTER_FETCH and scatter) or (kind == PowerupKinds.BANK_SHOT and bank) \
-			or (kind == PowerupKinds.TELEPAWTHY and steer)
+		var on := (kind == PowerupKinds.SQUEAKY_BLAST and blast) or (kind == PowerupKinds.HOT_DOG and hot) \
+			or (kind == PowerupKinds.SCATTER_FETCH and scatter) or (kind == PowerupKinds.TELEPAWTHY and steer) \
+			or (kind == PowerupKinds.HERE_BOY and _here_boy())
 		if on:
 			colors.append(PowerupKinds.color(kind))
 	return colors
 
 
-## Called on a wall bounce, after the bounce has been applied. Returns true if this was the bank,
-## which then does not count as the impact that arms a blast.
-func bank_bounce() -> bool:
-	if not bank or _banked:
-		return false
-	_banked = true
-	var speed := minf(_toy.velocity.length() * BANK_BOOST, BANK_MAX_SPEED)
-	_toy.velocity = _toy.velocity.normalized() * speed
-	Juice.burst(_toy.get_parent(), _toy.global_position, PowerupKinds.color(PowerupKinds.BANK_SHOT), 12, 4.0)
-	Sfx.play_at("charged", _toy.global_position, 1.3, -6.0)
-	return true
+## Here, Boy! is the thrower's power, not the toy's - but the throw is what it reaches for, so
+## the trail says so.
+func _here_boy() -> bool:
+	return is_instance_valid(_toy) and is_instance_valid(_toy.thrower) and _toy.thrower.slot != null \
+		and _toy.thrower.slot.has_powerup(PowerupKinds.HERE_BOY)
 
 
 func reset() -> void:
 	blast = false
-	mud = false
+	hot = false
 	scatter = false
-	bank = false
 	steer = false
 	_steered = 0.0
-	_banked = false
 	volley = 0
 	fuse_left = -1.0
 	_spent = false
-	_mud_distance = 0.0
+	_hot_distance = 0.0
 	if is_instance_valid(_warning):
 		_warning.hide()
 
@@ -131,16 +115,16 @@ func steer_toward(delta: float) -> void:
 
 
 func travel(from: Vector3, to: Vector3) -> void:
-	if not mud:
+	if not hot:
 		return
 	var length := from.distance_to(to)
 	if length < 0.001:
 		return
-	var next := MUD_SPACING - _mud_distance
+	var next := HOT_SPACING - _hot_distance
 	while next <= length:
-		MudPatch.spawn(_toy.get_parent(), from.lerp(to, next / length))
-		next += MUD_SPACING
-	_mud_distance = fmod(_mud_distance + length, MUD_SPACING)
+		HotPatch.spawn(_toy.get_parent(), from.lerp(to, next / length), _toy.thrower)
+		next += HOT_SPACING
+	_hot_distance = fmod(_hot_distance + length, HOT_SPACING)
 
 
 ## The first impact arms the fuse and kills the toy's speed, so the burst goes off where the
@@ -201,9 +185,9 @@ func detonate() -> void:
 	tween.tween_property(wave, "scale", Vector3.ONE * BLAST_RADIUS, 0.18).from(Vector3.ONE * 0.2)
 	tween.parallel().tween_property(wave.material_override, "albedo_color:a", 0.0, 0.25)
 	tween.tween_callback(wave.queue_free)
-	if mud:
-		MudPatch.spawn(_toy.get_parent(), origin, 1.3)
-		Sfx.play_at("splat", origin, 0.8, -4.0)
+	if hot:
+		HotPatch.spawn(_toy.get_parent(), origin, _toy.thrower, 1.4)
+		Sfx.play_at("blast", origin, 0.7, -8.0)
 	_toy.velocity *= 0.25
 	if not _toy.is_dangerous():
 		_toy._settle()

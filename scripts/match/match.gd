@@ -11,11 +11,12 @@ const TOY_SCENE := preload("res://scenes/actors/toy.tscn")
 const TRAINING_SCENE := preload("res://scenes/arenas/training_yard.tscn")
 ## Crates are a budget, not a drip. A round gets two (three with a bigger pack) and that is
 ## all it gets however long the dogs survive, so a long scrap never ends buried in treats.
-## The first lands once the opening rush has settled, and the rest follow on a steady gap.
-const TREAT_FIRST_DELAY := 9.0
+## The first lands right after the whistle - playtests showed most rounds were decided before a
+## later crate ever arrived - and the rest follow on a steady gap.
+const TREAT_FIRST_DELAY := 1.5
 ## A brand new session's first crate waits a little longer, while everyone finds the buttons.
-const TREAT_FIRST_DELAY_NEW := 13.0
-const TREAT_GAP := 12.0
+const TREAT_FIRST_DELAY_NEW := 3.0
+const TREAT_GAP := 5.0
 const TREATS_SMALL_PACK := 2
 const TREATS_BIG_PACK := 3
 ## Crates keep this far from any dog and from one another, so every drop is a new trip.
@@ -31,6 +32,10 @@ const SUDDEN_DEATH_AT := 10.0
 const OVERTIME_LIMIT := 25.0
 ## Toys on the floor that the sky will add to, at most.
 const SKY_TOY_CAP := 14
+## Supply drops: a dog empty-pawed this long, with no loose toy within reach, gets one dropped
+## nearby. Playtests had dogs toy-less for most of their time alive - hunting, not playing.
+const RESUPPLY_AFTER := 2.0
+const RESUPPLY_REACH := 4.5
 ## No toy starts within this many metres of any dog's spawn: the opening move is a decision,
 ## not a free pickup. Relaxed in steps only if an arena leaves nowhere else to put one.
 const MIN_TOY_SPAWN_DISTANCE := 5.0
@@ -129,6 +134,7 @@ func _physics_process(delta: float) -> void:
 	round_time_left = maxf(0.0, round_time_left - delta)
 	if not practice_round and round_time_left <= SUDDEN_DEATH_AT:
 		_run_sudden_death(delta)
+	_resupply(delta)
 	_replay_clock += delta
 	replay.record(_replay_clock, dogs, toys, actors)
 	hud.update_match(dogs, round_time_left, round_number)
@@ -179,7 +185,7 @@ func _after_replay() -> void:
 
 func _show_round_board() -> void:
 	hud.round_board(_result_text, _standings(), Game.points_to_win,
-		"NEXT ROUND  -  press %s" % DeviceInput.button_label(&"confirm", Game.slots))
+		"NEXT ROUND  -  %s to go now" % DeviceInput.button_label(&"confirm", Game.slots))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -224,6 +230,7 @@ func _exit_tree() -> void:
 
 
 func start_round() -> void:
+	_empty_time.clear()
 	Juice.reset_time_effects()
 	_result_delay = 0.0
 	_treat_clock = _treat_delay()
@@ -801,6 +808,41 @@ func _run_sudden_death(delta: float) -> void:
 		var scatter := Vector3(randf_range(-1.0, 1.0), 0, randf_range(-1.0, 1.0)) * 0.9
 		var at := arena.clear_pickup_position(dog.global_position + lead + scatter, 0.5)
 		var drop := SkyDrop.new()
+		var falling: ToyData = Game.toys.filter(func(t: ToyData) -> bool: return t.fully_implemented).pick_random()
+		drop.setup(self, falling)
+		actors.add_child(drop)
+		drop.global_position = Vector3(at.x, 0, at.z)
+
+
+var _empty_time: Dictionary = {}
+
+
+## A dog with nothing in its mouth and nothing loose nearby gets a toy dropped beside it, on a
+## harmless green ring, so a round is spent playing rather than searching.
+func _resupply(delta: float) -> void:
+	for dog in dogs:
+		if not is_instance_valid(dog) or not dog.alive or dog.held_toy != null:
+			_empty_time.erase(dog)
+			continue
+		_empty_time[dog] = float(_empty_time.get(dog, 0.0)) + delta
+		if float(_empty_time[dog]) < RESUPPLY_AFTER:
+			continue
+		if toys.size() + get_tree().get_nodes_in_group(SkyDrop.GROUP).size() >= SKY_TOY_CAP:
+			return
+		var near := false
+		for toy in toys:
+			if is_instance_valid(toy) and toy.state == Toy.State.IDLE and not toy.ephemeral \
+					and Vector2(toy.global_position.x - dog.global_position.x, toy.global_position.z - dog.global_position.z).length() < RESUPPLY_REACH:
+				near = true
+				break
+		if near:
+			continue
+		# Next one for this dog no sooner than another RESUPPLY_AFTER plus the fall.
+		_empty_time[dog] = -1.0
+		var offset := Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0)).normalized() * 2.4
+		var at := arena.clear_pickup_position(dog.global_position + offset, 0.6)
+		var drop := SkyDrop.new()
+		drop.harmless = true
 		var falling: ToyData = Game.toys.filter(func(t: ToyData) -> bool: return t.fully_implemented).pick_random()
 		drop.setup(self, falling)
 		actors.add_child(drop)

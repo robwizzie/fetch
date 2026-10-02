@@ -334,8 +334,7 @@ func _slide(delta: float) -> void:
 		if state == State.FLYING and collision.get_collider().has_method("take_hit"):
 			collision.get_collider().call("take_hit", velocity)
 		bounces += 1
-		var banking := state == State.FLYING and power_effects.bank and not power_effects._banked
-		if state == State.FLYING and not banking:
+		if state == State.FLYING:
 			power_effects.impact()
 		if state == State.FLYING and data.special == ToyData.Special.HEAVY:
 			velocity = Vector3.ZERO
@@ -343,8 +342,6 @@ func _slide(delta: float) -> void:
 			break
 		velocity = velocity.bounce(normal) * data.bounciness
 		velocity.y = 0.0
-		if banking:
-			power_effects.bank_bounce()
 		if bounces > data.max_bounces:
 			velocity *= 0.5
 		if state == State.FLYING:
@@ -397,7 +394,7 @@ func _receive_strike(impulse: Vector3, from: Toy) -> void:
 		# Caroms transfer the shooter's behavior snapshot as well as attribution.
 		power_effects.reset()
 		power_effects.blast = from.power_effects.blast
-		power_effects.mud = from.power_effects.mud
+		power_effects.hot = from.power_effects.hot
 		state = State.FLYING
 		thrower = from.thrower
 		bounces = 0
