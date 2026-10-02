@@ -49,7 +49,7 @@ func _ready() -> void:
 		await get_tree().create_timer(0.25).timeout
 		await _capture("m%d_%s" % [i, Game.arenas[i].id])
 		if i == 0:
-			d.slot.powerups.assign([PowerupKinds.SQUEAKY_BLAST, PowerupKinds.MUD_TRACK])
+			d.slot.powerups.assign([PowerupKinds.SQUEAKY_BLAST, PowerupKinds.HOT_DOG])
 			d._action_lockout = 0.0
 			var t2: Toy = m.toys[1]
 			t2.pick_up(d)

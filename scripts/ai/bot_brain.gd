@@ -38,6 +38,8 @@ const LEVEL_IGNORE := [0.75, 0.45, 0.15]
 const LEVEL_PAUSE := [1.6, 1.0, 0.6]
 const LEVEL_AIM_ERROR := [1.6, 0.45, 0.0]
 const LEVEL_PACE := [0.78, 0.92, 1.0]
+## Holding a toy with a throw incoming: how often it turns to block with it instead of dashing.
+const LEVEL_BLOCK := [0.0, 0.3, 0.55]
 var _decoy_verdicts: Dictionary = {}
 
 
@@ -330,6 +332,9 @@ func _react(dog: Dog) -> void:
 			return
 		if dog.held_toy == null:
 			dog.input.virtual_buttons[&"throw"] = true
+		elif _rng.randf() < LEVEL_BLOCK[_level()]:
+			# Turn into it: the toy in its mouth takes the hit (see Dog.faces_throw).
+			dog.input.virtual_move = Vector2(-heading.x, -heading.z) * 0.4
 		else:
 			dog.input.virtual_move = Vector2(-heading.z, heading.x)
 			dog.input.virtual_buttons[&"dash"] = true

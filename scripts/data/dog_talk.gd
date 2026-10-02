@@ -9,7 +9,9 @@ const KNOCKOUTS: Array[String] = ["BONK!", "RUFF!", "YELP!", "OOF!", "WHUMP!", "
 const SELF_BONKS: Array[String] = ["SELF-BONK!", "CHASED OWN TAIL!", "WHO THREW THAT?!", "BONKED BY OWN TOY!"]
 const CATCHES: Array[String] = ["CATCH!", "CHOMP!", "GOOD CATCH!", "NICE MOUTH!", "GOTCHA!"]
 const DISARMS: Array[String] = ["DROP IT!", "LEAVE IT!", "MINE NOW!"]
-const SHIELD_POPS: Array[String] = ["BUBBLE POP!", "SPLOOSH!", "BATH SAVED YOU!"]
+## A throw knocked away by the toy in your mouth.
+const MOUTH_BLOCKS: Array[String] = ["BLOCKED!", "CLANK!", "NOT TODAY!", "NICE PARRY!"]
+const SHIELD_POPS: Array[String] = ["BLOCKED!", "SHIELD SAVE!", "NOT TODAY!"]
 const ROUND_WINS: Array[String] = [
 	"%s wins the round!",
 	"%s fetches the round!",
@@ -50,6 +52,10 @@ static func catch_line() -> String:
 
 static func disarm() -> String:
 	return DISARMS.pick_random()
+
+
+static func mouth_block() -> String:
+	return MOUTH_BLOCKS.pick_random()
 
 
 static func shield_pop() -> String:

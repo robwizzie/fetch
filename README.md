@@ -73,7 +73,9 @@ Mixed dog toys is the default; the setup screen also allows a single toy. Tennis
 frisbees fly fast and flat without bouncing around, heavy bones pierce dogs but stop at walls, and
 super balls retain more bounce. Every toy in the box bonks: a clean hit from any of them puts a dog
 out, so what you are holding never changes whether a throw counts. Only dangerous outbound throws can eliminate; walking into props is harmless.
-Mystery treats arrive in sealed tins and reveal one of eight powers when collected, with a reward
+Face a throw with a toy in your mouth and your toy takes the hit: it is knocked loose and you stay in.
+Mystery treats arrive in sealed tins and reveal one of ten powers when collected - Shield, Zoomies,
+Telepawthy, Ghost Pup, Dig!, Squeaky Kaboom, Hot Dog, Triple Fetch, Here, Boy! and Good Boy Decoy - with a reward
 badge above the dog and a short explanation beside its HUD belt. Up to three powers carry between
 rounds; Shield absorbs one hit, and a full belt swaps its oldest power for a new one. Treat timing
 adapts as the match progresses, and treats can be disabled in setup.

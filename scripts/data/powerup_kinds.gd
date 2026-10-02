@@ -18,46 +18,46 @@ const TELEPAWTHY := &"telepawthy"
 const GHOST_PUP := &"ghost_pup"
 const DIG := &"dig"
 const SQUEAKY_BLAST := &"squeaky_blast"
-const MUD_TRACK := &"mud_track"
+const HOT_DOG := &"hot_dog"
 const SCATTER_FETCH := &"scatter_fetch"
-const BANK_SHOT := &"bank_shot"
+const HERE_BOY := &"here_boy"
 const GOOD_DECOY := &"good_decoy"
 
 const ALL: Array[StringName] = [SHIELD, ZOOMIES, TELEPAWTHY, GHOST_PUP, DIG,
-	SQUEAKY_BLAST, MUD_TRACK, SCATTER_FETCH, BANK_SHOT, GOOD_DECOY]
+	SQUEAKY_BLAST, HOT_DOG, SCATTER_FETCH, HERE_BOY, GOOD_DECOY]
 
 ## Powers that change what a throw does (rather than the dog). A thrown toy carries their
 ## colours in its trail, so everyone can read a shot before it lands.
-const THROW_POWERS: Array[StringName] = [SQUEAKY_BLAST, MUD_TRACK, SCATTER_FETCH, BANK_SHOT, TELEPAWTHY]
+const THROW_POWERS: Array[StringName] = [SQUEAKY_BLAST, HOT_DOG, SCATTER_FETCH, HERE_BOY, TELEPAWTHY]
 
 
 static func display_name(kind: StringName) -> String:
 	match kind:
-		SHIELD: return "BUBBLE BATH"
+		SHIELD: return "SHIELD"
 		ZOOMIES: return "ZOOMIES"
 		TELEPAWTHY: return "TELEPAWTHY"
 		GHOST_PUP: return "GHOST PUP"
 		DIG: return "DIG!"
 		SQUEAKY_BLAST: return "SQUEAKY KABOOM"
-		MUD_TRACK: return "MUDDY PAWS"
+		HOT_DOG: return "HOT DOG"
 		SCATTER_FETCH: return "TRIPLE FETCH"
-		BANK_SHOT: return "BANK SHOT"
+		HERE_BOY: return "HERE, BOY!"
 		GOOD_DECOY: return "GOOD BOY DECOY"
 	return "TREAT"
 
 
 static func blurb(kind: StringName) -> String:
 	match kind:
-		SHIELD: return "A soapy bubble soaks one hit. Nobody likes bath time"
+		SHIELD: return "Blocks one hit that would have bonked you"
 		ZOOMIES: return "Tear around at full pelt with a dash that's always ready"
 		TELEPAWTHY: return "Steer your throw in mid-air with the stick"
 		GHOST_PUP: return "Invisible until you throw or dash. Only your paw prints show"
 		DIG: return "Your dash tunnels under the lawn - and under anything in the way - and pops up further on"
 		SQUEAKY_BLAST: return "Impact arms a squeaky bomb; grab it quick to defuse"
-		MUD_TRACK: return "Throws leave a mud trail that slows everyone down"
+		HOT_DOG: return "Your throws leave a sizzling trail. Any rival who runs through it is bonked"
 		SCATTER_FETCH: return "Every throw sends two extra toys out wide"
-		BANK_SHOT: return "The first wall bounce sends a throw off even faster"
-		GOOD_DECOY: return "Dashing leaves a very convincing good boy behind"
+		HERE_BOY: return "Dash while your throw is flying to zap across the arena to wherever it is"
+		GOOD_DECOY: return "A second you runs around on its own. Which one is real?"
 	return ""
 
 
@@ -66,16 +66,16 @@ static func blurb(kind: StringName) -> String:
 ## which is a different job and a much shorter one.
 static func tag(kind: StringName) -> String:
 	match kind:
-		SHIELD: return "SOAKS ONE HIT"
+		SHIELD: return "BLOCKS ONE HIT"
 		ZOOMIES: return "RUN! RUN! RUN!"
 		TELEPAWTHY: return "STEER YOUR THROW"
 		GHOST_PUP: return "TURN INVISIBLE"
 		DIG: return "DASH UNDERGROUND"
 		SQUEAKY_BLAST: return "BOUNCE, THEN BOOM"
-		MUD_TRACK: return "LEAVE A MUD TRAIL"
+		HOT_DOG: return "THROWS LEAVE FIRE"
 		SCATTER_FETCH: return "THREE AT ONCE"
-		BANK_SHOT: return "BOUNCE FOR SPEED"
-		GOOD_DECOY: return "DASH LEAVES A DECOY"
+		HERE_BOY: return "ZAP TO YOUR THROW"
+		GOOD_DECOY: return "WHICH ONE IS REAL?"
 	return "TREAT"
 
 
@@ -87,9 +87,9 @@ static func color(kind: StringName) -> Color:
 		GHOST_PUP: return Color("dfe9f5")
 		DIG: return Color("c9a06a")
 		SQUEAKY_BLAST: return Color("ff9d65")
-		MUD_TRACK: return Color("a07a52")
+		HOT_DOG: return Color("ff6a3d")
 		SCATTER_FETCH: return Color("f07ad0")
-		BANK_SHOT: return Color("5fb8ff")
+		HERE_BOY: return Color("5fb8ff")
 		GOOD_DECOY: return Color("8ee06a")
 	return Color.WHITE
 
@@ -103,9 +103,9 @@ static func glyph(kind: StringName) -> String:
 		GHOST_PUP: return "G"
 		DIG: return "D"
 		SQUEAKY_BLAST: return "B"
-		MUD_TRACK: return "M"
+		HOT_DOG: return "H"
 		SCATTER_FETCH: return "3"
-		BANK_SHOT: return "K"
+		HERE_BOY: return "!"
 		GOOD_DECOY: return "Y"
 	return "?"
 

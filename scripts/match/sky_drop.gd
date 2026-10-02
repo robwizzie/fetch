@@ -11,6 +11,8 @@ const RADIUS := 1.0
 const FALL_FROM := 11.0
 
 var toy_data: ToyData
+## A supply drop for a dog left without a toy: a friendly ring, and nobody is hurt by it.
+var harmless := false
 var game_match: Node
 var _elapsed := 0.0
 var _ring: MeshInstance3D
@@ -28,11 +30,12 @@ func setup(p_match: Node, p_toy: ToyData) -> void:
 func _ready() -> void:
 	add_to_group(GROUP)
 	_ring = Mats.mesh(self, Mats.torus(RADIUS - 0.1, RADIUS), Color.WHITE, Vector3(0, 0.05, 0))
-	_ring_material = Mats.unlit(Color(1.0, 0.36, 0.25, 0.9))
+	var tint := Color(0.55, 0.95, 0.5) if harmless else Color(1.0, 0.36, 0.25)
+	_ring_material = Mats.unlit(Color(tint, 0.9))
 	_ring.material_override = _ring_material
 	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_fill = Mats.mesh(self, Mats.cylinder(RADIUS, 0.01), Color.WHITE, Vector3(0, 0.04, 0))
-	_fill.material_override = Mats.unlit(Color(1.0, 0.36, 0.25, 0.25))
+	_fill.material_override = Mats.unlit(Color(tint, 0.25))
 	_fill.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_fill.scale = Vector3(0.05, 1, 0.05)
 	_falling = ToyModel.new()
@@ -44,7 +47,7 @@ func _ready() -> void:
 
 ## True while [param point] is inside the ring of a drop that has not landed yet.
 func threatens(point: Vector3, margin: float = 0.0) -> bool:
-	return not _landed and Vector2(point.x - global_position.x, point.z - global_position.z).length() < RADIUS + margin
+	return not harmless and not _landed and Vector2(point.x - global_position.x, point.z - global_position.z).length() < RADIUS + margin
 
 
 func _process(delta: float) -> void:
@@ -63,6 +66,13 @@ func _process(delta: float) -> void:
 
 func _land() -> void:
 	_landed = true
+	if harmless:
+		Sfx.play_at("pickup", global_position, 1.1, -6.0)
+		Juice.burst(get_parent(), global_position + Vector3.UP * 0.3, Color(0.8, 1.0, 0.7), 12, 3.5)
+		if game_match != null and is_instance_valid(game_match) and game_match.has_method("drop_toy"):
+			game_match.drop_toy(global_position, toy_data)
+		queue_free()
+		return
 	Sfx.play_at("bonk", global_position, 0.8, -2.0)
 	Juice.shake(0.22)
 	Juice.burst(get_parent(), global_position + Vector3.UP * 0.3, Color(1, 0.85, 0.6), 20, 5.0)

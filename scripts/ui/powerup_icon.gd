@@ -70,7 +70,7 @@ static func texture(kind: StringName, size: int = 64, tint: Color = Color.WHITE)
 static func _draw(buf: PackedByteArray, kind: StringName, s: int, tint: Color) -> void:
 	match kind:
 		PowerupKinds.SHIELD:
-			_bubbles(buf, s, tint)
+			_shield(buf, s, tint)
 		PowerupKinds.ZOOMIES:
 			_bolt(buf, s, tint)
 		PowerupKinds.TELEPAWTHY:
@@ -87,21 +87,34 @@ static func _draw(buf: PackedByteArray, kind: StringName, s: int, tint: Color) -
 				var angle := TAU * float(i) / 16.0
 				points.append(Vector2(0.5, 0.5) + Vector2(cos(angle), sin(angle)) * (0.44 if i % 2 == 0 else 0.24))
 			_polygon(buf, s, points, tint)
-		PowerupKinds.MUD_TRACK:
-			_ellipse(buf, s, Vector2(0.43, 0.7), Vector2(0.36, 0.17), tint)
-			_ellipse(buf, s, Vector2(0.72, 0.44), Vector2(0.17, 0.14), tint)
-			_ellipse(buf, s, Vector2(0.4, 0.2), Vector2(0.12, 0.10), tint)
+		PowerupKinds.HOT_DOG:
+			# A flame: a teardrop licking up, a smaller tongue beside it.
+			var flame := PackedVector2Array()
+			for i in 25:
+				var t := float(i) / 24.0
+				var angle := lerpf(0.0, TAU, t)
+				var r := 0.3 * (1.0 - 0.55 * pow(maxf(0.0, -sin(angle)), 0.6))
+				var point := Vector2(0.5 + cos(angle) * r, 0.62 + sin(angle) * r * 1.1)
+				if sin(angle) < 0.0:
+					point.y -= pow(-sin(angle), 3.0) * 0.36
+				flame.append(point)
+			_polygon(buf, s, flame, tint)
+			_ellipse(buf, s, Vector2(0.79, 0.62), Vector2(0.09, 0.15), tint)
 		PowerupKinds.SCATTER_FETCH:
 			# Three balls fanning out.
 			_ellipse(buf, s, Vector2(0.5, 0.28), Vector2(0.15, 0.15), tint)
 			_ellipse(buf, s, Vector2(0.24, 0.62), Vector2(0.15, 0.15), tint)
 			_ellipse(buf, s, Vector2(0.76, 0.62), Vector2(0.15, 0.15), tint)
 			_polygon(buf, s, PackedVector2Array([Vector2(0.44, 0.92), Vector2(0.56, 0.92), Vector2(0.53, 0.5), Vector2(0.47, 0.5)]), tint)
-		PowerupKinds.BANK_SHOT:
-			# A path striking a wall and coming off it faster: a V with a bar on the left.
-			_polygon(buf, s, PackedVector2Array([Vector2(0.1, 0.08), Vector2(0.24, 0.08), Vector2(0.24, 0.92), Vector2(0.1, 0.92)]), tint)
-			_polygon(buf, s, PackedVector2Array([Vector2(0.86, 0.1), Vector2(0.95, 0.2), Vector2(0.34, 0.54), Vector2(0.3, 0.44)]), tint)
-			_polygon(buf, s, PackedVector2Array([Vector2(0.3, 0.56), Vector2(0.34, 0.46), Vector2(0.95, 0.82), Vector2(0.86, 0.92)]), tint)
+		PowerupKinds.HERE_BOY:
+			# A zap: dots trailing up to a bold arrow - from here to there in a blink.
+			for i in 3:
+				_ellipse(buf, s, Vector2(0.1 + i * 0.1, 0.9 - i * 0.1), Vector2(0.045 + i * 0.01, 0.045 + i * 0.01), tint)
+			var from := Vector2(0.4, 0.62)
+			var to := Vector2(0.7, 0.32)
+			var side := (to - from).orthogonal().normalized() * 0.075
+			_polygon(buf, s, PackedVector2Array([from + side, to + side, to - side, from - side]), tint)
+			_polygon(buf, s, PackedVector2Array([Vector2(0.92, 0.1), Vector2(0.9, 0.5), Vector2(0.52, 0.12)]), tint)
 		PowerupKinds.GOOD_DECOY:
 			# A dog head and its ghost: two overlapping heads with ears.
 			for offset in [Vector2(-0.12, 0.06), Vector2(0.12, -0.02)]:
@@ -114,12 +127,18 @@ static func _draw(buf: PackedByteArray, kind: StringName, s: int, tint: Color) -
 
 # ---------------------------------------------------------------- shapes
 
-## Bath time: one big soap bubble and two little ones rising off it.
-static func _bubbles(buf: PackedByteArray, s: int, tint: Color) -> void:
-	_ring(buf, s, Vector2(0.44, 0.58), 0.34, 0.09, tint)
-	_ellipse(buf, s, Vector2(0.33, 0.47), Vector2(0.07, 0.07), tint)
-	_ring(buf, s, Vector2(0.80, 0.22), 0.13, 0.06, tint)
-	_ellipse(buf, s, Vector2(0.62, 0.10), Vector2(0.06, 0.06), tint)
+## A heater shield: flat top, straight sides, curving in to a point at the foot.
+static func _shield(buf: PackedByteArray, s: int, tint: Color) -> void:
+	var points := PackedVector2Array([Vector2(0.16, 0.12), Vector2(0.5, 0.06), Vector2(0.84, 0.12), Vector2(0.84, 0.46)])
+	for i in 9:
+		var t := float(i + 1) / 10.0
+		points.append(Vector2(0.84, 0.46).lerp(Vector2(0.5, 0.94), t) + Vector2(sin(t * PI) * 0.06, 0.0))
+	points.append(Vector2(0.5, 0.94))
+	for i in 9:
+		var t := float(i + 1) / 10.0
+		points.append(Vector2(0.5, 0.94).lerp(Vector2(0.16, 0.46), t) + Vector2(-sin(t * PI) * 0.06, 0.0))
+	points.append(Vector2(0.16, 0.46))
+	_polygon(buf, s, points, tint)
 
 
 ## A throw bending round a corner: a thick arc ending in an arrowhead.

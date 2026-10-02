@@ -18,6 +18,7 @@ func _ready() -> void:
 	await _toy_collisions()
 	await _powerups()
 	await _whacking()
+	await _mouth_blocks()
 	await get_tree().create_timer(0.15, true, false, true).timeout
 	if not _failed:
 		print("[weapons] PASSED: safe walking/holding, blocked throws, sweeps, four lethal toys, catching, charged throws, toy caroms, whacking and power-up belts")
@@ -353,14 +354,14 @@ func _powerups() -> void:
 	_check(dog.collect_powerup(PowerupKinds.ZOOMIES) == PowerupKinds.TELEPAWTHY, "the fifth replaces the next oldest")
 	expected = [PowerupKinds.GHOST_PUP, PowerupKinds.ZOOMIES, PowerupKinds.DIG]
 	_check(dog.slot.powerups == expected, "in slot two")
-	_check(dog.collect_powerup(PowerupKinds.BANK_SHOT) == PowerupKinds.DIG, "then slot three")
+	_check(dog.collect_powerup(PowerupKinds.HERE_BOY) == PowerupKinds.DIG, "then slot three")
 	_check(dog.collect_powerup(PowerupKinds.SHIELD) == PowerupKinds.GHOST_PUP, "and round again to slot one")
 	_check(dog.slot.powerups.size() == PowerupKinds.MAX_SLOTS, "the belt never exceeds its cap")
 	_check(not dog.slot.has_powerup(PowerupKinds.GHOST_PUP), "the displaced power-up is really gone")
 	_check(dog.slot.powerups[0] == PowerupKinds.SHIELD, "the new power-up is on the belt")
 	dog.slot.clear_powerups()
-	dog.slot.powerups.assign([PowerupKinds.MUD_TRACK, PowerupKinds.DIG, PowerupKinds.ZOOMIES])
-	_check(dog.slot.take_powerup(PowerupKinds.SHIELD) == PowerupKinds.MUD_TRACK, "a belt set up directly also replaces slot one first")
+	dog.slot.powerups.assign([PowerupKinds.HOT_DOG, PowerupKinds.DIG, PowerupKinds.ZOOMIES])
+	_check(dog.slot.take_powerup(PowerupKinds.SHIELD) == PowerupKinds.HOT_DOG, "a belt set up directly also replaces slot one first")
 
 	# Every kind a crate can roll has to actually do something: a stat on the dog, or a
 	# behaviour snapshotted onto the throw.
@@ -371,12 +372,15 @@ func _powerups() -> void:
 		dog.apply_powerups()
 		probe.power_effects.launch(dog)
 		dog._start_dash()
+		dog._decoy_sent = false
+		dog._maybe_send_decoy()
 		var left_decoy := is_instance_valid(dog._decoy)
 		if left_decoy:
 			dog._decoy.poof()
-		var changed := left_decoy or probe.power_effects.scatter or probe.power_effects.bank or dog.shield_charges > 0 \
+		# Here, Boy! changes what the dash does while a throw is out; it has its own test below.
+		var changed := left_decoy or kind == PowerupKinds.HERE_BOY or probe.power_effects.scatter or dog.shield_charges > 0 \
 			or dog._speed_mult != 1.0 or dog._dash_mult != 1.0 or dog._cooldown_mult != 1.0 or dog.ghost or dog.digger \
-			or probe.power_effects.blast or probe.power_effects.mud or probe.power_effects.steer
+			or probe.power_effects.blast or probe.power_effects.hot or probe.power_effects.steer
 		dog._dash_timer = 0.0
 		dog._surface()
 		_check(changed, "%s changes the dog or its throws" % PowerupKinds.display_name(kind))
@@ -484,32 +488,54 @@ func _behaviour_powers() -> void:
 	toy.power_effects.detonate()
 	_check(hidden.alive, "a wall between the burst and a dog protects it")
 
-	# Mud Track lays a bounded trail of patches that slow, then clear.
+	# Hot Dog lays a bounded trail of fire that bonks a rival who steps in - not the thrower -
+	# then burns out.
 	await _new_arena()
 	thrower = _dog(Vector3(-8, 0, 0))
-	thrower.slot.powerups.assign([PowerupKinds.MUD_TRACK])
+	thrower.slot.powerups.assign([PowerupKinds.HOT_DOG])
 	toy = _toy(&"frisbee", Vector3(-8, 0.32, -3))
 	toy.pick_up(thrower)
 	thrower.facing = Vector3.RIGHT
 	thrower._throw(1.0)
 	for i in 20:
 		await get_tree().physics_frame
-	var patches := get_tree().get_nodes_in_group("mud_patches")
-	_check(patches.size() >= 3, "a Mud Track throw leaves a trail (%d patches)" % patches.size())
-	_check(patches.size() <= MudPatch.LIMIT, "and the trail is capped")
-	var walker := _dog((patches[0] as Node3D).global_position, 1)
-	for i in 3:
+	var patches := get_tree().get_nodes_in_group("hot_patches")
+	_check(patches.size() >= 3, "a Hot Dog throw leaves a trail of fire (%d patches)" % patches.size())
+	_check(patches.size() <= HotPatch.LIMIT, "and the trail is capped")
+	var spot := (patches[patches.size() / 2] as Node3D).global_position
+	thrower.global_position = (patches[0] as Node3D).global_position
+	var walker := _dog(spot, 1)
+	walker.set_physics_process(true)
+	for i in 4:
 		await get_tree().physics_frame
-	_check(walker.speed_scale < 1.0, "standing in mud slows a dog")
+	_check(not walker.alive, "a rival who steps in the fire is bonked")
+	_check(thrower.alive, "the thrower can stand in their own fire")
 	while toy.state == Toy.State.FLYING:
 		await get_tree().physics_frame
-	await get_tree().create_timer(MudPatch.LIFETIME + 0.3).timeout
-	_check(is_equal_approx(walker.speed_scale, 1.0), "and the slow lifts when the mud dries up")
-	_check(get_tree().get_nodes_in_group("mud_patches").is_empty(), "every patch clears itself")
+	await get_tree().create_timer(HotPatch.LIFETIME + 0.3).timeout
+	_check(get_tree().get_nodes_in_group("hot_patches").is_empty(), "every patch burns out")
+
+	# Here, Boy!: dash while your throw flies and you zap to it; the toy flies on, not caught.
+	await _new_arena()
+	var zapper := _dog(Vector3(-8, 0, 3))
+	zapper.slot.powerups.assign([PowerupKinds.HERE_BOY])
+	var far := _toy(&"tennis_ball", Vector3(-8, 0.32, 0))
+	far.pick_up(zapper)
+	zapper.facing = Vector3.RIGHT
+	zapper._throw(1.0)
+	for i in 8:
+		await get_tree().physics_frame
+	var toy_at := far.global_position
+	var was := zapper.global_position
+	zapper._start_dash()
+	_check(zapper.global_position.distance_to(was) > 2.0, "Here, Boy! zaps the dog across the arena")
+	_check(Vector2(zapper.global_position.x - toy_at.x, zapper.global_position.z - toy_at.z).length() < 2.0, "to where its throw is")
+	_check(zapper.held_toy == null and far.state == Toy.State.FLYING, "and the toy carries on - a throw never comes back")
+	_check(zapper._dash_cooldown > 0.0, "it spends the dash")
 	await _combining_powers()
 
 
-## Scatter Fetch, Bank Shot, Good Decoy, and how the throw powers combine.
+## Scatter Fetch, Good Decoy, and how the throw powers combine.
 func _combining_powers() -> void:
 	# Scatter: one press, three toys; the side ones vanish instead of becoming pickups.
 	await _new_arena()
@@ -558,33 +584,26 @@ func _combining_powers() -> void:
 	second._try_hit(victim)
 	_check(victim.alive and victim.shield_charges == 0, "a volley pops a shield once and does not also knock out")
 
-	# Bank Shot: the first wall bounce is faster than the throw that reached it.
+	# Good Decoy: a second you, once a round, that runs around on its own until something hits it.
 	await _new_arena()
-	_wall(3.0)
-	thrower = _dog(Vector3(-8, 0, 4))
-	thrower.slot.powerups.assign([PowerupKinds.BANK_SHOT, PowerupKinds.SQUEAKY_BLAST])
-	var banker := _toy(&"tennis_ball", Vector3(0, Toy.FLY_HEIGHT, 0))
-	banker.set_physics_process(false)
-	banker.state = Toy.State.FLYING
-	banker.thrower = thrower
-	banker.power_effects.launch(thrower)
-	banker.velocity = Vector3.RIGHT * 20.0
+	var owner_dog := _dog(Vector3.ZERO)
+	owner_dog.slot.powerups.assign([PowerupKinds.GOOD_DECOY])
+	owner_dog._maybe_send_decoy()
+	owner_dog._maybe_send_decoy()
+	_check(get_tree().get_nodes_in_group("decoys").size() == 1, "the power sends out one decoy a round")
+	var decoy := owner_dog._decoy
+	var start := decoy.global_position
+	await get_tree().create_timer(1.2).timeout
+	_check(is_instance_valid(decoy) and decoy.global_position.distance_to(start) > 1.0, "the decoy runs around on its own")
+	var rival := _dog(Vector3(8, 0, 0), 1)
+	var shot := _toy(&"tennis_ball", decoy.global_position + Vector3(0, Toy.FLY_HEIGHT, 0))
+	shot.thrower = rival
+	shot.state = Toy.State.FLYING
+	shot.velocity = Vector3(10, 0, 0)
+	shot.set_physics_process(false)
 	await get_tree().physics_frame
-	banker._slide(0.2)
-	_check(banker.velocity.x < 0.0 and banker.velocity.length() > 20.0 * banker.data.bounciness * 1.3, "a Bank Shot comes off the wall faster")
-	_check(banker.power_effects.fuse_left < 0.0, "with Squeaky Blast, the bank itself does not arm the fuse")
-
-	# Good Decoy: a dash leaves a copy that pops on its own.
-	await _new_arena()
-	var dasher := _dog(Vector3.ZERO)
-	dasher.slot.powerups.assign([PowerupKinds.GOOD_DECOY])
-	dasher._start_dash()
-	_check(get_tree().get_nodes_in_group("decoys").size() == 1, "a dash leaves one decoy")
-	dasher._dash_cooldown = 0.0
-	dasher._start_dash()
-	_check(get_tree().get_nodes_in_group("decoys").size() == 1, "a new dash replaces the old decoy")
-	await get_tree().create_timer(Decoy.LIFETIME + 0.3).timeout
-	_check(get_tree().get_nodes_in_group("decoys").is_empty(), "the decoy goes on its own")
+	await get_tree().process_frame
+	_check(not is_instance_valid(decoy) or get_tree().get_nodes_in_group("decoys").is_empty(), "a rival's throw pops it")
 	await _new_powers()
 
 
@@ -696,6 +715,53 @@ func _whacking() -> void:
 	bully.global_position = Vector3(0, 0, 6.0)
 	bully.facing = Vector3(0, 0, -1)
 	_check(bully._whack_target() == null, "a dog out of range is not whackable")
+
+
+## A throw at a dog that is facing it with a toy in its mouth knocks that toy loose instead of
+## bonking the dog. From the side or behind, the holder is bonked as usual.
+func _mouth_blocks() -> void:
+	await _new_arena()
+	var thrower := _dog(Vector3(0, 0, -6.0))
+	var holder := _dog(Vector3.ZERO, 1)
+	var held := _toy(&"tennis_ball", Vector3(3, 0.32, 3))
+	held.pick_up(holder)
+	holder.facing = Vector3(0, 0, -1)
+	var incoming := _toy(&"frisbee", Vector3(0, Toy.FLY_HEIGHT, -1.0))
+	incoming.thrower = thrower
+	incoming.state = Toy.State.FLYING
+	incoming.velocity = Vector3(0, 0, 14.0)
+	_check(holder.faces_throw(incoming), "a throw coming straight at the face is faced")
+	var stopped := holder.hit_by(incoming)
+	_check(stopped and holder.alive, "facing a throw with a toy in your mouth blocks it")
+	_check(holder.held_toy == null and held.state == Toy.State.IDLE, "and knocks your own toy loose")
+	_check(held.velocity.length() > 3.0, "sending it flying")
+	_check(incoming.state == Toy.State.IDLE, "the blocked throw is spent")
+
+	# Shielded, the shield is hit first - the toy in the mouth is inside it - and the toy stays.
+	var guarded := _toy(&"tennis_ball", Vector3(6, 0.32, 6))
+	guarded.pick_up(holder)
+	holder.facing = Vector3(0, 0, -1)
+	holder.shield_charges = 1
+	var at_shield := _toy(&"frisbee", Vector3(0, Toy.FLY_HEIGHT, -1.0))
+	at_shield.thrower = thrower
+	at_shield.state = Toy.State.FLYING
+	at_shield.velocity = Vector3(0, 0, 14.0)
+	holder.hit_by(at_shield)
+	_check(holder.alive and holder.shield_charges == 0, "a shielded dog's shield takes the hit first")
+	_check(holder.held_toy == guarded, "and the toy in its mouth stays put")
+	holder.held_toy.drop(holder.global_position + Vector3(3, 0, 3))
+
+	# Turned away, the same throw bonks.
+	var second := _toy(&"tennis_ball", Vector3(5, 0.32, 5))
+	second.pick_up(holder)
+	holder.facing = Vector3(0, 0, 1)
+	var behind := _toy(&"frisbee", Vector3(0, Toy.FLY_HEIGHT, -1.0))
+	behind.thrower = thrower
+	behind.state = Toy.State.FLYING
+	behind.velocity = Vector3(0, 0, 14.0)
+	_check(not holder.faces_throw(behind), "a throw from behind is not faced")
+	holder.hit_by(behind)
+	_check(not holder.alive, "so it bonks, toy in mouth or not")
 
 
 func _check(condition: bool, message: String) -> void:

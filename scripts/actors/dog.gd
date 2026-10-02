@@ -7,6 +7,8 @@ signal eliminated(dog: Dog)
 
 enum State { ALIVE, ELIMINATED }
 
+## How far off straight ahead a throw can come and still be blocked by the toy in your mouth.
+const MOUTH_BLOCK_ANGLE := 60.0
 const ACCEL := 47.0
 const BRAKE := 65.0
 const TURN_ACCEL := 76.0
@@ -136,6 +138,10 @@ const VOLLEY_WINDOW_MSEC := 450
 const SCATTER_ANGLE := 16.0
 const SCATTER_POWER := 0.85
 var _decoy: Decoy
+## One decoy a round: set once this round's has been sent out (and stays set if it pops).
+var _decoy_sent := false
+## The toy this dog threw last: Here, Boy! zaps to it while it flies (it never comes back).
+var _last_thrown: Toy
 ## Tall grass the dog is standing in, by source. While any holds it, and it has not just given
 ## itself away, the dog is concealed: body, ring and name all hidden.
 var _cover: Dictionary = {}
@@ -216,6 +222,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_maybe_send_decoy()
 	if state != State.ALIVE or round_locked:
 		return
 	_powerup_halo.visible = shield_charges > 0 and not concealed
@@ -420,6 +427,8 @@ func get_hold_position() -> Vector3:
 # ---------------------------------------------------------------- actions
 
 func _start_dash() -> void:
+	if _here_boy():
+		return
 	_dash_timer = DASH_TIME * (DIG_TIME_SCALE if digger else 1.0)
 	# A burrow is protected from the moment the dog goes under until it is back up.
 	_iframe_timer = _dash_timer + 0.05 if digger else DASH_IFRAMES
@@ -432,13 +441,6 @@ func _start_dash() -> void:
 		_burrow()
 	else:
 		reveal()
-	if slot != null and slot.has_powerup(PowerupKinds.GOOD_DECOY):
-		if is_instance_valid(_decoy):
-			_decoy.poof()
-		_decoy = Decoy.new()
-		_decoy.setup(self)
-		get_parent().add_child(_decoy)
-		_decoy.global_position = global_position
 	Juice.burst(get_parent(), global_position - facing * 0.3 + Vector3(0, 0.3, 0), Color(1, 1, 1, 0.7), 8, 3.0)
 
 
@@ -657,6 +659,7 @@ func _throw(charge: float = 0.0) -> void:
 	if charge > 0.35:
 		Juice.burst(get_parent(), global_position + facing * 0.7 + Vector3(0, 0.55, 0),
 			Color(1.0, 0.9, 0.6), int(3.0 + charge * 6.0), 1.8 + charge * 2.4)
+	_last_thrown = toy
 	Events.toy_thrown.emit(toy, self)
 
 
@@ -917,8 +920,103 @@ func _resolve_hit(toy: Toy, area_hit: bool, direction: Vector3) -> bool:
 		Juice.burst(get_parent(), global_position + Vector3.UP * 0.7, Color(1.0, 0.88, 0.4), 14, 3.5)
 		Sfx.play("shield", 1.0, -3.0)
 		return true
+	# Facing a throw with a toy in your mouth: the toy you hold takes it. The throw glances off,
+	# yours is knocked flying, and you are still in - but now you are empty-pawed and the toy
+	# is up for grabs. Turning to face danger is a skill; this makes it pay. A shield comes
+	# first (above): the toy in your mouth is inside the shield, so the shield is hit first.
+	if not area_hit and is_instance_valid(held_toy) and faces_throw(toy):
+		_mouth_block(toy)
+		return true
 	eliminate(toy, direction)
 	return true
+
+
+## Here, Boy!: with a throw of your own still in the air, the dash button zaps you to where it
+## is - just behind it, so it carries on ahead of you. The toy is not called back: a throw is
+## still a commitment, this only lets you chase it from a standing start across the arena.
+## Uses the dash (and its cooldown). Returns false - a plain dash - when nothing of yours is
+## flying or there is nowhere clear to land.
+func _here_boy() -> bool:
+	if slot == null or not slot.has_powerup(PowerupKinds.HERE_BOY) or held_toy != null:
+		return false
+	var toy := _last_thrown
+	if not is_instance_valid(toy) or toy.state != Toy.State.FLYING or toy.thrower != self or toy.ephemeral:
+		return false
+	var arenas := get_tree().get_nodes_in_group("arenas")
+	var travel := Vector3(toy.velocity.x, 0.0, toy.velocity.z).normalized()
+	var spot := Vector3(toy.global_position.x, 0.0, toy.global_position.z) - travel * (data.body_radius + toy.data.radius + 0.5)
+	if not arenas.is_empty():
+		spot = (arenas.back() as Arena).clear_pickup_position(spot, data.body_radius + 0.15)
+	var from := global_position
+	_dash_cooldown = data.dash_cooldown * _cooldown_mult
+	_spawn_warp(from)
+	global_position = Vector3(spot.x, global_position.y, spot.z)
+	velocity = Vector3.ZERO
+	# A blink of safety on arrival, so landing behind a flying toy is never a bonk.
+	invincible = true
+	_iframe_timer = DASH_IFRAMES
+	_spawn_warp(global_position)
+	Sfx.play_at("warp", global_position, randf_range(1.1, 1.25), -3.0)
+	Juice.float_text(get_parent(), global_position + Vector3.UP * 1.7, "HERE, BOY!", PowerupKinds.color(PowerupKinds.HERE_BOY).lightened(0.3), 0.6)
+	reveal()
+	return true
+
+
+func _spawn_warp(at: Vector3) -> void:
+	Juice.burst(get_parent(), at + Vector3.UP * 0.6, PowerupKinds.color(PowerupKinds.HERE_BOY), 16, 4.5)
+	Juice.burst(get_parent(), at + Vector3.UP * 0.6, Color(1, 1, 1, 0.85), 8, 3.0)
+
+
+## Good Boy Decoy: once a round, as soon as the power is on the belt and play is on, a second
+## of this dog peels off and runs around on its own (see Decoy).
+func _maybe_send_decoy() -> void:
+	if _decoy_sent or slot == null or not slot.has_powerup(PowerupKinds.GOOD_DECOY):
+		return
+	if not alive or round_locked or practice_safe or _spawn_grace > 0.0 or not is_inside_tree():
+		return
+	_decoy_sent = true
+	_decoy = Decoy.new()
+	_decoy.setup(self)
+	get_parent().add_child(_decoy)
+	# Out of the same spot, the two of them shuffling apart, so nobody can see who is who.
+	_decoy.global_position = global_position + facing.rotated(Vector3.UP, PI * 0.5) * 0.4
+	Juice.burst(get_parent(), global_position + Vector3.UP * 0.6, Color(1, 1, 1, 0.8), 16, 3.0)
+	Sfx.play_at("squeak", global_position, 1.4, -6.0)
+
+
+## True when [param toy] is coming at this dog's face: it is in front (within MOUTH_BLOCK_ANGLE
+## of where the dog looks) and travelling towards it.
+func faces_throw(toy: Toy) -> bool:
+	var to_toy := Vector3(toy.global_position.x - global_position.x, 0.0, toy.global_position.z - global_position.z)
+	var travel := Vector3(toy.velocity.x, 0.0, toy.velocity.z)
+	if to_toy.length() < 0.01 or travel.length() < 0.1:
+		return false
+	var look := Vector3(facing.x, 0.0, facing.z).normalized()
+	return look.dot(to_toy.normalized()) >= cos(deg_to_rad(MOUTH_BLOCK_ANGLE)) and travel.dot(-to_toy) > 0.0
+
+
+func _mouth_block(toy: Toy) -> void:
+	_cancel_charge()
+	_buffered_throw = 0.0
+	var travel := Vector3(toy.velocity.x, 0.0, toy.velocity.z).normalized()
+	var knocked := held_toy
+	held_toy = null
+	knocked.drop(global_position + facing * 0.3)
+	# Popped out over a shoulder, carried on along the throw - away from you, so it is a race.
+	knocked.velocity = travel.rotated(Vector3.UP, deg_to_rad(38.0) * (1.0 if randf() > 0.5 else -1.0)) * 7.5
+	_pickup_lock = 0.55
+	toy.deflect_from(self)
+	_weapon_impulse = travel * 4.5
+	_stagger_time = maxf(_stagger_time, 0.22)
+	model.play_stagger()
+	var mouth := global_position + facing * 0.5 + Vector3.UP * 0.7
+	Juice.burst(get_parent(), mouth, Color(1, 1, 1, 0.9), 12, 5.0)
+	Juice.burst(get_parent(), mouth, knocked.data.color, 8, 4.0)
+	Juice.float_text(get_parent(), global_position + Vector3.UP * 1.7, DogTalk.mouth_block(), Color(0.75, 0.95, 1.0), 0.7)
+	Juice.shake(0.12)
+	Sfx.play_at("whack", global_position, randf_range(1.05, 1.15), -2.0)
+	Sfx.play_at("squeak", global_position, randf_range(0.85, 0.95), -7.0)
+	Events.toy_blocked.emit(self, toy)
 
 
 ## A ghost's "BOO!": a startled jump away and a moment's stumble. Never a knockout on its own.
@@ -992,6 +1090,32 @@ func knocked_out_by(by: Node) -> Dog:
 	if is_instance_valid(_last_pusher) and Time.get_ticks_msec() - _last_push_msec < PUSH_CREDIT_MSEC:
 		return _last_pusher
 	return null
+
+
+## Stepped into a Hot Dog patch: out, credited to whoever threw it - unless mid-dash (the dog
+## hops it), underground, or behind a shield, which takes the burn instead.
+func burn(patch: Node3D, by: Dog) -> void:
+	if not alive or round_locked or invincible or _burrowed or _spawn_grace > 0.0 or practice_safe:
+		return
+	if shield_charges > 0:
+		shield_charges -= 1
+		if slot != null:
+			slot.use_powerup(PowerupKinds.SHIELD)
+		_powerup_halo.visible = shield_charges > 0
+		# A moment clear of the flames, so one patch does not eat a second shield next frame.
+		invincible = true
+		get_tree().create_timer(0.6, false).timeout.connect(func() -> void:
+			if is_instance_valid(self) and _dash_timer <= 0.0:
+				invincible = false)
+		Juice.float_text(get_parent(), global_position + Vector3.UP * 1.6, DogTalk.shield_pop(), Color(1.0, 0.88, 0.4), 0.6)
+		Sfx.play("shield", 1.0, -3.0)
+		return
+	if is_instance_valid(by):
+		_last_pusher = by
+		_last_push_msec = Time.get_ticks_msec()
+	Juice.burst(get_parent(), global_position + Vector3.UP * 0.5, Color(1.0, 0.5, 0.15), 16, 4.0)
+	var away := Vector3(global_position.x - patch.global_position.x, 0.0, global_position.z - patch.global_position.z)
+	eliminate(null, away.normalized() if away.length() > 0.01 else facing)
 
 
 ## Down a hole: out of the round, the same as a bonk.
