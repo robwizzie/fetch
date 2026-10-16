@@ -60,6 +60,33 @@ func _setup_hides_the_fiddly_bits() -> void:
 	await get_tree().process_frame
 	_check(not more.visible, "and they fold away again")
 
+	# A pad can always walk down from the top to FETCH!, options folded or not.
+	for unfolded in [false, true]:
+		if setup._more.visible != unfolded:
+			setup._toggle_more()
+		var at: Control = setup._mode_row
+		var reached := false
+		for step in 20:
+			if at == setup._start:
+				reached = true
+				break
+			at = at.get_node(at.focus_neighbor_bottom) as Control
+		_check(reached, "pressing down from Mode reaches FETCH! (%s)" % ("more options open" if unfolded else "folded"))
+	if setup._more.visible:
+		setup._toggle_more()
+
+	# Picking packs: two panels, dogs moved across with left/right, and a fair shuffle.
+	setup._teams_row.index = 1
+	setup._apply()
+	_check(setup._pack_cards.size() == Game.slots.size(), "teams show every dog as a movable card")
+	var mover: PlayerSlot = Game.slots[0]
+	setup._move_to_pack(mover, 1 - mover.team)
+	_check(setup._pack_cards.size() == Game.slots.size(), "moving a dog rebuilds both packs")
+	setup._shuffle_packs()
+	_check(Game.teams_valid(), "a shuffle always leaves both packs with a dog")
+	setup._teams_row.index = 0
+	setup._apply()
+
 	# Whatever is chosen still lands on Game, revealed or not.
 	setup._teams_row.index = 1
 	setup._points_row.index = 0

@@ -27,7 +27,7 @@ func _ready() -> void:
 	for id in [&"hot_potato", &"king_of_the_bed", &"golden_ball"]:
 		await _bots_finish(id)
 	if not _failed:
-		print("[modes] PASSED: hot bone pops its holder, bed counts only alone, golden ball banks for its holder, bots finish all three")
+		print("[modes] PASSED: hot potato tags and blows IT, bed counts only alone, golden ball banks for its holder, respawns keep time, bots finish all three")
 	get_tree().quit(1 if _failed else 0)
 
 
@@ -67,15 +67,34 @@ func _hot_potato_rules() -> void:
 	var game_match := _start(&"hot_potato", false)
 	await _until_playing(game_match)
 	var mode := game_match.mode as HotPotato
-	_check(is_instance_valid(mode.hot), "a hot bone is chosen")
-	var holder: Dog = game_match.dogs[1]
-	holder._spawn_grace = 0.0
-	mode.hot.pick_up(holder)
-	mode.fuse = 0.05
-	for i in 6:
-		await get_tree().physics_frame
-	_check(not holder.alive, "when it pops, the dog holding the hot bone is out")
-	_check(game_match.dogs[0].alive and game_match.dogs[2].alive, "and nobody else")
+	var dogs: Array[Dog] = game_match.dogs
+	for dog in dogs:
+		dog._spawn_grace = 0.0
+	_check(game_match.toys.size() == 1 and game_match.toys[0] == mode.hot, "the hot potato is the only toy out")
+	_check(is_instance_valid(mode.hot.holder) and mode.it == mode.hot.holder, "it starts in a random dog's mouth, and that dog is IT")
+	_check(not mode.allows_treats() and not mode.allows_sudden_death(), "no crates and no sky drops muddy it")
+	# Tag: a throw that reaches a rival lands in their mouth instead of bonking them.
+	var tagger: Dog = mode.it
+	var target: Dog = dogs[1] if tagger != dogs[1] else dogs[2]
+	tagger.held_toy = null
+	mode.hot.state = Toy.State.FLYING
+	mode.hot.holder = null
+	mode.hot.thrower = tagger
+	mode.hot.velocity = Vector3(0, 0, 10)
+	_check(target.hit_by(mode.hot), "a hot potato throw that reaches a rival tags them")
+	_check(target.alive and target.held_toy == mode.hot, "tagged, not bonked: it is in their mouth now")
+	mode.tick(0.01, dogs)
+	_check(mode.it == target, "and they are IT")
+	_check(target._action_lockout > 0.0, "with a beat of hot hands before they can throw it back")
+	# Blow: IT is out, nobody else, and a moment later it turns up in someone else's mouth.
+	mode.fuse = 0.01
+	mode.tick(0.05, dogs)
+	_check(not target.alive, "when it blows, IT is out")
+	var standing := dogs.filter(func(dog: Dog) -> bool: return dog.alive)
+	_check(standing.size() == dogs.size() - 1, "and nobody else")
+	for i in 3:
+		mode.tick(HotPotato.REDEAL * 0.5, dogs)
+	_check(is_instance_valid(mode.hot.holder) and mode.hot.holder.alive and mode.it == mode.hot.holder, "then it is dealt to another dog on a fresh fuse")
 	_check(mode.fuse > HotPotato.FUSE_MIN - 1.0, "a fresh fuse starts")
 	game_match.queue_free()
 	await get_tree().process_frame
@@ -96,7 +115,18 @@ func _bed_rules() -> void:
 	dogs[1].global_position = Vector3(20, 0, 20)
 	mode.tick(3.0, dogs)
 	_check(mode.timeout_winner(dogs) == dogs[0].slot, "at time-up, the most bed time wins")
-	mode.tick(KingOfTheBed.CLAIM_TIME, dogs)
+	# Bonked off it: the round goes on, the dog comes back, and its time is still banked.
+	var banked_before: float = mode.banked[mode._key(dogs[0].slot)]
+	dogs[0]._spawn_grace = 0.0
+	dogs[0].eliminate()
+	for i in range(1, dogs.size()):
+		dogs[i].eliminate()
+	_check(not mode.is_round_over(dogs), "knocking everyone out does not end a bed round")
+	await get_tree().create_timer(KingOfTheBed.RESPAWN_TIME + 0.4).timeout
+	_check(dogs[0].alive, "a bonked dog comes back")
+	_check(is_equal_approx(mode.banked[mode._key(dogs[0].slot)], banked_before), "with its bed time where it left it")
+	dogs[0].global_position = mode.bed_centre
+	mode.tick(KingOfTheBed.CLAIM_TIME, [dogs[0]] as Array[Dog])
 	_check(mode.is_round_over(dogs) and mode.round_winner(dogs) == dogs[0].slot, "holding it long enough takes the round")
 	game_match.queue_free()
 	await get_tree().process_frame
@@ -115,6 +145,15 @@ func _golden_rules() -> void:
 	mode.tick(3.0, dogs)
 	_check(mode.timeout_winner(dogs) == dogs[2].slot, "at time-up, the most golden time wins")
 	_check(mode.bot_keeps(dogs[2], mode.golden), "a bot hangs on to the golden ball")
+	# Bonked: the ball comes loose, the round goes on, and the holder is back with their time kept.
+	var kept: float = mode.banked[mode._key(dogs[2].slot)]
+	dogs[2].eliminate()
+	_check(not mode.is_round_over(dogs), "a bonk does not decide a golden ball round")
+	await get_tree().create_timer(GameMode.RESPAWN_TIME + 0.4).timeout
+	_check(dogs[2].alive, "the bonked dog comes back")
+	_check(is_equal_approx(mode.banked[mode._key(dogs[2].slot)], kept), "with its time kept (%.2f vs %.2f)" % [mode.banked[mode._key(dogs[2].slot)], kept])
+	dogs[2]._spawn_grace = 0.0
+	mode.golden.pick_up(dogs[2])
 	mode.tick(GoldenBall.CLAIM_TIME, dogs)
 	_check(mode.is_round_over(dogs) and mode.round_winner(dogs) == dogs[2].slot, "holding it long enough takes the round")
 	game_match.queue_free()

@@ -453,16 +453,16 @@ func _behaviour_powers() -> void:
 	_check(toy.power_effects.blast, "a Squeaky Blast throw carries the blast")
 	thrower.slot.powerups.clear()
 	_check(toy.power_effects.blast, "and a belt change never rewrites a toy in flight")
-	var fused := false
+	var went_off := false
 	for i in 60:
 		await get_tree().physics_frame
-		fused = fused or toy.power_effects.fuse_left > 0.0
+		went_off = went_off or toy.power_effects._spent
 		if not victim.alive:
 			break
-	_check(fused, "the first impact arms a fuse rather than going off at once")
+	_check(went_off, "the throw explodes on its first impact")
 	_check(not victim.alive, "the burst puts out a rival in range")
 
-	# A catch defuses it.
+	# Caught clean out of the air, it never goes off.
 	await _new_arena()
 	_wall(3.0)
 	thrower = _dog(Vector3(-6, 0, 0))
@@ -471,9 +471,19 @@ func _behaviour_powers() -> void:
 	toy.pick_up(thrower)
 	thrower.slot.powerups.assign([PowerupKinds.SQUEAKY_BLAST])
 	thrower._throw(1.0)
-	toy.power_effects.impact()
 	toy.pick_up(catcher)
-	_check(toy.power_effects.fuse_left < 0.0 and not toy.power_effects.blast, "catching a fused toy defuses it")
+	_check(not toy.power_effects.blast and not toy.power_effects._spent, "catching a Squeaky Kaboom throw defuses it")
+
+	# A throw that runs out of flight without hitting anything goes off where it stops.
+	await _new_arena()
+	thrower = _dog(Vector3(-8, 0, 0))
+	toy = _toy(&"tennis_ball", Vector3(0, Toy.FLY_HEIGHT, 0))
+	toy.set_physics_process(false)
+	toy.state = Toy.State.FLYING
+	toy.thrower = thrower
+	toy.power_effects.blast = true
+	toy._settle()
+	_check(toy.power_effects._spent, "a Squeaky Kaboom that lands on nothing still explodes")
 
 	# Walls block the burst.
 	await _new_arena()
@@ -639,16 +649,21 @@ func _new_powers() -> void:
 	_check(plain.velocity.z == 0.0, "a normal throw ignores the stick")
 	thrower.input.virtual_move = Vector2.ZERO
 
-	# Ghost Pup: invisible anywhere, shown by a throw or a dash.
+	# Ghost Pup: a see-through shimmer anywhere, shown solid by a throw or a dash.
 	await _new_arena()
 	var ghost := _dog(Vector3.ZERO)
 	ghost.slot.powerups.assign([PowerupKinds.GHOST_PUP])
 	ghost.apply_powerups()
 	await get_tree().process_frame
-	_check(ghost.concealed and not ghost.model.visible and not ghost.ring.visible, "a Ghost Pup is invisible in the open")
+	# A faint shimmer rather than gone: its owner has to be able to follow it on a shared screen.
+	_check(ghost.concealed and ghost.is_shimmering(), "a Ghost Pup goes see-through in the open")
+	var body := ghost.model.find_children("*", "GeometryInstance3D", true, false)
+	_check(not body.is_empty() and (body[0] as GeometryInstance3D).transparency > 0.8, "faint enough to miss in a scrap")
+	_check(ghost.ring.transparency > 0.5 and not ghost.name_tag.visible, "its ring a faint trace and its name hidden")
 	ghost.reveal()
 	await get_tree().process_frame
 	_check(not ghost.concealed and ghost.model.visible, "a throw or dash gives it away")
+	_check(is_zero_approx((body[0] as GeometryInstance3D).transparency), "solid again while it shows")
 	await get_tree().create_timer(Dog.REVEAL_TIME + 0.1).timeout
 	_check(ghost.concealed, "and it fades out again")
 	ghost.slot.clear_powerups()

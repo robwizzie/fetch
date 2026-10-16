@@ -16,7 +16,7 @@ tonemap_mode = 0
 [node name="Kitchen" type="Node3D"]
 script = ExtResource("1_arena")
 decor_theme = "Kitchen"
-size = Vector2(26, 14.6)
+size = Vector2(29.12, 16.352)
 wall_style = 1
 ground_style = 3
 wall_height = 1.6
@@ -47,48 +47,48 @@ environment = SubResource("Environment_kitchen")
 [node name="SpawnPoints" type="Node3D" parent="."]
 
 [node name="P1" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(-10, 0, -5)
+position = Vector3(-11.2, 0, -5.6)
 
 [node name="P2" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(10, 0, 5)
+position = Vector3(11.2, 0, 5.6)
 
 [node name="P3" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(10, 0, -5)
+position = Vector3(11.2, 0, -5.6)
 
 [node name="P4" type="Marker3D" parent="SpawnPoints"]
-position = Vector3(-10, 0, 5)
+position = Vector3(-11.2, 0, 5.6)
 
 [node name="ToySpawns" type="Node3D" parent="."]
 
 [node name="T1" type="Marker3D" parent="ToySpawns"]
-position = Vector3(-8, 0, -5.4)
+position = Vector3(-8.96, 0, -6.048)
 
 [node name="T2" type="Marker3D" parent="ToySpawns"]
-position = Vector3(8, 0, 5.4)
+position = Vector3(8.96, 0, 6.048)
 
 [node name="T3" type="Marker3D" parent="ToySpawns"]
-position = Vector3(8, 0, -5.4)
+position = Vector3(8.96, 0, -6.048)
 
 [node name="T4" type="Marker3D" parent="ToySpawns"]
-position = Vector3(-8, 0, 5.4)
+position = Vector3(-8.96, 0, 6.048)
 
 [node name="T5" type="Marker3D" parent="ToySpawns"]
-position = Vector3(-4.6, 0, -3.5)
+position = Vector3(-5.152, 0, -3.92)
 
 [node name="T6" type="Marker3D" parent="ToySpawns"]
-position = Vector3(4.6, 0, 3.5)
+position = Vector3(5.152, 0, 3.92)
 
 [node name="Gimmicks" type="Node3D" parent="."]
 
 [node name="BeltNorth" type="Node3D" parent="Gimmicks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2, 0, -3.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.464, 0, -3.92)
 script = ExtResource("g_belt")
-length = 10.0
+length = 11.2
 
 [node name="BeltSouth" type="Node3D" parent="Gimmicks"]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2.2, 0, 3.5)
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2.464, 0, 3.92)
 script = ExtResource("g_belt")
-length = 10.0
+length = 11.2
 
 [node name="Obstacles" type="Node3D" parent="."]
 
@@ -100,7 +100,7 @@ color = Color(0.93, 0.9, 0.84, 1)
 accent = Color(0.72, 0.5, 0.29, 1)
 
 [node name="Fridge" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.9, 0, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11.86, 0, 0)
 script = ExtResource("2_obstacle")
 kind = 15
 size = Vector3(2, 2.6, 1.7)
@@ -108,7 +108,7 @@ color = Color(0.88, 0.34, 0.31, 1)
 accent = Color(0.95, 0.94, 0.92, 1)
 
 [node name="Counter" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10.9, 0, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11.86, 0, 0)
 script = ExtResource("2_obstacle")
 kind = 14
 size = Vector3(2, 1.15, 3.0)
@@ -116,7 +116,7 @@ color = Color(0.86, 0.68, 0.45, 1)
 accent = Color(0.66, 0.45, 0.26, 1)
 
 [node name="TableNorth" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.6, 0, -4.7)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.272, 0, -5.264)
 script = ExtResource("2_obstacle")
 kind = 3
 size = Vector3(2.4, 0.95, 1.5)
@@ -124,7 +124,7 @@ color = Color(0.72, 0.5, 0.3, 1)
 accent = Color(0.48, 0.32, 0.18, 1)
 
 [node name="TableSouth" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.6, 0, 4.7)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.272, 0, 5.264)
 script = ExtResource("2_obstacle")
 kind = 3
 size = Vector3(2.4, 0.95, 1.5)

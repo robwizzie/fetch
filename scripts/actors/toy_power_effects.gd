@@ -10,7 +10,7 @@ extends Node3D
 ##   Steer + anything the thrower bends the main toy; Scatter's side toys fly straight.
 
 const FUSE := 0.48
-const BLAST_RADIUS := 2.4
+const BLAST_RADIUS := 2.9
 const HOT_SPACING := 0.45
 ## Speed kept by a toy the moment its blast arms.
 const ARM_DAMPING := 0.12
@@ -127,15 +127,12 @@ func travel(from: Vector3, to: Vector3) -> void:
 	_hot_distance = fmod(_hot_distance + length, HOT_SPACING)
 
 
-## The first impact arms the fuse and kills the toy's speed, so the burst goes off where the
-## toy struck rather than wherever a hard ricochet carried it. A dog brave enough to grab the
-## squeaking toy before it goes defuses it (pickup resets the snapshot).
+## Squeaky Kaboom goes off the moment the throw hits anything - a wall, a dog, another toy - or
+## runs out of flight (see Toy._settle). No fuse, no slowing down first: it used to arm on
+## impact and sit there squeaking for half a second, which read as a dud more than a bomb.
 func impact() -> void:
-	if blast and not _spent and fuse_left < 0.0:
-		fuse_left = FUSE
-		_toy.velocity *= ARM_DAMPING
-		_warning.show()
-		Sfx.play_at("fuse", _toy.global_position, 1.0, -5.0)
+	if blast and not _spent:
+		detonate()
 
 
 ## Driven by Toy's physics tick so round locks and pauses suspend both together.
@@ -167,6 +164,9 @@ func detonate() -> void:
 		var dog := node as Dog
 		if not dog.alive or _toy._hit_dogs.has(dog.get_instance_id()):
 			continue
+		# Thrown into a wall at your own feet: the toy's owner grace covers its blast too.
+		if dog == _toy.thrower and _toy._owner_immune:
+			continue
 		var gap := Vector2(origin.x - dog.global_position.x, origin.z - dog.global_position.z)
 		if gap.length() > BLAST_RADIUS + dog.effective_radius():
 			continue
@@ -174,17 +174,39 @@ func detonate() -> void:
 			continue
 		if dog.hit_by_blast(_toy, origin):
 			_toy._hit_dogs.append(dog.get_instance_id())
-	Sfx.play_at("blast", origin, 1.0, -2.0)
-	Juice.shake(0.18)
-	Juice.burst(_toy.get_parent(), origin, Color("ffbd75"), 18, 5.0)
-	var wave := Mats.mesh(_toy.get_parent(), Mats.torus(0.90, 1.0), Color("ffdf9c"),
-		Vector3(origin.x, Terrain.ground_height(self, origin) + 0.1, origin.z))
-	wave.material_override = Mats.unlit(Color(1, 0.8, 0.5, 0.8))
+	Sfx.play_at("blast", origin, 1.0, 0.0)
+	Juice.shake(0.32)
+	var parent := _toy.get_parent()
+	Juice.burst(parent, origin, Color("fff1c4"), 26, 9.0)
+	Juice.burst(parent, origin, Color("ffbd75"), 30, 6.5)
+	Juice.burst(parent, origin, Color("ff7a3d"), 18, 4.0)
+	Juice.float_text(parent, origin + Vector3.UP * 1.2, "KABOOM!", Color(1.0, 0.72, 0.35), 1.0)
+	var ground := Terrain.ground_height(self, origin) + 0.1
+	# A hot white flash, then a shock ring racing out to the edge of the blast.
+	var flash := Mats.mesh(parent, Mats.sphere(1.0), Color.WHITE, Vector3(origin.x, origin.y, origin.z))
+	flash.material_override = Mats.unlit(Color(1.0, 0.95, 0.75, 0.85))
+	flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var pop := flash.create_tween()
+	pop.tween_property(flash, "scale", Vector3.ONE * BLAST_RADIUS * 0.8, 0.12).from(Vector3.ONE * 0.3)
+	pop.parallel().tween_property(flash.material_override, "albedo_color:a", 0.0, 0.18)
+	pop.tween_callback(flash.queue_free)
+	var wave := Mats.mesh(parent, Mats.torus(0.90, 1.0), Color("ffdf9c"), Vector3(origin.x, ground, origin.z))
+	wave.material_override = Mats.unlit(Color(1, 0.8, 0.5, 0.9))
 	wave.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var tween := wave.create_tween()
-	tween.tween_property(wave, "scale", Vector3.ONE * BLAST_RADIUS, 0.18).from(Vector3.ONE * 0.2)
-	tween.parallel().tween_property(wave.material_override, "albedo_color:a", 0.0, 0.25)
+	tween.tween_property(wave, "scale", Vector3.ONE * BLAST_RADIUS, 0.2).from(Vector3.ONE * 0.2)
+	tween.parallel().tween_property(wave.material_override, "albedo_color:a", 0.0, 0.3)
 	tween.tween_callback(wave.queue_free)
+	var scorch := MeshInstance3D.new()
+	scorch.mesh = Mats.cylinder(BLAST_RADIUS * 0.55, 0.01)
+	scorch.material_override = Mats.unlit(Color(0.12, 0.08, 0.05, 0.45))
+	scorch.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(scorch)
+	scorch.global_position = Vector3(origin.x, ground - 0.08, origin.z)
+	var fade := scorch.create_tween()
+	fade.tween_interval(1.2)
+	fade.tween_property(scorch.material_override, "albedo_color:a", 0.0, 0.8)
+	fade.tween_callback(scorch.queue_free)
 	if hot:
 		HotPatch.spawn(_toy.get_parent(), origin, _toy.thrower, 1.4)
 		Sfx.play_at("blast", origin, 0.7, -8.0)

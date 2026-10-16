@@ -1,17 +1,22 @@
 class_name GoldenBall
 extends LastDogStanding
 ## Golden Ball: one toy each round is golden. While it is in your mouth, your time banks - one
-## dog, or one pack in teams. First to CLAIM_TIME takes the round; knocking everyone else out
-## still wins it; on the clock, whoever banked most wins. So the holder wants to run and keep it,
-## and everyone else wants to bonk them or whack it loose - and throwing it is giving it away.
+## dog, or one pack in teams. First to CLAIM_TIME takes the round; on the clock, whoever banked
+## most wins. So the holder runs and keeps it, everyone else bonks them or whacks it loose - and
+## throwing it is giving it away. Bonked dogs come back after a moment (GameMode.RESPAWN_TIME)
+## with their time kept: the round is a chase for the ball, never decided by the last dog up.
+## Carrying it slows you a touch (CARRY_SLOW), so a chase can be won.
 
-const CLAIM_TIME := 10.0
+const CLAIM_TIME := 8.0
+const CARRY_SLOW := 0.88
 
 var golden: Toy
 var banked: Dictionary = {}
 var _marker: Node3D
 var _ring: MeshInstance3D
 var _label: Label3D
+var _gauge: ChargeMeter
+var _carrier: Dog
 var _winner: PlayerSlot
 var _cheer := 0.0
 
@@ -28,6 +33,16 @@ func on_round_start(_dogs: Array[Dog]) -> void:
 			break
 	if golden == null:
 		return
+	# Gold and glowing, so it is never mistaken for an ordinary toy.
+	var gold := StandardMaterial3D.new()
+	gold.albedo_color = Color(1.0, 0.82, 0.3)
+	gold.metallic = 0.6
+	gold.roughness = 0.3
+	gold.emission_enabled = true
+	gold.emission = Color(1.0, 0.75, 0.25)
+	gold.emission_energy_multiplier = 0.7
+	for mesh in golden.model.find_children("*", "MeshInstance3D", true, false):
+		(mesh as MeshInstance3D).material_override = gold
 	_marker = Node3D.new()
 	_marker.name = "GoldenBallMarker"
 	game_match.actors.add_child(_marker)
@@ -46,6 +61,11 @@ func on_round_start(_dogs: Array[Dog]) -> void:
 	_label.outline_modulate = Color(0.25, 0.16, 0.02)
 	_label.text = "GOLDEN BALL"
 	_marker.add_child(_label)
+	# The holder's progress, as a gold gauge filling round their feet.
+	_gauge = ChargeMeter.new()
+	_marker.add_child(_gauge)
+	_gauge.setup(Palette.GOLD, 0.55)
+	_gauge.hide_meter()
 
 
 ## The side holding the golden ball right now, or null.
@@ -63,15 +83,27 @@ func tick(delta: float, _dogs: Array[Dog]) -> void:
 	if not is_instance_valid(golden) or not is_instance_valid(_marker):
 		return
 	var at := golden.global_position
-	_marker.global_position = Vector3(at.x, 0.05 if golden.state != Toy.State.HELD else 0.1, at.z)
+	# Round the holder's feet while carried; round the ball itself while it is loose.
+	if golden.state == Toy.State.HELD and is_instance_valid(golden.holder):
+		at = golden.holder.global_position
+	_marker.global_position = Vector3(at.x, 0.05, at.z)
 	_ring.rotation.y += delta * 2.0
 	var owner := holder()
+	var carrier := golden.holder if owner != null else null
+	if carrier != _carrier:
+		if is_instance_valid(_carrier):
+			_carrier.clear_slow(_marker)
+		_carrier = carrier
+		if is_instance_valid(_carrier):
+			_carrier.set_slow(_marker, CARRY_SLOW)
 	if owner == null:
 		_label.text = "GOLDEN BALL"
 		_label.modulate = Color("ffe08a")
+		_gauge.hide_meter()
 		return
 	var key := _key(owner)
 	banked[key] = float(banked.get(key, 0.0)) + delta
+	_gauge.set_charge(minf(1.0, banked[key] / CLAIM_TIME), Vector3.FORWARD)
 	_label.modulate = owner.color.lightened(0.2)
 	_label.text = "%s  %.1f / %d" % [owner.label, banked[key], int(CLAIM_TIME)]
 	_cheer -= delta
@@ -82,12 +114,23 @@ func tick(delta: float, _dogs: Array[Dog]) -> void:
 		_winner = owner
 
 
-func is_round_over(dogs: Array[Dog]) -> bool:
-	return _winner != null or super.is_round_over(dogs)
+func is_round_over(_dogs: Array[Dog]) -> bool:
+	return _winner != null
 
 
-func round_winner(dogs: Array[Dog]) -> PlayerSlot:
-	return _winner if _winner != null else super.round_winner(dogs)
+func round_winner(_dogs: Array[Dog]) -> PlayerSlot:
+	return _winner
+
+
+func respawns() -> bool:
+	return true
+
+
+func respawn_avoid() -> Array[Vector3]:
+	var avoid: Array[Vector3] = []
+	if is_instance_valid(golden):
+		avoid.append(golden.global_position)
+	return avoid
 
 
 func timeout_winner(dogs: Array[Dog]) -> PlayerSlot:
@@ -130,9 +173,19 @@ func bot_goal(dog: Dog) -> Vector3:
 	return golden.global_position
 
 
+func hud_status(dog: Dog) -> String:
+	if not is_instance_valid(golden):
+		return ""
+	if golden.holder == dog:
+		return "HOLD ON! %.1f / %d" % [float(banked.get(_key(dog.slot), 0.0)), int(CLAIM_TIME)]
+	if is_instance_valid(golden.holder) and golden.holder.slot.allied_with(dog.slot):
+		return "PROTECT YOUR PACK-MATE"
+	return "GET THE GOLDEN BALL"
+
+
 func bot_keeps(_dog: Dog, toy: Toy) -> bool:
 	return toy == golden
 
 
 func hud_hint() -> String:
-	return "Hold the golden ball for %d seconds · or be the last dog standing" % int(CLAIM_TIME)
+	return "Keep the golden ball in your mouth for %d seconds · bonked? Back in a moment, time kept" % int(CLAIM_TIME)

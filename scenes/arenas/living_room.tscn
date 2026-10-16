@@ -104,7 +104,7 @@ color = Color(0.35, 0.47, 0.5, 1)
 accent = Color(0.75, 0.55, 0.35, 1)
 
 [node name="TV" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -7.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -8.25)
 script = ExtResource("2_obstacle")
 kind = 7
 size = Vector3(6.0, 2.2, 2.0)

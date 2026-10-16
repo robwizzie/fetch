@@ -7,7 +7,7 @@
 script = ExtResource("1")
 id = &"king_of_the_bed"
 display_name = "King of the Bed"
-description = "Hold the big dog bed alone to win the round. Everyone else wants it too."
+description = "Hold the big dog bed alone for 8 seconds. Bonked? You are back in a moment, bed time kept."
 mode_script = ExtResource("2")
 default_points_to_win = 5
 team_based = false

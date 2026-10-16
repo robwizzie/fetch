@@ -7,7 +7,7 @@
 script = ExtResource("1")
 id = &"golden_ball"
 display_name = "Golden Ball"
-description = "One toy is golden. Keep it in your mouth for 10 seconds - everyone else wants to bonk you for it."
+description = "Keep the golden ball in your mouth for 8 seconds. Bonked? You are back in a moment, time kept."
 mode_script = ExtResource("2")
 default_points_to_win = 5
 team_based = false

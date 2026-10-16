@@ -53,14 +53,20 @@ func _rebuild() -> void:
 			for node in shapes:
 				var shape := node as CollisionShape3D
 				# Beds slide about, so the fixed graph leaves them to the bot's own steering.
-				if shape.disabled or not shape.get_parent() is StaticBody3D or not Arena.is_solid_shape(shape) or not shape.shape is BoxShape3D:
+				if shape.disabled or not shape.get_parent() is StaticBody3D or not Arena.is_solid_shape(shape):
 					continue
-				var extent := (shape.shape as BoxShape3D).size * 0.5
 				var p := shape.to_local(world)
-				var nearest := Vector2(clampf(p.x, -extent.x, extent.x), clampf(p.z, -extent.z, extent.z))
-				if Vector2(p.x, p.z).distance_to(nearest) < CLEARANCE:
-					clear = false
-					break
+				if shape.shape is BoxShape3D:
+					var extent := (shape.shape as BoxShape3D).size * 0.5
+					var nearest := Vector2(clampf(p.x, -extent.x, extent.x), clampf(p.z, -extent.z, extent.z))
+					if Vector2(p.x, p.z).distance_to(nearest) < CLEARANCE:
+						clear = false
+						break
+				elif shape.shape is CylinderShape3D:
+					# Round props: bushes, rocks, snowmen.
+					if Vector2(p.x, p.z).length() < (shape.shape as CylinderShape3D).radius + CLEARANCE:
+						clear = false
+						break
 			if clear:
 				var id := _graph.get_available_point_id()
 				_cells[Vector2i(x, z)] = id

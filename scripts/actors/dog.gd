@@ -189,12 +189,18 @@ func _ready() -> void:
 	model.setup(data, slot.color)
 	model.set_hat(Game.hat(slot.hat))
 	model.setup_silhouette(slot.color)
+	# In teams the ring and name are the pack's colour, so a glance tells you which side a dog
+	# is on; the player's own colour stays on the aim arrow and HUD tag.
+	var side_color := Game.team_color(slot.team) if Game.team_mode and slot.team >= 0 else slot.color
 	name_tag.text = "%s · %s" % [slot.label, data.display_name.to_upper()]
 	name_tag.font = UiKit.FONT_DISPLAY
-	name_tag.modulate = slot.color
+	name_tag.modulate = side_color
 	name_tag.position.y = 1.55 * data.model_scale + 0.35
 	ring.mesh = Mats.torus(data.body_radius + 0.10, data.body_radius + 0.17)
-	ring.material_override = Mats.unlit(Color(slot.color, 0.85))
+	ring.material_override = Mats.unlit(Color(side_color, 0.9))
+	if Game.team_mode and slot.team >= 0:
+		# A pack ring is bolder than a free-for-all one: it is the main thing to read.
+		ring.mesh = Mats.torus(data.body_radius + 0.06, data.body_radius + 0.22)
 	_contact_disc = Mats.contact_shadow(self, data.body_radius * 0.85)
 	name_tag.pixel_size = 0.006
 	_build_aim_marker()
@@ -310,6 +316,7 @@ func _physics_process(delta: float) -> void:
 	velocity.y = 0.0
 	push_velocity = velocity
 	move_and_slide()
+	_round_corners(move)
 	if _burrowed:
 		_stay_in_bounds()
 	ground_y = move_toward(ground_y, Terrain.ground_height(self, global_position), CLIMB_SPEED * delta)
@@ -331,7 +338,7 @@ func _physics_process(delta: float) -> void:
 	model.update_motion(facing, velocity.length() / data.move_speed, delta)
 	_aim_marker.position = facing * (data.body_radius + 0.62) + Vector3(0, 0.04, 0)
 	_aim_marker.rotation.y = atan2(-facing.x, -facing.z)
-	_aim_marker.visible = held_toy != null and not concealed
+	_aim_marker.visible = held_toy != null and (not concealed or (ghost and _cover.is_empty()))
 	ring.scale = Vector3.ONE * (1.08 if _catch_buffer > 0.0 else 1.0)
 	if held_toy:
 		held_toy.global_position = get_hold_position()
@@ -373,8 +380,13 @@ func _update_concealment() -> void:
 	if hide == concealed:
 		return
 	concealed = hide
+	# Ghost Pup out in the open is a faint shimmer, not gone: on one shared screen its owner has
+	# to be able to follow it, while rivals in the thick of it mostly will not. Tall grass hides
+	# a dog completely - everyone saw where it went in.
+	var shimmer := hide and ghost and _cover.is_empty()
 	if not _burrowed:
-		_set_body_shown(not hide)
+		_set_body_shown(not hide or shimmer)
+		_set_shimmer(shimmer)
 	if hide:
 		_powerup_halo.visible = false
 	else:
@@ -567,6 +579,30 @@ func _set_body_shown(shown: bool) -> void:
 			part.visible = shown
 	if is_instance_valid(held_toy):
 		held_toy.model.visible = shown
+
+
+## How see-through a Ghost Pup is: the body, what it carries, and its ring and aim arrow (kept a
+## little stronger, so its owner can find it).
+const SHIMMER_BODY := 0.86
+const SHIMMER_MARKS := 0.7
+
+
+func is_shimmering() -> bool:
+	return concealed and ghost and _cover.is_empty()
+
+
+func _set_shimmer(on: bool) -> void:
+	for mesh in model.find_children("*", "GeometryInstance3D", true, false):
+		(mesh as GeometryInstance3D).transparency = SHIMMER_BODY if on else 0.0
+	if is_instance_valid(held_toy):
+		held_toy.set_faint(on)
+	for mark: GeometryInstance3D in [ring, _aim_marker]:
+		if is_instance_valid(mark):
+			mark.transparency = SHIMMER_MARKS if on else 0.0
+	if is_instance_valid(name_tag):
+		name_tag.visible = not on and not concealed
+	if is_instance_valid(_contact_disc):
+		_contact_disc.visible = not on and not concealed
 
 
 ## Ghost Pup's only tell: a fading print on each step, left and right in turn.
@@ -856,7 +892,34 @@ func can_be_hurt_by(toy: Toy) -> bool:
 func hit_by(toy: Toy) -> bool:
 	if not toy.is_dangerous():
 		return false
+	if toy.tag_only:
+		return _tagged(toy)
 	return _resolve_hit(toy, false, Vector3.ZERO)
+
+
+## How long a dog just tagged with the hot potato has to hold it before it can throw it back.
+const HOT_HANDS := 0.55
+
+
+## Hit by the hot potato: no bonk - it lands in this dog's mouth, and now it is theirs to get
+## rid of. A dash dodges it; a pack-mate's throw goes through; nobody can tag themselves.
+func _tagged(toy: Toy) -> bool:
+	if not alive or round_locked or invincible or _burrowed or _spawn_grace > 0.0 or practice_safe:
+		return false
+	if not is_instance_valid(toy.thrower) or toy.thrower == self:
+		return false
+	if slot.allied_with(toy.thrower.slot):
+		return false
+	_cancel_charge()
+	_buffered_throw = 0.0
+	if is_instance_valid(held_toy):
+		held_toy.drop(global_position)
+	_last_pusher = toy.thrower
+	_last_push_msec = Time.get_ticks_msec()
+	toy.pick_up(self)
+	_action_lockout = HOT_HANDS
+	model.play_stagger()
+	return true
 
 
 func hit_by_blast(toy: Toy, origin: Vector3) -> bool:
@@ -982,6 +1045,42 @@ func _maybe_send_decoy() -> void:
 	_decoy.global_position = global_position + facing.rotated(Vector3.UP, PI * 0.5) * 0.4
 	Juice.burst(get_parent(), global_position + Vector3.UP * 0.6, Color(1, 1, 1, 0.8), 16, 3.0)
 	Sfx.play_at("squeak", global_position, 1.4, -6.0)
+
+
+## Walking into a prop near one of its corners: ease the dog round it instead of stopping dead.
+## Only when the push is mostly into the prop and the edge is close, so running along a wall or
+## leaning on a long side still behaves as it always has.
+const CORNER_REACH := 0.75
+## Sideways speed round a corner, as a share of the dog's top speed.
+const CORNER_SLIP_SPEED := 0.7
+
+
+func _round_corners(move: Vector3) -> void:
+	if move.length() < 0.5 or get_slide_collision_count() == 0 or _dash_timer > 0.0:
+		return
+	var want := move.normalized()
+	for i in get_slide_collision_count():
+		var hit := get_slide_collision(i)
+		var normal := Vector3(hit.get_normal().x, 0.0, hit.get_normal().z)
+		if normal.length() < 0.5 or want.dot(-normal.normalized()) < 0.75:
+			continue
+		normal = normal.normalized()
+		var shape_node := hit.get_collider_shape() as CollisionShape3D
+		if shape_node == null or not shape_node.shape is BoxShape3D:
+			continue
+		# How far the box runs on either side of the dog, along the face it is pushing on.
+		var along := Vector3(-normal.z, 0.0, normal.x)
+		var half := (shape_node.shape as BoxShape3D).size * 0.5
+		var basis := shape_node.global_transform.basis
+		var reach := absf(basis.x.dot(along)) * half.x * basis.x.length() + absf(basis.z.dot(along)) * half.z * basis.z.length()
+		var offset := (global_position - shape_node.global_position).dot(along)
+		var to_edge := reach - absf(offset)
+		if to_edge > CORNER_REACH + data.body_radius:
+			continue
+		var side := signf(offset) if absf(offset) > 0.01 else 1.0
+		# A sideways step, collision-checked, so it can never push the dog into something else.
+		move_and_collide(along * side * CORNER_SLIP_SPEED * data.move_speed * get_physics_process_delta_time())
+		return
 
 
 ## True when [param toy] is coming at this dog's face: it is in front (within MOUTH_BLOCK_ANGLE

@@ -98,6 +98,11 @@ func _capture(name_: String) -> void:
 	# Forced rather than awaited: a window the OS considers hidden stops drawing, and waiting for
 	# frame_post_draw then hangs the capture.
 	await get_tree().process_frame
+	# Several draws, so 3D previews in sub-viewports (seat dogs, the podium) have rendered too;
+	# one forced draw captured them still blank.
+	for i in 3:
+		RenderingServer.force_draw(false)
+		await get_tree().process_frame
 	RenderingServer.force_draw(false)
 	var img := get_viewport().get_texture().get_image()
 	var file := out_dir.path_join(name_ + ".png")

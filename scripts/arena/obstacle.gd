@@ -162,6 +162,17 @@ func _build_colliders() -> void:
 			for spec: Array in _rail_segments():
 				_collider(spec[1], spec[0])
 			_build_occluder()
+		Kind.BUSH, Kind.PLANT, Kind.TIRE, Kind.UMBRELLA, Kind.ROCK, Kind.SNOWMAN:
+			# Round things collide round. A box round a bush stuck its corners out past the
+			# leaves, so dogs snagged on air going round it.
+			var shape := CollisionShape3D.new()
+			var cylinder := CylinderShape3D.new()
+			cylinder.radius = (size.x + size.z) * 0.25
+			cylinder.height = size.y
+			shape.shape = cylinder
+			shape.position = Vector3(0, size.y * 0.5, 0)
+			add_child(shape)
+			_shapes.append(shape)
 		_:
 			_collider(size, Vector3(0, size.y * 0.5, 0))
 

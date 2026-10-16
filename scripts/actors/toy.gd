@@ -15,6 +15,8 @@ const CAROM_TRANSFER := 0.78
 const CONTACT_LOCK := 0.1
 
 var data: ToyData
+## Hot Potato: a throw that tags instead of bonking - whoever it hits ends up holding it.
+var tag_only := false
 var state := State.IDLE
 var holder: Dog = null
 var thrower: Dog = null
@@ -108,7 +110,8 @@ func pick_up(dog: Dog) -> void:
 	# Caught out of the air: remember who threw it, for "return to sender".
 	caught_from = thrower if state == State.FLYING and is_instance_valid(thrower) and thrower != dog else null
 	power_effects.reset()
-	model.visible = not dog.concealed
+	model.visible = not dog.concealed or dog.is_shimmering()
+	set_faint(dog.is_shimmering())
 	if is_instance_valid(holder) and holder != dog and holder.held_toy == self:
 		holder.held_toy = null
 	state = State.HELD
@@ -129,10 +132,14 @@ func pick_up(dog: Dog) -> void:
 ## [param charge] is the wind-up that produced this throw, 0 to 1. It is already folded into
 ## [param power]; what it changes here is how loudly the shot reads in the air.
 func throw(dog: Dog, dir: Vector3, power: float, charge: float = 0.0, snapshot: ToyPowerEffects = null) -> void:
+	set_faint(false)
 	if snapshot != null:
 		power_effects.copy_from(snapshot)
 	else:
 		power_effects.launch(dog)
+	if tag_only:
+		# The hot potato is a game of tag: no belt power may turn a tag into a bonk.
+		power_effects.reset()
 	model.visible = true
 	if dog.held_toy == self:
 		dog.held_toy = null
@@ -202,6 +209,7 @@ func _safe_release_point(dog: Dog, dir: Vector3) -> Vector3:
 
 
 func drop(at: Vector3) -> void:
+	set_faint(false)
 	power_effects.reset()
 	model.visible = true
 	if is_instance_valid(holder) and holder.held_toy == self:
@@ -218,6 +226,12 @@ func drop(at: Vector3) -> void:
 	model.scale = Vector3.ONE
 	_set_solid(true)
 	trail.emitting = false
+
+
+## A Ghost Pup's toy shimmers with it (see Dog._set_shimmer); solid again once it leaves the mouth.
+func set_faint(on: bool) -> void:
+	for mesh in model.find_children("*", "GeometryInstance3D", true, false):
+		(mesh as GeometryInstance3D).transparency = Dog.SHIMMER_BODY if on else 0.0
 
 
 ## Shield impacts are defused instead of producing a second point-blank hit.
@@ -484,6 +498,9 @@ func _check_pickup() -> void:
 
 
 func _settle() -> void:
+	# A Squeaky Kaboom that runs out of flight without hitting anything goes off where it stops.
+	if state == State.FLYING and power_effects.blast:
+		power_effects.detonate()
 	state = State.IDLE
 	_owner_immune = false
 	_pickup_delay = 0.12

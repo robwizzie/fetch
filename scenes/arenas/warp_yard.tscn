@@ -102,28 +102,28 @@ color = Color(0.36, 0.55, 0.33, 1)
 accent = Color(0.28, 0.44, 0.26, 1)
 
 [node name="StubNW" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.4, 0, -5.0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.4, 0, -5)
 script = ExtResource("2_obstacle")
 size = Vector3(0.7, 1.2, 3.0)
 color = Color(0.36, 0.55, 0.33, 1)
 accent = Color(0.28, 0.44, 0.26, 1)
 
 [node name="StubNE" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.4, 0, -5.0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.4, 0, -5)
 script = ExtResource("2_obstacle")
 size = Vector3(0.7, 1.2, 3.0)
 color = Color(0.36, 0.55, 0.33, 1)
 accent = Color(0.28, 0.44, 0.26, 1)
 
 [node name="StubSW" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.4, 0, 5.0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.4, 0, 5)
 script = ExtResource("2_obstacle")
 size = Vector3(0.7, 1.2, 3.0)
 color = Color(0.36, 0.55, 0.33, 1)
 accent = Color(0.28, 0.44, 0.26, 1)
 
 [node name="StubSE" type="StaticBody3D" parent="Obstacles"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.4, 0, 5.0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.4, 0, 5)
 script = ExtResource("2_obstacle")
 size = Vector3(0.7, 1.2, 3.0)
 color = Color(0.36, 0.55, 0.33, 1)

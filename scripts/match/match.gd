@@ -118,21 +118,27 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if get_tree().paused or phase != Phase.PLAYING:
 		return
-	# Safety net: a toy that somehow leaves the arena comes back to a toy spawn.
+	# Safety net: a toy that somehow gets past the walls - even just past them, where nobody can
+	# reach it - comes back inside, near where it left. Nothing in play belongs beyond a wall.
+	var half: Vector2 = arena.size * 0.5
 	for toy in toys:
-		if toy.state != Toy.State.HELD and arena.is_outside(toy.global_position):
-			toy.drop(arena.get_toy_spawn_position(0))
+		if not is_instance_valid(toy) or toy.state == Toy.State.HELD:
+			continue
+		var at := toy.global_position
+		if arena.is_outside(at, 0.05) or at.y < -1.5:
+			var inside := Vector3(clampf(at.x, -half.x + 1.2, half.x - 1.2), 0.0, clampf(at.z, -half.y + 1.2, half.y - 1.2))
+			toy.drop(arena.clear_pickup_position(inside, toy.data.radius + 0.25))
 	_reach_clock -= delta
 	if _reach_clock <= 0.0:
 		_reach_clock = 0.5
 		_rescue_stranded_toys()
-	if Game.powerups_enabled and round_number >= Game.first_treat_round():
+	if Game.powerups_enabled and mode.allows_treats() and round_number >= Game.first_treat_round():
 		_treat_clock -= delta
 		if _treat_clock <= 0.0 and _treat_count < treats_per_round():
 			_spawn_treat()
 			_treat_clock = TREAT_GAP
 	round_time_left = maxf(0.0, round_time_left - delta)
-	if not practice_round and round_time_left <= SUDDEN_DEATH_AT:
+	if not practice_round and mode.allows_sudden_death() and round_time_left <= SUDDEN_DEATH_AT:
 		_run_sudden_death(delta)
 	_resupply(delta)
 	_replay_clock += delta
@@ -168,7 +174,7 @@ func _process(delta: float) -> void:
 	if _result_delay <= 0.0:
 		if practice_round:
 			hud.banner(_result_text, _result_color, 1.65)
-		elif Game.replays and _round_winner != null and replay.has_moment():
+		elif Game.replays and _round_winner != null and not mode.respawns() and replay.has_moment():
 			# The knockout that won it, once more, slowly and from close up.
 			actors.visible = false
 			hud.show_replay(true)
@@ -239,7 +245,7 @@ func start_round() -> void:
 	if not practice_round:
 		round_number += 1
 		_grant_comeback_shields()
-	round_time_left = ROUND_SECONDS
+	round_time_left = mode.round_seconds(ROUND_SECONDS)
 	if replay != null:
 		replay.clear()
 	sudden_death = false
@@ -299,6 +305,8 @@ func _grant_comeback_shields() -> void:
 
 ## Every dog starts empty and every toy starts out in the open, away from the pack.
 func _spawn_round_toys() -> void:
+	if not mode.spawns_round_toys():
+		return
 	var available: Array[ToyData] = []
 	for item in Game.toys:
 		if item.fully_implemented:
@@ -568,7 +576,7 @@ func _begin_warmup() -> void:
 	_treat_clock = _treat_delay()
 	_treat_count = 0
 	_treat_spots.clear()
-	round_time_left = ROUND_SECONDS
+	round_time_left = mode.round_seconds(ROUND_SECONDS)
 	# The pen toys have done their job. Anything still in a mouth stays there; the rest make way
 	# for the arena's normal scatter.
 	var kept: Array[Toy] = []
@@ -694,7 +702,6 @@ func _on_dog_eliminated(dog: Node, by: Node) -> void:
 		hud.refresh_scores()
 		_update_crowns()
 		_offer_revive(victim)
-		_maybe_haunt(victim)
 		var kind := highlights.classify(victim, by, credited, sudden_death)
 		if kind != &"" and not self_bonk:
 			_call_out(kind, credited, victim)
@@ -703,6 +710,9 @@ func _on_dog_eliminated(dog: Node, by: Node) -> void:
 			phase = Phase.ROUND_OVER
 			_end_round(credited.slot, "%s reaches %d bonks!" % [_side_name(credited.slot), Game.points_to_win])
 			return
+	# Ghosts haunt the warm-up too: it is where people find out the option is on.
+	if dog is Dog:
+		_maybe_haunt(dog as Dog)
 	mode.on_dog_eliminated(dog)
 	hud.update_match(dogs, round_time_left, round_number)
 	# Finish the collision batch first: a blast can eliminate several dogs simultaneously.
@@ -820,6 +830,8 @@ var _empty_time: Dictionary = {}
 ## A dog with nothing in its mouth and nothing loose nearby gets a toy dropped beside it, on a
 ## harmless green ring, so a round is spent playing rather than searching.
 func _resupply(delta: float) -> void:
+	if not mode.allows_supply_drops():
+		return
 	for dog in dogs:
 		if not is_instance_valid(dog) or not dog.alive or dog.held_toy != null:
 			_empty_time.erase(dog)
@@ -859,9 +871,9 @@ func drop_toy(at: Vector3, item: ToyData) -> void:
 ## Free-for-all with ghosts on: a knocked-out player comes back as a ghost once the tumble is
 ## over, and haunts the arena until the round ends. People only - a CPU just waits.
 func _maybe_haunt(victim: Dog) -> void:
-	if not Game.ghosts or Game.team_mode or victim.slot.is_bot or victim.input == null:
+	if not Game.ghosts or Game.team_mode or mode.respawns() or victim.slot.is_bot or victim.input == null:
 		return
-	get_tree().create_timer(1.3, false).timeout.connect(func() -> void:
+	get_tree().create_timer(0.8, false).timeout.connect(func() -> void:
 		if phase != Phase.PLAYING or not is_instance_valid(victim) or victim.alive:
 			return
 		var ghost := GhostDog.new()
@@ -873,7 +885,7 @@ func _maybe_haunt(victim: Dog) -> void:
 ## Team play, the Boomerang Fu way: a downed dog with a pack-mate still standing leaves a ring
 ## where it lies, and the pack-mate who stands in it long enough brings it back.
 func _offer_revive(victim: Dog) -> void:
-	if not Game.team_mode or victim.slot.team < 0:
+	if not Game.team_mode or victim.slot.team < 0 or not mode.allows_revives():
 		return
 	if not dogs.any(func(d: Dog) -> bool: return is_instance_valid(d) and d.alive and d != victim and d.slot.allied_with(victim.slot)):
 		return

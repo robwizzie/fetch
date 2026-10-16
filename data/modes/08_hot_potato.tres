@@ -6,8 +6,8 @@
 [resource]
 script = ExtResource("1")
 id = &"hot_potato"
-display_name = "Hot Potato Bone"
-description = "One toy is the hot bone. Don't be holding it when it pops!"
+display_name = "Hot Potato"
+description = "One hot potato, and whoever has it is IT. Tag a rival with it before it blows. Last dog standing wins."
 mode_script = ExtResource("2")
 default_points_to_win = 5
 team_based = false

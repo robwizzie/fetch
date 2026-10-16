@@ -119,6 +119,6 @@ CI imports the project and runs the regression suites on every push (`.github/wo
 - ✅ Hit-stop followed by KO slow motion, particles, floating text
 - ✅ Recorded CC0 soundtrack (menu / match / victory) and effects, with a bark per breed; procedural fallbacks; separate mixable buses
 - ✅ Fully 3D asset import/animation contract, validator and reference comparison studio
-- ✅ Four modes (Last Dog Standing, Hot Potato Bone, King of the Bed, Golden Ball); holes to knock rivals into, crates that break, switch-driven swing boards
+- ✅ Four modes (Last Dog Standing, Hot Potato tag, King of the Bed and Golden Ball with respawns); holes to knock rivals into, crates that break, switch-driven swing boards
 - ✅ Controller rumble and comfort settings: slow motion, screen shake, colour-blind palette, final-bonk replay
 - ⏳ Authored furred dog meshes/rigs, online play: see `docs/ART_DIRECTION.md`

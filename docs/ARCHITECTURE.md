@@ -177,12 +177,14 @@ spawn. A full belt replaces its longest-held kind *in place* (slot one first, th
 other sockets never shuffle. A round gets a fixed budget of crates (`match.treats_per_round()`: two, or three
 with three or more dogs) however long it runs, and `_treat_position()` scores random open spots by distance
 from every dog and every crate already dropped that round. Dog-side powers are read by
-`Dog.apply_powerups()`: **Zoomies** (speed and dash recharge), **Ghost Pup** (the grass concealment, applied
-everywhere, with paw prints on each step) and **Dig!** (a longer dash that goes underground, invincible for
+`Dog.apply_powerups()`: **Zoomies** (speed and dash recharge), **Ghost Pup** (concealment everywhere, but as a
+see-through shimmer - `Dog._set_shimmer`, its ring and aim arrow faint traces - so its owner can still follow it on
+the shared screen; paw prints on each step; tall grass still hides a dog completely) and **Dig!** (a longer dash that goes underground, invincible for
 its whole length, surfacing with a reveal). Behaviour powers live on the throw: `ToyPowerEffects` snapshots the belt at launch, so
-a later swap never rewrites a toy in flight, and a pickup or catch resets it. **Squeaky Blast** arms a fuse on
-the toy's first impact and stops it dead, then bursts in `BLAST_RADIUS`; cover blocks it, shields absorb it,
-and grabbing the squeaking toy defuses it. **Hot Dog** drops a `HotPatch` every `HOT_SPACING` metres of
+a later swap never rewrites a toy in flight, and a pickup or catch resets it. **Squeaky Blast** (Squeaky Kaboom) explodes the instant the throw hits
+anything, or where it runs out of flight (`Toy._settle`), bonking every dog in `BLAST_RADIUS`; cover blocks it,
+shields absorb it, the toy's owner grace keeps a thrower from blowing themselves up point-blank, and a catch
+defuses it. **Hot Dog** drops a `HotPatch` every `HOT_SPACING` metres of
 flight; a rival who steps in one is bonked (`Dog.burn`, credited to the thrower); the thrower, pack-mates,
 dashing and burrowed dogs are safe, a shield takes the burn, and patches burn out after `LIFETIME`, capped at `LIMIT`.
 **Telepawthy** bends a flying toy toward the thrower's stick (`steer_toward`) at `STEER_RATE`, with a total
@@ -258,12 +260,23 @@ changing which way throws bounce; a switch drives anything with `toggle()`/`set_
 with `reset_for_round()` is reset when the next round starts on the same arena. As a backstop, the match
 moves any settled toy no dog in play can reach back to open ground (`Match._rescue_stranded_toys`).
 
-**Modes.** `GameMode` has `tick`, `timeout_winner`, `bot_goal`, `bot_keeps` and `bot_should_throw_now` hooks; the match
-calls `tick` every frame and asks `is_round_over` after it. `HotPotato` marks one toy as the hot bone and
-knocks out its holder (or last holder) when the fuse pops. `KingOfTheBed` banks time for a side alone on a
-bed placed clear of other gimmicks; first to `CLAIM_TIME` wins, or most time at the whistle. `GoldenBall`
-banks time for whichever side holds one golden toy (bots keep it and run). Unfinished mode ideas live in
-`data/modes/shelved/`, out of every menu.
+**Modes.** `GameMode` has `tick`, `timeout_winner`, `bot_goal`, `bot_keeps`, `bot_avoids` and
+`bot_should_throw_now` hooks, plus switches for what a mode wants in its rounds (`spawns_round_toys`,
+`allows_treats`, `allows_supply_drops`, `allows_sudden_death`, `round_seconds`); the match calls `tick` every
+frame and asks `is_round_over` after it. Modes won by an objective `respawns()`: a bonked dog is back after
+`RESPAWN_TIME` (`schedule_respawn`) at the start spot furthest from rivals and clear of the objective
+(`respawn_avoid`), with whatever it had banked kept, and the round is never won by being the last dog up.
+- `LastDogStanding`: the classic; no respawns.
+- `HotPotato`: a game of tag with a bomb. The potato (`Toy.tag_only`, the only toy out - no crates, supply or
+  sky drops, no clock) starts in a random dog's mouth on a hidden 6-11 s fuse. Its holder is IT; a throw that
+  reaches a rival lands in their mouth instead of bonking (`Dog._tagged`, a beat of `HOT_HANDS` before they can
+  throw it back), and a miss leaves the thrower IT. It heats yellow to red and ticks faster, with a three-second
+  countdown over IT's head; when it blows IT is out and the potato is dealt to another dog. No belt power rides
+  on a potato throw. Last dog standing wins.
+- `KingOfTheBed`: hold the bed alone for `CLAIM_TIME`; respawns, bed time kept.
+- `GoldenBall`: keep the gold, glowing toy in your mouth for `CLAIM_TIME`, a gold gauge filling round your feet;
+  carrying it slows you a touch (`CARRY_SLOW`); respawns, time kept.
+Win-by-bonks is offered for Last Dog Standing only. Unfinished mode ideas live in `data/modes/shelved/`, out of every menu.
 
 **Comfort.** `Game` keeps rumble, knockout slow motion, screen shake, a colour-blind player palette
 (`PlayerSlot.palette()`, `Game.team_color()`) and the final-bonk replay, all saved to settings.
@@ -308,10 +321,13 @@ volume-preserving squash and stretch, and every pulse returns to `_base_scale()`
   your own toy) costs a bone (`Game.add_points`, never below nil) and `BoneBreak` snaps it off the
   player's card; in Rounds it costs nothing - the round is just won by whoever is standing. Whoever leads wears the crown in the match (`Match._update_crowns`, ties included),
   in place of their hat.
-- **Teams**: any split of up to four dogs into two packs, chosen by pressing dogs on the setup
-  screen; `Game.assign_teams` keeps that split while both packs have someone. A pack-mate's throw
+- **Teams**: any split of up to four dogs into two packs, chosen on the setup screen: two pack
+  panels with an "N v N" count, a dog moved across with left/right or a press, or a fair Shuffle;
+  `Game.assign_teams` keeps that split while both packs have someone. In play, rings, name tags and
+  HUD cards wear the pack colour, and the cards line up pack by pack. A pack-mate's throw
   is a pass (`Dog._receive_pass`). A downed dog with a pack-mate standing leaves a `ReviveSpot`;
-  standing in it for `REVIVE_TIME` brings the dog back (`Dog.revive`). Bots rescue unguarded mates.
+  standing in it for `REVIVE_TIME` brings the dog back (`Dog.revive`); a clock arc round the ring and
+  a seconds-left label show how long is left. Bots rescue unguarded mates.
 - **Sudden death**: the last `SUDDEN_DEATH_AT` seconds drop `SkyDrop`s on rings aimed at the dogs;
   at zero the round goes to overtime instead of a draw (capped at `OVERTIME_LIMIT`).
 - **Callouts**: `Highlights` classifies each knockout (double, return to sender, revenge, bank shot,
@@ -323,3 +339,7 @@ volume-preserving squash and stretch, and every pulse returns to `_base_scale()`
 - **CPU difficulty**: `PlayerSlot.cpu_level`, set on the CPU's seat; `BotBrain` scales reaction,
   pause between throws, aim error and pace by it.
 
+**Arena layout rules.** Most arenas are about 29 x 16.4 m (Living Room and Warp Yard keep their own
+shapes). A prop by a wall is either flush against it or leaves at least 1.7 m - the biggest dog plus room -
+so no gap looks passable without being so. Round props (bush, plant, tyre, umbrella, rock, snowman) collide as
+cylinders, not boxes, and `Dog._round_corners` eases a dog round a box corner it walks into near the edge.

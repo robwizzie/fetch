@@ -536,6 +536,11 @@ func is_clear_position(at: Vector3, radius: float) -> bool:
 			var nearest := Vector2(clampf(point.x, -half.x, half.x), clampf(point.z, -half.z, half.z))
 			if Vector2(point.x, point.z).distance_to(nearest) < radius:
 				return false
+		elif collider.shape is CylinderShape3D:
+			# Round props (bushes, rocks, snowmen) collide as cylinders.
+			var point := collider.to_local(at)
+			if Vector2(point.x, point.z).length() < (collider.shape as CylinderShape3D).radius + radius:
+				return false
 	return true
 
 
@@ -552,4 +557,8 @@ func clear_pickup_position(preferred: Vector3, radius: float = 0.85) -> Vector3:
 			if is_clear_position(candidate, radius):
 				return candidate
 	push_warning("No clear pickup location near %s" % preferred)
-	return preferred
+	# Whatever happens, never hand back a spot beyond the walls.
+	var half := size * 0.5
+	var local := to_local(preferred)
+	return to_global(Vector3(clampf(local.x, -half.x + radius, half.x - radius), local.y,
+		clampf(local.z, -half.y + radius, half.y - radius)))

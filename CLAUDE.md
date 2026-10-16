@@ -29,7 +29,7 @@ Always run `--import` then the smoke test before committing. Commit generated `*
 - Menu palette lives in `UiKit` (NAVY, CREAM, YELLOW, WOOD). Dog cards use the dog's `card_color`; the player colour is only the border and P-tag.
 - Authored dog import and animation live in DogModel; ProceduralDogModel is a temporary fallback. Validate against assets/models/dogs/README.md, and never describe placeholder dogs as reference-matching.
 - Remaining gameplay art is procedural geometry (`DogModel`, `ToyModel`, `Obstacle`) with soft matte materials; real models replace those nodes, not gameplay scripts. Selection portraits crop the supplied reference sheets. `CoverStage` shows the original cover at its proper aspect ratio; loading uses real threaded progress.
-- Units are metres. Arena is 26 x 14.6 centred on the origin. Speeds ~7 m/s, throws ~18 m/s.
+- Units are metres. Arenas are centred on the origin, most about 29 x 16.4 (each scene sets `size`). Speeds ~7 m/s, throws ~18 m/s.
 - Nodes built before entering the tree can't call `look_at()`; use `look_at_from_position()`.
 - `match` is a GDScript keyword: the match scene's script uses `game_match` for references.
 - Keep the smoke test passing and extend it when adding a mechanic (it uses `DeviceInput.VIRTUAL` scripted players).

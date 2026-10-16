@@ -65,7 +65,12 @@ func setup(slots: Array[PlayerSlot], mode_hint: String) -> void:
 	for c in scores.get_children():
 		c.queue_free()
 	_chips.clear()
-	for slot in slots:
+	# In teams the cards line up pack by pack, so the two sides read as two groups.
+	var ordered := slots.duplicate()
+	if Game.team_mode:
+		ordered.sort_custom(func(a: PlayerSlot, b: PlayerSlot) -> bool:
+			return a.index < b.index if a.team == b.team else a.team < b.team)
+	for slot in ordered:
 		var chip := _make_chip(slot)
 		scores.add_child(chip)
 		_chips[slot] = chip
@@ -307,8 +312,9 @@ func _make_chip(slot: PlayerSlot) -> PanelContainer:
 	var chip := PanelContainer.new()
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(slot.dog.card_color_dark, 0.92)
-	style.border_color = slot.color
-	style.set_border_width_all(3)
+	var in_pack := Game.team_mode and slot.team >= 0
+	style.border_color = Game.team_color(slot.team) if in_pack else slot.color
+	style.set_border_width_all(5 if in_pack else 3)
 	style.set_corner_radius_all(12)
 	style.content_margin_left = 16
 	style.content_margin_right = 16
@@ -329,6 +335,10 @@ func _make_chip(slot: PlayerSlot) -> PanelContainer:
 	name_label.add_theme_constant_override("outline_size", 6)
 	name_label.add_theme_font_size_override("font_size", 26)
 	name_row.add_child(name_label)
+	if in_pack:
+		var pack := UiKit.chip(Game.team_name(slot.team).replace(" PACK", ""), Game.team_color(slot.team), 14, Color.WHITE)
+		pack.size_flags_horizontal = Control.SIZE_EXPAND | Control.SIZE_SHRINK_END
+		name_row.add_child(pack)
 	vbox.add_child(name_row)
 	var belt := HBoxContainer.new()
 	belt.name = "Belt"
@@ -497,6 +507,9 @@ func update_match(dogs: Array[Dog], seconds: float, round_number: int) -> void:
 	var remaining := ceili(seconds)
 	_clock.text = "ROUND %d  ·  %d:%02d" % [round_number, remaining / 60, remaining % 60]
 	_clock.add_theme_color_override("font_color", UiKit.YELLOW if remaining <= 10 else UiKit.CREAM)
+	# A mode with no clock (Hot Potato ends on its own): just the round.
+	if seconds > 600.0:
+		_clock.text = "ROUND %d" % round_number
 	if round_number > 0 and seconds <= 10.0:
 		# Sudden death, then overtime: the clock says so, in red, pulsing.
 		var pulse := 0.75 + 0.25 * sin(Time.get_ticks_msec() * 0.012)
@@ -522,7 +535,10 @@ func update_match(dogs: Array[Dog], seconds: float, round_number: int) -> void:
 		elif not dog.alive and not get_tree().get_nodes_in_group(ReviveSpot.GROUP).filter(func(s: Node) -> bool: return (s as ReviveSpot).dog == dog).is_empty():
 			status.text = "DOWN · A PACK-MATE CAN REVIVE YOU"
 		elif not dog.alive:
-			status.text = "DOGHOUSE · BACK NEXT ROUND"
+			var back := GameMode.current != null and GameMode.current.respawns()
+			status.text = "BONKED · BACK IN A MOMENT" if back else "DOGHOUSE · BACK NEXT ROUND"
+		elif GameMode.current != null and GameMode.current.hud_status(dog) != "":
+			status.text = GameMode.current.hud_status(dog)
 		else:
 			var toy_status := dog.held_toy.data.display_name.to_upper() if dog.held_toy else "FIND A TOY"
 			if charge >= 1.0:

@@ -16,10 +16,13 @@ var _ghost_row: CarouselRow
 var _more: VBoxContainer
 var _more_button: Button
 var _start: Button
+var _back: Button
 var _desc: Label
 var _preview: TextureRect
 var _preview_frame: PanelContainer
 var _shuffle_grid: GridContainer
+var _pack_cards: Array[Button] = []
+var _shuffle_button: Button
 ## The two columns: the rules of the match, and the park.
 const LEFT_WIDTH := 800.0
 const RIGHT_WIDTH := 680.0
@@ -41,7 +44,7 @@ const SIDE_OPTIONS := ["Free-for-all", "Teams"]
 ## Who your own toys can hurt. Most groups want neither; the third is for people who enjoy pain.
 const FIRE_OPTIONS := ["You", "Nobody", "You and pack-mates"]
 ## Free-for-all only: watch the rest of the round, or haunt it as a ghost.
-const GHOST_OPTIONS := ["Watch", "Come back as a ghost"]
+const GHOST_OPTIONS := ["Watch", "Ghost (free-for-all)"]
 
 
 func _ready() -> void:
@@ -183,6 +186,7 @@ func _ready() -> void:
 	actions.add_theme_constant_override("separation", 18)
 	root.add_child(actions)
 	var back := UiKit.wood_button("Choose dogs", 280, true)
+	_back = back
 	back.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	back.pressed.connect(func() -> void: Game.goto(Game.SCENE_DOG_SELECT))
 	actions.add_child(back)
@@ -214,7 +218,8 @@ func _row(parent: Control, title: String, items: Array, start: int) -> CarouselR
 ## Bonks only make sense where the round is a fight to the last dog. A mode won some other way
 ## (a bed held, a golden ball kept) is always played for rounds.
 func _bonks_allowed() -> bool:
-	return Game.selected_mode != null and Game.selected_mode.id in [&"last_dog_standing", &"hot_potato"]
+	# Hot Potato throws tag rather than bonk, and the goal modes are won by their goal.
+	return Game.selected_mode != null and Game.selected_mode.id == &"last_dog_standing"
 
 
 ## The goal row counts rounds or bonks, whichever the match is played for.
@@ -247,6 +252,7 @@ func _column_heading(text: String) -> Label:
 func _toggle_more() -> void:
 	_more.visible = not _more.visible
 	_show_preview()
+	_wire_focus()
 	_more_button.text = "Fewer options" if _more.visible else "More options"
 	Sfx.play("ui_move")
 
@@ -304,8 +310,36 @@ func _apply() -> void:
 	_start.text = "FETCH!" if ok else "That mode isn't built yet"
 	if ok and not Game.teams_valid():
 		ok = false
-		_start.text = "Both packs need a dog - press a dog above to swap packs"
+		_start.text = "Both packs need a dog - move one across above"
 	_start.disabled = not ok
+	_wire_focus()
+
+
+## Up and down walk one line through everything on the screen - the pack (when teams are on,
+## so dogs can be swapped), the rules, the park, then FETCH! - so a pad can always get from the
+## top to the start button. Left and right belong to the option rows, which use them to change
+## their value, so geometric focus could not cross the two columns.
+func _wire_focus() -> void:
+	var line: Array[Control] = []
+	if Game.team_mode:
+		line.append_array(_pack_cards)
+		if is_instance_valid(_shuffle_button):
+			line.append(_shuffle_button)
+	line.append_array([_mode_row, _teams_row, _scoring_row, _points_row, _more_button] as Array[Control])
+	if _more.visible:
+		for row in _more.get_children():
+			if row is Control and (row as Control).visible:
+				line.append(row)
+	line.append(_start)
+	for i in line.size():
+		var node := line[i]
+		node.focus_neighbor_top = node.get_path_to(line[i - 1] if i > 0 else _back)
+		node.focus_neighbor_bottom = node.get_path_to(line[i + 1] if i < line.size() - 1 else _back)
+	_back.focus_neighbor_top = _back.get_path_to(_start)
+	_back.focus_neighbor_bottom = _back.get_path_to(line[0])
+	_back.focus_neighbor_right = _back.get_path_to(_start)
+	_start.focus_neighbor_left = _start.get_path_to(_back)
+	_start.focus_neighbor_bottom = _start.get_path_to(_back)
 
 
 func _on_start() -> void:
@@ -325,17 +359,20 @@ func _rules_text() -> String:
 		for slot in Game.slots:
 			if slot.team >= 0:
 				counts[slot.team] += 1
-		lines.append("[b]TEAMS  %d v %d[/b]  Press a dog above to swap its pack. A pack-mate's throw is a [b]pass[/b] - your toys never bonk each other - and you can [b]revive[/b] a downed pack-mate by standing in their ring." % counts)
+		lines.append("[b]TEAMS  %d v %d[/b]  Move a dog with left / right (or press it), or Shuffle. A pack-mate's throw is a [b]pass[/b] - your toys never bonk each other - and you can [b]revive[/b] a downed pack-mate by standing in their ring." % counts)
 	else:
 		lines.append("[b]FREE-FOR-ALL[/b]  Every dog for itself.")
 	if Game.scoring == Game.Scoring.BONKS:
 		lines.append("[b]WIN BY BONKS[/b]  Every rival you bonk is a point; bonk yourself with your own toy and you lose one. Rounds keep coming until someone reaches %d." % Game.points_to_win)
 	else:
-		lines.append("[b]WIN BY ROUNDS[/b]  The last %s standing wins the round; first to %d round wins takes the match." % ["pack" if Game.team_mode else "dog", Game.points_to_win])
+		# The mode's own line above already says how a round is won.
+		lines.append("[b]WIN BY ROUNDS[/b]  First to %d round wins takes the match." % Game.points_to_win)
 	if not _bonks_allowed():
 		lines.append("[i]This mode is always played for rounds.[/i]")
 	if Game.ghosts and not Game.team_mode:
 		lines.append("[b]GHOSTS[/b]  Knocked out? Float back in as a ghost: bark to spook a dog into a stumble, throw to nudge a loose toy.")
+	elif Game.ghosts:
+		lines.append("[b]GHOSTS[/b]  Free-for-all only. In teams a pack-mate revives you instead.")
 	return "\n".join(lines)
 
 
@@ -344,36 +381,127 @@ func _build_pack() -> void:
 	for child in _pack.get_children():
 		_pack.remove_child(child)
 		child.queue_free()
-	for i in Game.slots.size():
-		var slot := Game.slots[i]
-		var tint: Color = Game.team_color(slot.team) if Game.team_mode and slot.team >= 0 else slot.color
-		var card := Button.new()
-		card.flat = true
-		card.focus_mode = Control.FOCUS_ALL if Game.team_mode else Control.FOCUS_NONE
-		card.mouse_filter = Control.MOUSE_FILTER_STOP if Game.team_mode else Control.MOUSE_FILTER_IGNORE
-		card.custom_minimum_size = Vector2(150, 0)
-		var frame := PanelContainer.new()
-		frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		frame.set_anchors_preset(Control.PRESET_FULL_RECT)
-		frame.add_theme_stylebox_override("panel", UiKit.panel_style(tint, Color(slot.dog.card_color, 0.9)))
-		card.add_child(frame)
+	_pack_cards.clear()
+	_shuffle_button = null
+	if not Game.team_mode:
+		for slot in Game.slots:
+			_pack.add_child(_dog_card(slot, slot.color, false))
+		return
+	# Two packs side by side, each in its colour, with the dogs on it inside. Left and right on a
+	# dog moves it to that pack; pressing it swaps. The split reads at a glance: "2 v 2".
+	var counts := [0, 0]
+	for slot in Game.slots:
+		if slot.team >= 0 and slot.team < 2:
+			counts[slot.team] += 1
+	for team in 2:
+		var tint := Game.team_color(team)
+		var panel := PanelContainer.new()
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(tint.darkened(0.55), 0.85)
+		style.border_color = tint
+		style.set_border_width_all(4)
+		style.set_corner_radius_all(18)
+		style.content_margin_left = 12
+		style.content_margin_right = 12
+		style.content_margin_top = 6
+		style.content_margin_bottom = 10
+		panel.add_theme_stylebox_override("panel", style)
 		var column := VBoxContainer.new()
-		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		column.add_theme_constant_override("separation", 2)
-		frame.add_child(column)
-		column.add_child(UiKit.dog_portrait(slot.dog, slot.dog.card_color, Vector2(120, 96), 1.0, 0.0, true))
-		var tag := UiKit.chip(Game.team_name(slot.team) if Game.team_mode and slot.team >= 0 else slot.label, tint, 15)
-		tag.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		column.add_child(tag)
-		card.custom_minimum_size = Vector2(150, 150)
-		if Game.team_mode:
-			card.pressed.connect(func() -> void:
-				slot.team = 1 - slot.team
-				Sfx.play("ui_move")
-				_apply()
-				# The row was rebuilt: keep a controller's focus on the dog just swapped.
-				(_pack.get_child(i) as Control).grab_focus())
-		_pack.add_child(card)
+		column.add_theme_constant_override("separation", 6)
+		panel.add_child(column)
+		column.add_child(UiKit.title(Game.team_name(team), 24, tint.lightened(0.25)))
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 8)
+		row.custom_minimum_size = Vector2(130, 0)
+		column.add_child(row)
+		for slot in Game.slots:
+			if slot.team == team:
+				row.add_child(_dog_card(slot, tint, true))
+		if counts[team] == 0:
+			var empty := UiKit.label("Move a dog here", 18, Color(1, 1, 1, 0.6))
+			empty.custom_minimum_size = Vector2(130, 120)
+			empty.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			row.add_child(empty)
+		_pack.add_child(panel)
+		if team == 0:
+			var versus := UiKit.title("%d v %d" % counts, 40, UiKit.CREAM)
+			versus.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			_pack.add_child(versus)
+	_shuffle_button = UiKit.wood_button("Shuffle", 150, true)
+	_shuffle_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_shuffle_button.pressed.connect(_shuffle_packs)
+	_pack.add_child(_shuffle_button)
+
+
+## One dog: its portrait on its card colour, framed in its side's colour, with its player tag.
+## In teams it is a button that moves the dog between packs.
+func _dog_card(slot: PlayerSlot, tint: Color, movable: bool) -> Control:
+	var card := Button.new()
+	card.flat = true
+	card.focus_mode = Control.FOCUS_ALL if movable else Control.FOCUS_NONE
+	card.mouse_filter = Control.MOUSE_FILTER_STOP if movable else Control.MOUSE_FILTER_IGNORE
+	card.custom_minimum_size = Vector2(124 if movable else 150, 132 if movable else 150)
+	card.set_meta("slot", slot)
+	var frame := PanelContainer.new()
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var rest := UiKit.panel_style(tint, Color(slot.dog.card_color, 0.9))
+	frame.add_theme_stylebox_override("panel", rest)
+	card.add_child(frame)
+	if movable:
+		# The dog a pad is on wears a gold rim and lifts, so left / right has an obvious subject.
+		var lit := UiKit.panel_style(UiKit.YELLOW, Color(slot.dog.card_color, 0.95))
+		lit.set_border_width_all(6)
+		card.focus_entered.connect(func() -> void:
+			frame.add_theme_stylebox_override("panel", lit)
+			card.pivot_offset = card.size * 0.5
+			Juice.pop(card, 1.08, 0.15))
+		card.focus_exited.connect(func() -> void: frame.add_theme_stylebox_override("panel", rest))
+	var column := VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_theme_constant_override("separation", 2)
+	frame.add_child(column)
+	var art := Vector2(96, 80) if movable else Vector2(120, 96)
+	column.add_child(UiKit.dog_portrait(slot.dog, slot.dog.card_color, art, 1.0, 0.0, true))
+	var tag := UiKit.chip(("◀ %s ▶" % slot.label) if movable else slot.label, slot.color, 15)
+	tag.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	column.add_child(tag)
+	if movable:
+		_pack_cards.append(card)
+		card.pressed.connect(func() -> void: _move_to_pack(slot, 1 - slot.team))
+		card.gui_input.connect(func(event: InputEvent) -> void:
+			if event.is_action_pressed("ui_left"):
+				_move_to_pack(slot, 0)
+				card.accept_event()
+			elif event.is_action_pressed("ui_right"):
+				_move_to_pack(slot, 1)
+				card.accept_event())
+	return card
+
+
+func _move_to_pack(slot: PlayerSlot, team: int) -> void:
+	if slot.team == team:
+		return
+	slot.team = team
+	Sfx.play("ui_move")
+	_apply()
+	# The row was rebuilt: keep a controller's focus on the dog that just moved.
+	for card in _pack_cards:
+		if card.get_meta("slot") == slot:
+			card.grab_focus()
+
+
+## A fair random split: as even as the numbers allow.
+func _shuffle_packs() -> void:
+	var order := Game.slots.duplicate()
+	order.shuffle()
+	for i in order.size():
+		(order[i] as PlayerSlot).team = i % 2
+	Sfx.play("ui_move")
+	_apply()
+	if is_instance_valid(_shuffle_button):
+		_shuffle_button.grab_focus()
 
 
 ## The arena picture shows while there is room for it: one arena chosen, extra options folded.

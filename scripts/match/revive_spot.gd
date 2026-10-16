@@ -18,6 +18,7 @@ var _ring: MeshInstance3D
 var _fill: MeshInstance3D
 var _fill_material: StandardMaterial3D
 var _label: Label3D
+var _clock: ChargeMeter
 var _done := false
 
 
@@ -48,6 +49,12 @@ func _ready() -> void:
 	_label.outline_modulate = Color(0.08, 0.06, 0.1)
 	_label.position = Vector3(0, 1.6, 0)
 	add_child(_label)
+	# A clock round the ring that fills as the revive goes, so everyone can see how long is
+	# left - the rescuer to stay put, the rivals to hurry.
+	_clock = ChargeMeter.new()
+	add_child(_clock)
+	_clock.setup(color, RADIUS - ChargeMeter.INNER + 0.02)
+	_clock.size_multiplier = 1.15
 
 
 ## The pack-mate standing in the ring, or null.
@@ -77,7 +84,17 @@ func _physics_process(delta: float) -> void:
 	var t := progress / REVIVE_TIME
 	_fill.scale = Vector3(maxf(t, 0.02), 1, maxf(t, 0.02))
 	_ring.scale = Vector3.ONE * (1.0 + 0.05 * sin(Time.get_ticks_msec() * 0.01)) if helper != null else Vector3.ONE
-	_label.text = "REVIVING…" if helper != null else "REVIVE!"
+	if progress > 0.0:
+		_clock.set_charge(t, Vector3.FORWARD)
+	else:
+		_clock.hide_meter()
+	# Seconds left while someone is on it; how far it got (and that it is draining) when not.
+	if helper != null:
+		_label.text = "REVIVING  %.1fs" % maxf(0.0, REVIVE_TIME - progress)
+		_label.font_size = 64
+	else:
+		_label.text = "REVIVE!  %d%%" % int(t * 100.0) if progress > 0.0 else "REVIVE!"
+		_label.font_size = 56
 	if progress >= REVIVE_TIME and helper != null:
 		_done = true
 		revived.emit(self, helper)

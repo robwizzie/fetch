@@ -1,8 +1,10 @@
 class_name KingOfTheBed
 extends LastDogStanding
 ## King of the Bed: one big dog bed in the middle. Lie on it alone - one dog, or one pack in
-## teams - and your time banks. First to CLAIM_TIME takes the round; knocking everyone else out
-## still wins it; when the clock runs out, whoever banked most wins.
+## teams - and your time banks. First to CLAIM_TIME takes the round; when the clock runs out,
+## whoever banked most wins. Getting bonked is a setback, not the end: a knocked-out dog is back
+## in after RESPAWN_TIME, and the time it banked is still banked - the round is a race to the
+## goal, not a fight to the last dog.
 
 const CLAIM_TIME := 8.0
 const RADIUS := 1.7
@@ -112,12 +114,21 @@ func tick(delta: float, dogs: Array[Dog]) -> void:
 		_winner = king
 
 
-func is_round_over(dogs: Array[Dog]) -> bool:
-	return _winner != null or super.is_round_over(dogs)
+## Only the bed decides it: everyone comes back, so nobody wins by being the last one up.
+func is_round_over(_dogs: Array[Dog]) -> bool:
+	return _winner != null
 
 
-func round_winner(dogs: Array[Dog]) -> PlayerSlot:
-	return _winner if _winner != null else super.round_winner(dogs)
+func round_winner(_dogs: Array[Dog]) -> PlayerSlot:
+	return _winner
+
+
+func respawns() -> bool:
+	return true
+
+
+func respawn_avoid() -> Array[Vector3]:
+	return [bed_centre]
 
 
 func timeout_winner(dogs: Array[Dog]) -> PlayerSlot:
@@ -139,9 +150,19 @@ func timeout_winner(dogs: Array[Dog]) -> PlayerSlot:
 	return null
 
 
+func hud_status(dog: Dog) -> String:
+	if not is_instance_valid(_bed):
+		return ""
+	var banked_time := float(banked.get(_key(dog.slot), 0.0))
+	var on_bed := Vector2(dog.global_position.x - bed_centre.x, dog.global_position.z - bed_centre.z).length() < RADIUS
+	if on_bed:
+		return "ON THE BED %.1f / %d" % [banked_time, int(CLAIM_TIME)]
+	return "GET ON THE BED · %.1f / %d" % [banked_time, int(CLAIM_TIME)]
+
+
 func bot_goal(_dog: Dog) -> Vector3:
 	return bed_centre if is_instance_valid(_bed) else Vector3.INF
 
 
 func hud_hint() -> String:
-	return "Hold the dog bed alone for %d seconds · or be the last dog standing" % int(CLAIM_TIME)
+	return "First to %d seconds alone on the dog bed · bonked? Back in %d seconds, time kept" % [int(CLAIM_TIME), int(RESPAWN_TIME)]

@@ -279,6 +279,8 @@ func _nearest_toy(dog: Dog) -> Toy:
 	for candidate in get_tree().get_nodes_in_group("toys"):
 		if candidate.state != Toy.State.IDLE or candidate.ephemeral:
 			continue
+		if GameMode.current != null and GameMode.current.bot_avoids(dog, candidate):
+			continue
 		var distance := dog.global_position.distance_squared_to(candidate.global_position)
 		if distance < best:
 			best = distance
