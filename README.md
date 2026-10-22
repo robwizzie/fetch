@@ -1,3 +1,19 @@
+<p align="center">
+  <img src="images/fetch-home-screen.png" alt="Fetch: Throw. Dodge. Catch." width="820" />
+</p>
+
+<p align="center">
+  <a href="https://robwiscount.org/play/fetch/"><img src="https://img.shields.io/badge/%F0%9F%8E%BE_Play_in_your_browser-robwiscount.org-6aa84f?style=for-the-badge" alt="Play in your browser"/></a>
+</p>
+
+<table>
+<tr>
+<td width="33%"><img src="docs/previews/main-menu.png" alt="Main menu" /><p align="center"><sub>Good dogs. Great rivalries.</sub></p></td>
+<td width="33%"><img src="docs/previews/backyard.png" alt="Backyard arena mid-round" /><p align="center"><sub>Last Dog Standing in the Backyard</sub></p></td>
+<td width="33%"><img src="docs/previews/the-pack.png" alt="The five dogs" /><p align="center"><sub>Meet the pack</sub></p></td>
+</tr>
+</table>
+
 # FETCH
 
 **Throw. Dodge. Catch.** A top-down local-multiplayer party game where 2–4 dogs throw toys
